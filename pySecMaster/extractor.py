@@ -34,7 +34,7 @@ from download import download_quandl_codes, download_quandl_data, \
     download_google_data
 
 
-def multithread(function, items, *args, threads=4):
+def multithread(function, items, threads=4, *args):
     """ Takes the main function to run in parallel, inputs the variable(s)
     and returns the results.
 
