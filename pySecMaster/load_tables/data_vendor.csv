@@ -1,0 +1,13 @@
+name,url,support_email,api
+Quandl_WIKI,https://www.quandl.com/data/WIKI,connect@quandl.com,WIKI
+Quandl_GOOG,https://www.quandl.com/data/GOOG,connect@quandl.com,GOOG
+Quandl_YAHOO,https://www.quandl.com/data/YAHOO,connect@quandl.com,YAHOO
+Quandl_FINRA,https://www.quandl.com/data/FINRA,connect@quandl.com,FINRA
+Quandl_EIA,https://www.quandl.com/data/EIA,connect@quandl.com,EIA
+Quandl_JODI,https://www.quandl.com/data/JODI,connect@quandl.com,JODI
+Quandl_ZFA,https://www.quandl.com/data/ZFA,connect@quandl.com,ZFA
+Quandl_ZFB,https://www.quandl.com/data/ZFB,connect@quandl.com,ZFB
+Quandl_RAYMOND,https://www.quandl.com/data/RAYMOND,connect@quandl.com,RAYMOND
+Quandl_ZEP,https://www.quandl.com/data/ZEP,connect@quandl.com,ZEP
+Quandl_EOD,https://www.quandl.com/data/EOD,connect@quandl.com,EOD
+Google_Finance,https://www.google.com/finance,,
