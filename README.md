@@ -25,12 +25,15 @@ The system downloads specified data from Quandl to a SQLite3 database, which can
   10. You can now save and run query_data.py.
 
 # System Requirements
-  - Python 3.x
+  - Python 3.x (sorry, no 2.7 support)
   - Pandas 0.16.x
   - More than 10GB of storage space (depends on the data downloaded)
 
 # User Requirements
   - Quandl API Token (free at quandl.com)
+
+# Additional Info
+To view the SQLite3 database, you can download SQLite Database Browser for free (http://sqlitebrowser.org). This allows you to view and edit all characteristics of the database.
 
 # Disclaimer
 Before using this software, be sure to understand and follow the terms of all data providers (Quandl and Google). I am not responsible for how you use this software, so please be responsible in your use of it! Please see the following links for some information:
