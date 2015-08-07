@@ -27,9 +27,6 @@ import pandas as pd
 import sqlite3
 import time
 
-database_location = 'C:/Users/Josh/Desktop/securities_master_5.db'
-start_time = time.time()
-
 
 def retrieve_q_code(sql_qry):
 
@@ -169,17 +166,20 @@ def pull_minute_prices(query_type, beg_date, end_date, *args):
                          'database in pull_daily_prices')
 
 
+database_location = 'C:/Users/####/Desktop/pySecMaster.db'
+
 index = 'S&P 500'  # 'S&P 500', 'Russell Midcap', 'Russell 2000', 'Russell 1000'
 
 ticker = 'AAPL'
 exchange = 'NASDAQ'
 daily_data_vendor = 'WIKI'     # WIKI, GOOG
-beg_date = '2015-07-20 00:00:00'
+beg_date = '2015-01-01 00:00:00'
 end_date = '2015-12-30 00:00:00'
 frequency = 'minute'    # daily, minute
 
 query_type = 'ticker'     # index, ticker, exchange, country, etc.
 
+start_time = time.time()
 if query_type == 'ticker':
     if frequency == 'daily':
         prices_df = pull_daily_prices(query_type, daily_data_vendor, beg_date,
@@ -199,7 +199,7 @@ else:
 
 print('Query took %0.2f seconds' % (time.time() - start_time))
 # print(prices_df.head(5))
-# prices_df.to_csv('latest_price.csv')
+prices_df.to_csv('latest_price.csv')
 
 unique_q_codes = pd.unique((prices_df['q_code']).values)
 print('There are %i unique q_codes' % (len(unique_q_codes)))
