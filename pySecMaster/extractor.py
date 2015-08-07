@@ -949,7 +949,6 @@ class GoogleFinanceDataExtraction(object):
                     # Data should be oldest to newest; gets the oldest date, as
                     #   any date between that and the latest date need to be
                     #   deleted before the new data can be added.
-                    clean_data.to_csv(q_code[5:] + '_min_data.csv')
                     first_date_iso = clean_data['date'].min()
 
                     query = ("""DELETE FROM minute_prices
