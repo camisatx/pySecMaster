@@ -27,12 +27,15 @@ import time
 from functools import wraps
 from datetime import datetime, timedelta
 import pandas as pd
+
 try:        # Python 3.4
     from urllib.request import urlopen
     from urllib.error import HTTPError
+    from urllib.error import URLError
 except ImportError:     # Python 2.7
     from urllib2 import urlopen
     from urllib2 import HTTPError
+    from urllib2 import URLError
 
 
 def rate_limit(rate=2000, period_sec=600, threads=1):
@@ -128,64 +131,79 @@ class QuandlDownload(object):
 
         except HTTPError as e:
             if str(e) == 'HTTP Error 403: Forbidden':
-                # time.sleep(10 * 60)
-                raise ValueError('Warning: Reached Quandl API call limit. '
-                                 'Make the RateLimit more restrictive.')
+                raise OSError('HTTPError %s: Reached Quandl API call limit. '
+                              'Make the RateLimit more restrictive.' % e.reason)
             elif str(e) == 'HTTP Error 404: Not Found':
                 if page_num:
-                    raise ValueError('Warning: Quandl page %i for %s not found.'
-                                     % (page_num, self.name))
+                    raise OSError('HTTPError %s: Quandl page %i for %s not '
+                                  'found.' % (e.reason, page_num, self.name))
                 else:
-                    print('Warning: %s not found.' % (self.name,))
+                    # Don't raise an exception, as this indicates the last page
+                    print('HTTPError %s: %s not found.' % (e.reason, self.name))
             elif str(e) == 'HTTP Error 429: Too Many Requests':
                 if download_try < 5:
-                    print('Warning: Exceeded Quandl API limit. Make the '
+                    print('HTTPError %s: Exceeded Quandl API limit. Make the '
                           'RateLimit more restrictive. Program will sleep for '
-                          '11 minutes and will try again...')
+                          '11 minutes and will try again...' % (e.reason,))
                     time.sleep(11 * 60)
                     self.download_csv(page_num, beg_date, download_try)
                 else:
-                    raise ValueError('Warning: Exceeded Quandl API limit. '
-                                     'After trying 5 time, the download was '
-                                     'still not successful. You could have hit '
-                                     'the 50,000 calls per day limit.')
+                    raise OSError('HTTPError %s: Exceeded Quandl API limit. '
+                                  'After trying 5 time, the download was still '
+                                  'not successful. You could have hit the '
+                                  '50,000 calls per day limit.' % (e.reason,))
             elif str(e) == 'HTTP Error 503: Service Unavailable':
                 if download_try < 10:
-                    print('Warning: Server is currently unavailable. Maybe the '
-                          'network is down. Will sleep for 10 minutes...')
+                    print('HTTPError %s: Server is currently unavailable. '
+                          'Maybe the network is down. Will sleep for 10 minutes'
+                          % (e.reason,))
                     time.sleep(10 * 60)
                     self.download_csv(page_num, beg_date, download_try)
                 else:
-                    raise ValueError('Warning: Server is currently unavailable.'
-                                     ' After trying 10 time, the download was '
-                                     'still not successful. Quitting for now.')
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
             else:
-                print(e)
                 print('Base URL used: %s' % (db_url + url_var,))
                 if page_num:
-                    raise ValueError('Warning: Unknown error when downloading '
-                                     'page %i for %s' %
-                                     (page_num, self.name))
+                    raise OSError('HTTPError %s: Unknown error when '
+                                  'downloading page %i for %s'
+                                  % (e.reason, page_num, self.name))
                 else:
-                    raise ValueError('Warning: Unknown error when downloading '
-                                     '%s' % (self.name,))
+                    raise OSError('HTTPError %s: Unknown error when '
+                                  'downloading %s' % (e.reason, self.name))
+
+        except URLError as e:
+            if download_try <= 10:
+                print('Warning: Experienced URL Error %s. Program will '
+                      'sleep for 30 minutes and will then try again...' %
+                      (e.reason,))
+                time.sleep(30 * 60)
+                self.download_csv(page_num, beg_date, download_try)
+            else:
+                raise URLError('Warning: Still experiencing URL Error %s. '
+                               'After trying 10 times, the error remains. '
+                               'Quitting for now, but you can try again later.'
+                               % (e.reason,))
 
 
 def download_quandl_codes(quandl_token, db_url, db_name, page_num):
 
-    """ The database name and url are provided, and this downloads the
-    entire metadata library in a csv file. Quandl has a restriction where
-    only 300 items can be downloaded at a time, thus multiple requests must
-    be sent. The way to do this is to increment the 'page=' variable,
-    increasing the page number event request. To ensure that all pages are
-    downloaded, this code will continue iterating through all pages until
-    nothing is returned, indicating there is no more data. Also, this code
-    assumes that Quandl doesn't change the format of the data they return.
+    """ The token, database name, database url and page number are provided,
+    and this downloads the metadata library for that particular page as a csv
+    file. Quandl has a restriction where only 300 items can be downloaded at a
+    time, thus multiple requests must be sent. This is handled by the page
+    number variable.
 
-    :param db_name: The name of the database being downloaded.
-    :return: A DataFrame with the Quandl database metadata.
+    :param quandl_token: String of the sensitive Quandl API token
+    :param db_url: String of the url address of the particular database's
+        metadata to download
+    :param db_name: String of the name of the database being downloaded
+    :param page_num: Integer of the database's metadata page to download
+    :return: A DataFrame with the Quandl database metadata
     """
-    # ToDo: LOW: Update function description
+
     col_names = ['q_code', 'name', 'start_date', 'end_date', 'frequency',
                  'last_updated']
     csv_file = QuandlDownload(quandl_token, db_url, db_name)
@@ -253,7 +271,7 @@ def download_quandl_data(quandl_token, db_url, q_code, beg_date=None):
     return df
 
 
-# Received captch after about 2000 queries (100 queries/60 sec; 8 threads)
+# Received captch after about 2000 queries (100 queries/60 sec; 4 threads)
 @rate_limit(rate=25, period_sec=60, threads=4)
 def download_google_data(db_url, q_code):
     """ Receives a Quandl Code as a string, splits the code into ticker and
@@ -295,41 +313,53 @@ def download_google_data(db_url, q_code):
 
         except HTTPError as e:
             if str(e) == 'HTTP Error 403: Forbidden':
-                # time.sleep(10 * 60)
-                raise ValueError('Warning: Reached API call limit. Make the '
-                                 'RateLimit more restrictive.')
+                raise OSError('HTTPError %s: Reached API call limit. Make the '
+                              'RateLimit more restrictive.' % (e.reason,))
             elif str(e) == 'HTTP Error 404: Not Found':
-                raise ValueError('Warning: %s not found.' % (q_code,))
+                raise OSError('HTTPError %s: %s not found' % (e.reason, q_code))
             elif str(e) == 'HTTP Error 429: Too Many Requests':
                 if download_try <= 5:
-                    print('Warning: Exceeded API limit. Make the RateLimit '
-                          'more restrictive. Program will sleep for 11 minutes '
-                          'and will try again...')
+                    print('HTTPError %s: Exceeded API limit. Make the '
+                          'RateLimit more restrictive. Program will sleep for '
+                          '11 minutes and will try again...' % (e.reason,))
                     time.sleep(11 * 60)
                     download_data(url, download_try)
                 else:
-                    raise ValueError('Warning: Exceeded API limit. After '
-                                     'trying 5 time, the download was still '
-                                     'not successful. You could have hit the '
-                                     'per day limit.')
+                    raise OSError('HTTPError %s: Exceeded API limit. After '
+                                  'trying 5 time, the download was still not '
+                                  'successful. You could have hit the per day '
+                                  'call limit.' % (e.reason,))
             elif str(e) == 'HTTP Error 503: Service Unavailable':
                 # Received this HTTP Error after 2000 queries. Browser showed
                 #   captch message upon loading url.
                 if download_try <= 10:
-                    print('Warning: Server is currently unavailable. Maybe the '
-                          'network is down or the server is blocking you. '
-                          'Will sleep for 10 minutes...')
+                    print('HTTPError %s: Server is currently unavailable. '
+                          'Maybe the network is down or the server is blocking '
+                          'you. Will sleep for 10 minutes...' % (e.reason,))
                     time.sleep(10 * 60)
                     download_data(url, download_try)
                 else:
-                    raise ValueError('Warning: Server is currently unavailable.'
-                                     ' After trying 10 time, the download was '
-                                     'still not successful. Quitting for now.')
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. '
+                                  'Quitting for now.' % (e.reason,))
             else:
-                print(e)
                 print('Base URL used: %s' % (url,))
-                raise ValueError('Warning: Unknown error when downloading %s'
-                                 % (q_code,))
+                raise OSError('HTTPError %s: Unknown error when downloading %s'
+                              % (e.reason, q_code))
+
+        except URLError as e:
+            if download_try <= 10:
+                print('Warning: Experienced URL Error %s. Program will '
+                      'sleep for 30 minutes and will then try again...' %
+                      (e.reason,))
+                time.sleep(30 * 60)
+                download_data(url, download_try)
+            else:
+                raise URLError('Warning: Still experiencing URL Error %s. '
+                               'After trying 10 times, the error remains. '
+                               'Quitting for now, but you can try again later.'
+                               % (e.reason,))
 
     def google_data_processing(url_obj):
         """ Takes the url object returned from Google, and format the text data
