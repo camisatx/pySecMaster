@@ -210,7 +210,8 @@ class QuandlCodeExtract(object):
                                     WHERE data_vendor='%s'""" % (data_vendor,))
                         del_success = delete_sql_table_rows(self.db_location,
                                                             query,
-                                                            'quandl_codes')
+                                                            'quandl_codes',
+                                                            'UNUSED')
                         if del_success == 'success':
                             self.extractor(data_vendor)
                         elif del_success == 'failure':
