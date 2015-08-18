@@ -208,10 +208,15 @@ def download_quandl_codes(quandl_token, db_url, db_name, page_num):
                  'last_updated']
     csv_file = QuandlDownload(quandl_token, db_url, db_name)
     file = csv_file.download_csv(page_num)
-    df = pd.read_csv(file, index_col=False, names=col_names, encoding='utf-8')
-
-    if len(df.index) == 0:
-        return df
+    try:
+        df = pd.read_csv(file, index_col=False, names=col_names,
+                         encoding='utf-8')
+    except TypeError:
+        # When there are no more codes to download, the file object will be an
+        #   empty CSV. This will cause the read_csv function to fail on a
+        #   TypeError since it can't add column names to an empty DF. Return
+        #   an empty DF, which will indicate the no more pages to download.
+        return pd.DataFrame()
 
     df['start_date'] = df.apply(dt_to_iso, axis=1, args=('start_date',))
     df['end_date'] = df.apply(dt_to_iso, axis=1, args=('end_date',))
