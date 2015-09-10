@@ -1,3 +1,17 @@
+import time
+from functools import wraps
+from datetime import datetime, timedelta
+import pandas as pd
+
+try:        # Python 3.4
+    from urllib.request import urlopen
+    from urllib.error import HTTPError
+    from urllib.error import URLError
+except ImportError:     # Python 2.7
+    from urllib2 import urlopen
+    from urllib2 import HTTPError
+    from urllib2 import URLError
+
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
@@ -6,7 +20,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.0'
+__version__ = '1.1'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -22,20 +36,6 @@ __version__ = '1.0'
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
-
-import time
-from functools import wraps
-from datetime import datetime, timedelta
-import pandas as pd
-
-try:        # Python 3.4
-    from urllib.request import urlopen
-    from urllib.error import HTTPError
-    from urllib.error import URLError
-except ImportError:     # Python 2.7
-    from urllib2 import urlopen
-    from urllib2 import HTTPError
-    from urllib2 import URLError
 
 
 def rate_limit(rate=2000, period_sec=600, threads=1):
@@ -152,12 +152,37 @@ class QuandlDownload(object):
                                   'After trying 5 time, the download was still '
                                   'not successful. You could have hit the '
                                   '50,000 calls per day limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 502: Bad Gateway':
+                if download_try < 10:
+                    print('HTTPError %s: Encountered a bad gateway with the '
+                          'server. Maybe the network is down. Will sleep for '
+                          '5 minutes'
+                          % (e.reason,))
+                    time.sleep(5 * 60)
+                    self.download_csv(page_num, beg_date, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 times, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
             elif str(e) == 'HTTP Error 503: Service Unavailable':
                 if download_try < 10:
                     print('HTTPError %s: Server is currently unavailable. '
                           'Maybe the network is down. Will sleep for 10 minutes'
                           % (e.reason,))
                     time.sleep(10 * 60)
+                    self.download_csv(page_num, beg_date, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
+            elif str(e) == 'HTTP Error 504: GATEWAY_TIMEOUT':
+                if download_try < 10:
+                    print('HTTPError %s: Server connection timed out. Maybe '
+                          'the network is down. Will sleep for 5 minutes'
+                          % (e.reason,))
+                    time.sleep(5 * 60)
                     self.download_csv(page_num, beg_date, download_try)
                 else:
                     raise OSError('HTTPError %s: Server is currently '
