@@ -1,3 +1,13 @@
+import time
+from datetime import datetime, timedelta
+import pandas as pd
+import sqlite3
+from multiprocessing import Pool
+import csv
+
+from download import download_quandl_codes, download_quandl_data, \
+    download_google_data
+
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
@@ -22,16 +32,6 @@ __version__ = '1.0'
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
-
-import time
-from datetime import datetime, timedelta, timezone
-import pandas as pd
-import sqlite3
-from multiprocessing import Pool
-import csv
-
-from download import download_quandl_codes, download_quandl_data, \
-    download_google_data
 
 
 def multithread(function, items, threads=4, *args):
@@ -92,6 +92,9 @@ def df_to_sql(df, db_location, sql_table, exists, item):
     except conn.OperationalError:
         raise ValueError('Unable to connect to the SQL Database in df_to_sql. '
                          'Make sure the database address/name are correct.')
+    except Exception as e:
+        print('Error: Unknown issue when adding DF to SQL for %s' % (item,))
+        print(e)
 
 
 def delete_sql_table_rows(db_location, query, table, q_code):
@@ -112,6 +115,11 @@ def delete_sql_table_rows(db_location, query, table, q_code):
     except conn.OperationalError:
         print('Unable to connect to the SQL Database in delete_sql_table_rows. '
               'Make sure the database address/name are correct.')
+        return 'failure'
+    except Exception as e:
+        print('Error: Unknown issue when trying to delete overlapping rows for'
+              '%s in the %s table.' % (q_code, table))
+        print(e)
         return 'failure'
 
 
@@ -187,7 +195,7 @@ class QuandlCodeExtract(object):
 
                     beg_date_obj = (datetime.now() - timedelta(
                                     days=self.update_range))
-                    beg_date = beg_date_obj.strftime('%Y-%m-%d')
+                    # beg_date = beg_date_obj.strftime('%Y-%m-%d')
 
                     # Were the Quandl Codes downloaded within the update_range
                     #   and is the highest page_num for that data set greater
@@ -236,7 +244,6 @@ class QuandlCodeExtract(object):
                                  "MAX(page_num) AS page_num, updated_date "
                                  "FROM  quandl_codes "
                                  "GROUP BY data_vendor ", conn)
-                # df.to_csv('query_last_price.csv')
                 return df
         except sqlite3.Error as e:
             print('Error when trying to connect to the database quandl_codes '
@@ -279,7 +286,7 @@ class QuandlCodeExtract(object):
                     clean_df = self.process_3_item_q_codes(db_pg_df)
                 elif db_name in ('GOOG', 'YAHOO', 'FINRA'):
                     clean_df = self.process_2_item_q_codes(db_pg_df)
-                else:       # 'EIA', 'ZEP', 'EOD', 'CURRFX'
+                else:       # 'WIKI', 'EIA', 'ZEP', 'EOD', 'CURRFX'
                     clean_df = self.process_1_item_q_codes(db_pg_df)
 
                 df_to_sql(clean_df, self.db_location, 'quandl_codes', 'append',
@@ -289,6 +296,31 @@ class QuandlCodeExtract(object):
                     print('Still downloading %s codes. Just finished page '
                           '%i...' % (db_name, page_num))
                 page_num += 1
+
+        # Remove duplicate q_codes
+        conn = sqlite3.connect(self.db_location)
+        try:
+            with conn:
+                cur = conn.cursor()
+                cur.execute("""DELETE FROM quandl_codes
+                               WHERE rowid NOT IN
+                               (SELECT min(rowid)
+                               FROM quandl_codes
+                               GROUP BY q_code)""")
+                print('Successfully removed all duplicate q_codes from '
+                      'quandl_codes')
+        except sqlite3.Error as e:
+            conn.rollback()
+            print(e)
+            print('Error: Not able to remove duplicate q_codes in the %s data '
+                  'set while running the extractor.' % (db_name,))
+        except conn.OperationalError:
+            print('Unable to connect to the SQL Database in extractor. Make '
+                  'sure the database address/name are correct.')
+        except Exception as e:
+            print('Error: An unknown issue occurred when removing all '
+                  'duplicate q_codes in the %s data set.' % (db_name,))
+            print(e)
 
         # Change the data set page_num variable to -2, indicating it finished
         conn = sqlite3.connect(self.db_location)
@@ -308,6 +340,10 @@ class QuandlCodeExtract(object):
         except conn.OperationalError:
             print('Unable to connect to the SQL Database in extractor. Make '
                   'sure the database address/name are correct.')
+        except Exception as e:
+            print('Error: An unknown issue occurred when changing the page_num'
+                  'rows for codes in the %s data set.' % (db_name,))
+            print(e)
 
         print('The %s database took %0.1f seconds to download'
               % (db_name, time.time() - dl_csv_start_time))
@@ -347,7 +383,8 @@ class QuandlCodeExtract(object):
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_3_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code, axis=1, args=('data_vendor',))
+        df['data_vendor'] = df.apply(strip_q_code,
+                                     axis=1, args=('data_vendor',))
         df['data'] = df.apply(strip_q_code, axis=1, args=('data',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         df['period'] = df.apply(strip_q_code, axis=1, args=('period',))
@@ -378,7 +415,8 @@ class QuandlCodeExtract(object):
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_2_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code, axis=1, args=('data_vendor',))
+        df['data_vendor'] = df.apply(strip_q_code,
+                                     axis=1, args=('data_vendor',))
         df['data'] = df.apply(strip_q_code, axis=1, args=('data',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         return df
@@ -396,7 +434,8 @@ class QuandlCodeExtract(object):
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_1_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code, axis=1, args=('data_vendor',))
+        df['data_vendor'] = df.apply(strip_q_code, axis=1,
+                                     args=('data_vendor',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         return df
 
@@ -734,8 +773,8 @@ class GoogleFinanceDataExtraction(object):
                                            '.csv', index_col=False)
             # Exclude these codes that are within the 15 day re-download period
             beg_date_obj_wo_data = (datetime.utcnow() - timedelta(days=15))
-            exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried']
-                                                > beg_date_obj_wo_data.isoformat()]
+            exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
+                                                beg_date_obj_wo_data.isoformat()]
             # Change DF to a list of only the q_codes
             list_to_exclude = exclude_codes_df['q_code'].values.flatten()
             # Create a temp DF from q_codes_df with only the codes to exclude
