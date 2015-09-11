@@ -1,3 +1,8 @@
+from create_tables import main_tables, stock_tables
+from extractor import QuandlCodeExtract
+from load_aux_tables import LoadTables
+from extractor import QuandlDataExtraction, GoogleFinanceDataExtraction
+
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
@@ -6,7 +11,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.0'
+__version__ = '1.1'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -40,20 +45,14 @@ Database data download tasks:
 Future expansions:
     Implement daily option chain data (from Google or Yahoo)
     Further link the same data via unique code IDs
-
 '''
-
-from create_tables import main_tables, stock_tables
-from extractor import QuandlCodeExtract
-from load_aux_tables import LoadTables
-from extractor import QuandlDataExtraction, GoogleFinanceDataExtraction
 
 ###############################################################################
 # General options:
 
 # Go to quandl.com to signup for a free account to get a Quandl API Token
 # NOTE: DELETE THIS TOKEN BEFORE CONTRIBUTING CODE; keep it confidential!
-quandl_token = 'XXXXXXXXXXXXXXX'
+quandl_token = 'XXXXXXXXXXX'
 
 # Specify the name of the Security Master database
 # The name must have underscores instead of spaces and must have '.db' on end
@@ -61,7 +60,7 @@ database_name = 'pySecMaster.db'
 
 # Change the location for where the database will be created
 # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/'
-database_location = 'C:/Users/XXXXXX/Desktop/'
+database_location = 'C:/Users/XXXX/Desktop/'
 
 database_link = database_location + database_name
 
@@ -72,7 +71,7 @@ database_link = database_location + database_name
 # Examples: 'GOOG', 'WIKI', 'YAHOO', 'SEC', 'EIA', 'JODI', 'CURRFX', 'FINRA'
 # ToDo: Determine how to handle Futures; codes are a single item w/o a '_'
 # ToDo: Determine how to handle USDAFAS; codes have 3 item formats
-database_list = ['WIKI', 'GOOG']
+database_list = ['WIKI']
 
 # Integer that represents the number of days before the Quandl Codes will be
 # refreshed. In addition, if a database wasn't completely downloaded within
@@ -89,13 +88,13 @@ tables_to_load = ['data_vendor', 'exchanges']
 
 # What source should the data be downloaded from? Quandl and/or Google Fin?
 # Examples: 'all', 'quandl', 'google_fin'
-download_source = 'google_fin'
+download_source = 'quandl'
 
 # Specify the items that will have their data downloaded.
 # Examples: 'all', 'us_only', 'us_main'
 # To add a field or understand what is actually being downloaded, go to
 # 	query_q_codes in extractor.py, and look at the SQLite queries.
-quandl_selection = 'us_main_goog'
+quandl_selection = 'wiki'
 google_fin_selection = 'us_main_goog'
 
 # Specify the time in seconds before the data is allowed to be re-downloaded.

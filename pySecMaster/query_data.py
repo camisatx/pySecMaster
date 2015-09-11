@@ -1,3 +1,7 @@
+import pandas as pd
+import sqlite3
+import time
+
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
@@ -6,7 +10,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.0'
+__version__ = '1.1'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -22,10 +26,6 @@ __version__ = '1.0'
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
-
-import pandas as pd
-import sqlite3
-import time
 
 
 def retrieve_q_code(sql_qry):
@@ -175,7 +175,7 @@ exchange = 'NASDAQ'
 daily_data_vendor = 'WIKI'     # WIKI, GOOG
 beg_date = '2015-01-01 00:00:00'
 end_date = '2015-12-30 00:00:00'
-frequency = 'minute'    # daily, minute
+frequency = 'daily'    # daily, minute
 
 query_type = 'ticker'     # index, ticker, exchange, country, etc.
 
@@ -199,7 +199,7 @@ else:
 
 print('Query took %0.2f seconds' % (time.time() - start_time))
 # print(prices_df.head(5))
-prices_df.to_csv('latest_price.csv')
+prices_df.to_csv('%s_%s.csv' % (ticker, frequency))
 
 unique_q_codes = pd.unique((prices_df['q_code']).values)
 print('There are %i unique q_codes' % (len(unique_q_codes)))

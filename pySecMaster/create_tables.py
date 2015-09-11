@@ -1,3 +1,5 @@
+import sqlite3
+
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
@@ -6,7 +8,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.0'
+__version__ = '1.1'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -22,8 +24,6 @@ __version__ = '1.0'
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
-
-import sqlite3
 
 # Future table additions:
 #   corporate_actions
