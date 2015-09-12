@@ -49,36 +49,48 @@ def main_tables(db_location):
 
     def quandl_codes(c):
         c.execute('''CREATE TABLE IF NOT EXISTS quandl_codes
-        (q_code_id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_vendor         TEXT,
-        data                TEXT,
-        component           TEXT,
-        period              TEXT,
-        q_code              TEXT,
-        name                TEXT,
-        start_date          FLOAT,
-        end_date            FLOAT,
-        frequency           TEXT,
-        last_updated        FLOAT,
-        page_num            INTEGER,
-        created_date        FLOAT,
-        updated_date        FLOAT,
-        FOREIGN KEY(data_vendor) REFERENCES data_vendor(name))''')
+        (q_code_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        quandl_id               INTEGER,
+        ticker_id               INTEGER,
+        data                    TEXT,
+        component               TEXT,
+        period                  TEXT,
+        dataset_code            TEXT,
+        database_code           TEXT,
+        name                    TEXT,
+        description             TEXT,
+        refreshed_at            FLOAT,
+        newest_available_date   FLOAT,
+        oldest_available_date   FLOAT,
+        column_names            TEXT,
+        frequency               TEXT,
+        type                    TEXT,
+        premium                 INTEGER,
+        database_id             INTEGER,
+        page_num                INTEGER,
+        created_date            FLOAT,
+        updated_date            FLOAT,
+        FOREIGN KEY(database_code) REFERENCES data_vendor(api),
+        FOREIGN KEY(ticker_id) REFERENCES tickers(symbol_id))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_data
                     ON quandl_codes(data)""")
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_comp
+                    ON quandl_codes(component)""")
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_ticker_id
+                    ON quandl_codes(ticker_id)""")
 
     def fundamental_data(c):
         c.execute('''CREATE TABLE IF NOT EXISTS fundamental_data
         (fundamental_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        q_code          TEXT,
+        q_code_id       TEXT,
         date            TEXT,
         value           REAL,
         note            TEXT,
         created_date    FLOAT,
         updated_date    FLOAT,
-        FOREIGN KEY(q_code) REFERENCES quandl_codes(q_code))''')
+        FOREIGN KEY(q_code_id) REFERENCES quandl_codes(q_code_id))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_q_code
-                    ON fundamental_data(q_code)""")
+                    ON fundamental_data(q_code_id)""")
 
     data_vendor(cur)
     quandl_codes(cur)
@@ -117,11 +129,11 @@ def stock_tables(db_location):
         as_of               TEXT,
         created_date        FLOAT,
         updated_date        FLOAT,
-        FOREIGN KEY(symbol_id) REFERENCES quandl_codes(symbol_id))''')
+        FOREIGN KEY(symbol_id) REFERENCES tickers(symbol_id))''')
 
     def tickers(c):
         c.execute('''CREATE TABLE IF NOT EXISTS tickers
-        (symbol_id              INTEGER PRIMARY KEY,
+        (symbol_id              INTEGER PRIMARY KEY AUTOINCREMENT,
         ticker                  TEXT,
         exchange                TEXT,
         sector                  TEXT,
@@ -131,7 +143,6 @@ def stock_tables(db_location):
         hq_country              TEXT,
         created_date            FLOAT,
         updated_date            FLOAT,
-        FOREIGN KEY(symbol_id) REFERENCES quandl_codes(symbol_id),
         FOREIGN KEY(exchange) REFERENCES exchange(abbrev))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
                     ON tickers(sector)""")
@@ -140,7 +151,7 @@ def stock_tables(db_location):
         c.execute('''CREATE TABLE IF NOT EXISTS daily_prices
         (daily_price_id INTEGER PRIMARY KEY AUTOINCREMENT,
         data_vendor_id  INT,
-        q_code          TEXT,
+        q_code_id       INT,
         date            TEXT,
         open            REAL,
         high            REAL,
@@ -156,9 +167,9 @@ def stock_tables(db_location):
         adj_volume      REAL,
         updated_date    FLOAT,
         FOREIGN KEY(data_vendor_id) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(q_code) REFERENCES quandl_codes(q_code))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_q_code
-                    ON daily_prices(q_code)""")
+        FOREIGN KEY(q_code_id) REFERENCES quandl_codes(q_code_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_q_code_id
+                    ON daily_prices(q_code_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_date
                     ON daily_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_updated_date
@@ -168,7 +179,7 @@ def stock_tables(db_location):
         c.execute('''CREATE TABLE IF NOT EXISTS minute_prices
         (minute_price_id INTEGER PRIMARY KEY AUTOINCREMENT,
         data_vendor_id  INT,
-        q_code          TEXT,
+        q_code_id       INT,
         date            TEXT,
         close           REAL,
         high            REAL,
@@ -177,9 +188,9 @@ def stock_tables(db_location):
         volume          REAL,
         updated_date    FLOAT,
         FOREIGN KEY(data_vendor_id) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(q_code) REFERENCES quandl_codes(q_code))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_q_code
-                    ON minute_prices(q_code)""")
+        FOREIGN KEY(q_code_id) REFERENCES quandl_codes(q_code_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_q_code_id
+                    ON minute_prices(q_code_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_date
                     ON minute_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_updated_date
@@ -188,15 +199,15 @@ def stock_tables(db_location):
     def finra_data(c):
         c.execute('''CREATE TABLE IF NOT EXISTS finra_data
         (finra_id               INTEGER PRIMARY KEY AUTOINCREMENT,
-        q_code                  TEXT,
+        q_code_id               INT,
         date                    TEXT,
         short_volume            REAL,
         short_exempt_volume     REAL,
         total_volume            REAL,
         updated_date            FLOAT,
-        FOREIGN KEY(q_code) REFERENCES quandl_codes(q_code))''')
-        c.execute('''CREATE INDEX IF NOT EXISTS idx_finra_q_code
-                    ON finra_data(q_code)''')
+        FOREIGN KEY(q_code_id) REFERENCES quandl_codes(q_code_id))''')
+        c.execute('''CREATE INDEX IF NOT EXISTS idx_finra_q_code_id
+                    ON finra_data(q_code_id)''')
 
     def options_prices(c):
         c.execute('''CREATE TABLE IF NOT EXISTS options_prices

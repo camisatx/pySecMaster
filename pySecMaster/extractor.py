@@ -87,6 +87,8 @@ def df_to_sql(df, db_location, sql_table, exists, item):
         # print('Successfully entered the Quandl Codes into the SQL Database')
     except conn.Error:
         conn.rollback()
+        # df.to_csv('error_logs/' + item + '_' +
+        #           str(datetime.now().strftime('%Y%m%d%H%M%S')) + '.csv')
         print("Failed to insert the DataFrame into the Database for %s" %
               (item,))
     except conn.OperationalError:
@@ -166,7 +168,7 @@ class QuandlCodeExtract(object):
 
             # This for loop only provides program info; doesn't format anything
             for row in range(len(data_sets)):
-                existing_vendor = data_sets.loc[row, 'data_vendor']
+                existing_vendor = data_sets.loc[row, 'database_code']
                 # existing_page_num = data_sets.loc[row, 'page_num']
                 existing_updated_date = data_sets.loc[row, 'updated_date']
                 if existing_vendor not in self.db_list:
@@ -179,17 +181,17 @@ class QuandlCodeExtract(object):
             for data_vendor in self.db_list:
 
                 # Does the data vendor already exists? If not go to extractor.
-                vendor_exist = data_sets.loc[data_sets['data_vendor'] ==
+                vendor_exist = data_sets.loc[data_sets['database_code'] ==
                                              data_vendor]
                 if len(vendor_exist) == 0:
                     self.extractor(data_vendor)
 
                 # Data vendor already exist. Check for other criteria
                 else:
-                    page_num = data_sets.loc[data_sets['data_vendor'] ==
+                    page_num = data_sets.loc[data_sets['database_code'] ==
                                              data_vendor, 'page_num']
                     page_num = page_num.iloc[0]
-                    updated_date = data_sets.loc[data_sets['data_vendor'] ==
+                    updated_date = data_sets.loc[data_sets['database_code'] ==
                                                  data_vendor, 'updated_date']
                     updated_date = updated_date.iloc[0]
 
@@ -215,7 +217,8 @@ class QuandlCodeExtract(object):
                               'New codes will now be downloaded to replace the '
                               'old codes' % (data_vendor, self.update_range))
                         query = ("""DELETE FROM quandl_codes
-                                    WHERE data_vendor='%s'""" % (data_vendor,))
+                                    WHERE database_code='%s'"""
+                                 % (data_vendor,))
                         del_success = delete_sql_table_rows(self.db_location,
                                                             query,
                                                             'quandl_codes',
@@ -240,10 +243,10 @@ class QuandlCodeExtract(object):
         try:
             conn = sqlite3.connect(self.db_location)
             with conn:
-                df = pd.read_sql("SELECT data_vendor, "
+                df = pd.read_sql("SELECT database_code, "
                                  "MAX(page_num) AS page_num, updated_date "
                                  "FROM  quandl_codes "
-                                 "GROUP BY data_vendor ", conn)
+                                 "GROUP BY database_code ", conn)
                 return df
         except sqlite3.Error as e:
             print('Error when trying to connect to the database quandl_codes '
@@ -273,16 +276,16 @@ class QuandlCodeExtract(object):
                 next_page = False
             else:
                 try:
-                    db_pg_df.insert(0, 'data_vendor', 'Unknown')
-                    db_pg_df.insert(1, 'data', 'Unknown')
-                    db_pg_df.insert(2, 'component', 'Unknown')
-                    db_pg_df.insert(3, 'period', 'Unknown')
+                    db_pg_df.insert(1, 'ticker_id', 0)
+                    db_pg_df.insert(2, 'data', 'Unknown')
+                    db_pg_df.insert(3, 'component', 'Unknown')
+                    db_pg_df.insert(4, 'period', 'Unknown')
                 except Exception as e:
                     print('The columns for component, period, document and '
                           'data_vendor are already created.')
                     print(e)
 
-                if db_name in ('EIA', 'JODI', 'ZFA', 'ZFB', 'RAYMOND'):
+                if db_name in ('EIA', 'JODI', 'ZFA', 'ZFB', 'RAYMOND', 'SEC'):
                     clean_df = self.process_3_item_q_codes(db_pg_df)
                 elif db_name in ('GOOG', 'YAHOO', 'FINRA'):
                     clean_df = self.process_2_item_q_codes(db_pg_df)
@@ -306,7 +309,7 @@ class QuandlCodeExtract(object):
                                WHERE rowid NOT IN
                                (SELECT min(rowid)
                                FROM quandl_codes
-                               GROUP BY q_code)""")
+                               GROUP BY quandl_id)""")
                 print('Successfully removed all duplicate q_codes from '
                       'quandl_codes')
         except sqlite3.Error as e:
@@ -329,7 +332,7 @@ class QuandlCodeExtract(object):
                 cur = conn.cursor()
                 cur.execute("""UPDATE quandl_codes
                                SET page_num=-2
-                               WHERE data_vendor=?""", (db_name,))
+                               WHERE database_code=?""", (db_name,))
                 print('Successfully updated %s codes with final page_num '
                       'variable.' % (db_name,))
         except sqlite3.Error as e:
@@ -351,40 +354,36 @@ class QuandlCodeExtract(object):
     @staticmethod
     def process_3_item_q_codes(df):
 
-        # Each EIA q_code structure: EIA/[document]_[component]_[period]
+        # Each EIA code structure: EIA/[document]_[component]_[period]
         #   NOTE: EIA/IES database does not follow this structure
-        # JODI q_code structure: JODI/[type]_[product][flow][unit]_[country]
+        # JODI code structure: JODI/[type]_[product][flow][unit]_[country]
 
         def strip_q_code(row, column):
-            q_code = row['q_code']
-            if column == 'data_vendor':
-                return q_code[:q_code.find('/')]
-            elif column == 'data':
+            code = row['dataset_code']
+            if column == 'data':
                 # ToDo: Find a way to include items with an underscore in name
                 # Example: 'EIA/AEO_2014_{Component}_A' --> 'AEO_2014'
                 # If block handles 1 item codes that are in 3 item data sets
-                if q_code.find('_') != -1:
-                    return q_code[q_code.find('/') + 1:q_code.find('_')]
+                if code.find('_') != -1:
+                    return code[:code.find('_')]
                 else:
                     return 'Unknown'
             elif column == 'component':
                 # If block handles 1 item codes that are in 3 item data sets
-                if q_code.find('_') != -1:
-                    return q_code[q_code.find('_') + 1:q_code.rfind('_')]
+                if code.find('_') != -1:
+                    return code[code.find('_') + 1:code.rfind('_')]
                 else:
-                    return q_code[q_code.find('/') + 1:]
+                    return code
             elif column == 'period':
                 # If block handles 1 item codes that are in 3 item data sets
-                if q_code.find('_') != -1:
-                    return q_code[q_code.rfind('_') + 1:]
+                if code.find('_') != -1:
+                    return code[code.rfind('_') + 1:]
                 else:
                     return 'Unknown'
             else:
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_3_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code,
-                                     axis=1, args=('data_vendor',))
         df['data'] = df.apply(strip_q_code, axis=1, args=('data',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         df['period'] = df.apply(strip_q_code, axis=1, args=('period',))
@@ -394,29 +393,25 @@ class QuandlCodeExtract(object):
     def process_2_item_q_codes(df):
 
         def strip_q_code(row, column):
-            q_code = row['q_code']
-            if column == 'data_vendor':
-                return q_code[:q_code.find('/')]
-            elif column == 'data':
+            code = row['dataset_code']
+            if column == 'data':
                 # data -> exchange
                 # If block handles 1 item codes that are in 2 item data sets
-                if q_code.find('_') != -1:
-                    return q_code[q_code.find('/') + 1:q_code.find('_')]
+                if code.find('_') != -1:
+                    return code[:code.find('_')]
                 else:
                     return 'Unknown'
             elif column == 'component':
                 # component -> ticker
                 # If block handles 1 item codes that are in 2 item data sets
-                if q_code.find('_') != -1:
-                    return q_code[q_code.find('_') + 1:]
+                if code.find('_') != -1:
+                    return code[code.find('_') + 1:]
                 else:
-                    return q_code[q_code.find('/') + 1:]
+                    return code
             else:
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_2_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code,
-                                     axis=1, args=('data_vendor',))
         df['data'] = df.apply(strip_q_code, axis=1, args=('data',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         return df
@@ -425,17 +420,13 @@ class QuandlCodeExtract(object):
     def process_1_item_q_codes(df):
 
         def strip_q_code(row, column):
-            q_code = row['q_code']
-            if column == 'data_vendor':
-                return q_code[:q_code.find('/')]
-            elif column == 'component':
-                return q_code[q_code.find('/') + 1:]
+            code = row['dataset_code']
+            if column == 'component':
+                return code
             else:
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_1_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code, axis=1,
-                                     args=('data_vendor',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         return df
 
@@ -471,7 +462,7 @@ class QuandlDataExtraction(object):
         q_code_df = self.query_q_codes(self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
-                              left_on='q_code', right_index=True, how='left')
+                              left_on='q_code_id', right_index=True, how='left')
         # Sort the DF with un-downloaded items first, then based on last update
         q_codes_df.sort('updated_date', ascending=True, na_position='first',
                         inplace=True)
@@ -484,7 +475,7 @@ class QuandlDataExtraction(object):
                                    (q_codes_df['updated_date'].isnull())]
 
         # Change the DF to a list
-        q_code_list = q_codes_final['q_code'].values.flatten()
+        q_code_list = q_codes_final['q_code_id'].values.flatten()
 
         # Inform the user how many codes will be updated
         dl_codes = len(q_codes_final.index)
@@ -534,11 +525,11 @@ class QuandlDataExtraction(object):
 
                 # Retrieve all q_codes
                 if download_selection == 'all':
-                    cur.execute("""SELECT q_code FROM quandl_codes""")
+                    cur.execute("""SELECT q_code_id FROM quandl_codes""")
 
                 # Retrieve q_codes traded in any exchange located in the US
                 elif download_selection == 'us_only':
-                    cur.execute("""SELECT q_code
+                    cur.execute("""SELECT q_code_id
                                     FROM quandl_codes
                                     WHERE
                                     exchange IN(
@@ -552,18 +543,18 @@ class QuandlDataExtraction(object):
                     # NYSE - 4453 items
                     # NYSEARCA - ETFs; 1572 items
                     # NYSEMKT - Former AMEX; Small caps; 506 items
-                    cur.execute("""SELECT q_code
+                    cur.execute("""SELECT q_code_id
                                    FROM quandl_codes
                                    WHERE data IN (
                                        SELECT abbrev_goog
                                        FROM exchange
                                        WHERE abbrev IN ('NASDAQ','NYSE'))
-                                   AND data_vendor='GOOG'""")
+                                   AND database_code='GOOG'""")
 
                 elif download_selection == 'wiki':
-                    cur.execute("""SELECT q_code
+                    cur.execute("""SELECT q_code_id
                                    FROM quandl_codes
-                                   WHERE data_vendor='WIKI'""")
+                                   WHERE database_code='WIKI'""")
 
                 else:
                     raise TypeError('Error: In query_q_codes, improper '
@@ -572,7 +563,7 @@ class QuandlDataExtraction(object):
                 
                 data = cur.fetchall()
                 if data:
-                    df = pd.DataFrame(data, columns=['q_code'])
+                    df = pd.DataFrame(data, columns=['q_code_id'])
                     # ticker_list = df.values.flatten()
                     # df.to_csv('query_q_code.csv')
                     return df
@@ -595,10 +586,11 @@ class QuandlDataExtraction(object):
         try:
             conn = sqlite3.connect(self.database_location)
             with conn:
-                df = pd.read_sql("SELECT q_code, MAX(date) as date, "
+                df = pd.read_sql("SELECT q_code_id, MAX(date) as date, "
                                  "updated_date "
                                  "FROM  daily_prices "
-                                 "GROUP BY q_code", conn, index_col='q_code')
+                                 "GROUP BY q_code_id", conn,
+                                 index_col='q_code_id')
                 if len(df.index) == 0:
                     return df
                 df['date'] = df.apply(dt_from_iso, axis=1, args=('date',))
@@ -685,7 +677,7 @@ class QuandlDataExtraction(object):
                     #   deleted before the new data can be added.
                     first_date_iso = clean_data['date'].min()
                     query = ("""DELETE FROM daily_prices
-                                WHERE q_code='%s'
+                                WHERE q_code_id='%s'
                                 AND date>='%s'""" % (q_code, first_date_iso))
                     del_success = delete_sql_table_rows(self.database_location,
                                                         query, 'daily_prices',
@@ -762,32 +754,32 @@ class GoogleFinanceDataExtraction(object):
         q_code_df = self.query_q_codes(self.dwnld_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
-                              left_on='q_code', right_index=True, how='left')
+                              left_on='q_code_id', right_index=True, how='left')
         # Sort the DF with un-downloaded items first, then based on last update
         q_codes_df.sort('updated_date', ascending=True, na_position='first',
                         inplace=True)
 
         try:
             # Load the codes that did not have data from the last extractor run
-            codes_wo_data_df = pd.read_csv('load_tables/goog_min_codes_wo_data'
-                                           '.csv', index_col=False)
+            codes_wo_data_df = pd.read_csv('load_tables/goog_min_codes_wo_data_'
+                                           'v3.csv', index_col=False)
             # Exclude these codes that are within the 15 day re-download period
             beg_date_obj_wo_data = (datetime.utcnow() - timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
                                                 beg_date_obj_wo_data.isoformat()]
             # Change DF to a list of only the q_codes
-            list_to_exclude = exclude_codes_df['q_code'].values.flatten()
+            list_to_exclude = exclude_codes_df['q_code_id'].values.flatten()
             # Create a temp DF from q_codes_df with only the codes to exclude
-            q_codes_to_exclude = q_codes_df['q_code'].isin(list_to_exclude)
+            q_codes_to_exclude = q_codes_df['q_code_id'].isin(list_to_exclude)
             # From the main DF, remove any of the codes that are in the temp DF
             # NOTE: Might be able to just use exclude_codes_df instead
             q_codes_df = q_codes_df[~q_codes_to_exclude]
         except IOError:
             # The CSV file doesn't exist; create a file that will be appended to
-            with open('load_tables/goog_min_codes_wo_data.csv', 'a',
+            with open('load_tables/goog_min_codes_wo_data_v3.csv', 'a',
                       newline='') as f:
                 writer = csv.writer(f, delimiter=',')
-                writer.writerow(('q_code', 'date_tried'))
+                writer.writerow(('q_code_id', 'date_tried'))
             pass
 
         # The cut-off time for when code data can be re-downloaded
@@ -798,7 +790,7 @@ class GoogleFinanceDataExtraction(object):
                                    (q_codes_df['updated_date'].isnull())]
 
         # Change the DF to a list
-        q_code_list = q_codes_final['q_code'].values.flatten()
+        q_code_list = q_codes_final['q_code_id'].values.flatten()
 
         # Inform the user how many codes will be updated
         dl_codes = len(q_codes_final.index)
@@ -848,19 +840,19 @@ class GoogleFinanceDataExtraction(object):
 
                 # Retrieve all GOOG q_codes
                 if download_selection == 'all':
-                    cur.execute("""SELECT q_code
+                    cur.execute("""SELECT q_code_id
                                    FROM quandl_codes
-                                   WHERE data_vendor='GOOG'""")
+                                   WHERE database_code='GOOG'""")
                 # Retrieve GOOG q_codes traded in any exchange located in the US
                 elif download_selection == 'us_only':
-                    cur.execute("""SELECT q_code
+                    cur.execute("""SELECT q_code_id
                                     FROM quandl_codes
                                     WHERE
                                     exchange IN(
                                         SELECT abbrev_goog
                                         FROM exchange
                                         WHERE country='United States')
-                                    AND data_vendor='GOOG'""")
+                                    AND database_code='GOOG'""")
                 # Retrieve GOOG q_codes that are in these main US exchanges
                 elif download_selection == 'us_main_goog':
                     # Restricts codes that have had updates in the past 45 days
@@ -870,14 +862,15 @@ class GoogleFinanceDataExtraction(object):
                     # NYSE - 4453 items
                     # NYSEARCA - ETFs; 1572 items
                     # NYSEMKT - Former AMEX; Small caps; 506 items
-                    cur.execute("""SELECT q_code
+                    cur.execute("""SELECT q_code_id
                                    FROM quandl_codes
                                    WHERE data IN (
                                        SELECT abbrev_goog
                                        FROM exchange
                                        WHERE abbrev IN ('NASDAQ','NYSE'))
-                                   AND data_vendor='GOOG'
-                                   AND end_date>?""", (beg_date.isoformat(),))
+                                   AND database_code='GOOG'
+                                   AND newest_available_date>?""",
+                                (beg_date.isoformat(),))
                 else:
                     raise TypeError('Error: In query_q_codes, improper '
                                     'download_selection was provided. If this '
@@ -886,7 +879,7 @@ class GoogleFinanceDataExtraction(object):
 
                 data = cur.fetchall()
                 if data:
-                    df = pd.DataFrame(data, columns=['q_code'])
+                    df = pd.DataFrame(data, columns=['q_code_id'])
                     # ticker_list = df.values.flatten()
                     # df.to_csv('query_q_code.csv')
                     return df
@@ -909,10 +902,11 @@ class GoogleFinanceDataExtraction(object):
         try:
             conn = sqlite3.connect(self.db_location)
             with conn:
-                df = pd.read_sql("SELECT q_code, MAX(date) as date, "
+                df = pd.read_sql("SELECT q_code_id, MAX(date) as date, "
                                  "updated_date "
                                  "FROM  minute_prices "
-                                 "GROUP BY q_code", conn, index_col='q_code')
+                                 "GROUP BY q_code_id", conn,
+                                 index_col='q_code_id')
                 if len(df.index) == 0:
                     return df
                 df['date'] = df.apply(dt_from_iso, axis=1, args=('date',))
@@ -992,7 +986,7 @@ class GoogleFinanceDataExtraction(object):
                     first_date_iso = clean_data['date'].min()
 
                     query = ("""DELETE FROM minute_prices
-                                WHERE q_code='%s'
+                                WHERE q_code_id='%s'
                                 AND date>='%s'""" % (q_code, first_date_iso))
                     del_success = delete_sql_table_rows(self.db_location,
                                                         query, 'minute_prices',

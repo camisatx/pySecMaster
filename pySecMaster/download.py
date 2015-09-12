@@ -75,11 +75,14 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
 
 def dt_to_iso(row, column):
     """
-    Change the default date format of "YYYY-MM-DD" to an ISO 8601 format
+    Change the default date format of "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS UTC"
+    to an ISO 8601 format.
     """
     raw_date = row[column]
     try:
         raw_date_obj = datetime.strptime(raw_date, '%Y-%m-%d')
+    except ValueError:
+        raw_date_obj = datetime.strptime(raw_date, '%Y-%m-%d %H:%M:%S %Z')
     except TypeError:   # Occurs if there is no date provided ("nan")
         raw_date_obj = datetime.today()
     return raw_date_obj.isoformat()
@@ -234,12 +237,14 @@ def download_quandl_codes(quandl_token, db_url, db_name, page_num,
     """
 
     download_try += 1
-    col_names = ['q_code', 'name', 'start_date', 'end_date', 'frequency',
-                 'last_updated']
+    col_names = ['quandl_id', 'dataset_code', 'database_code', 'name',
+                 'description', 'refreshed_at', 'newest_available_date',
+                 'oldest_available_date', 'column_names', 'frequency', 'type',
+                 'premium', 'database_id']
     file = quandl_download_csv(quandl_token, db_url, db_name, page_num=page_num)
     try:
         df = pd.read_csv(file, index_col=False, names=col_names,
-                         encoding='utf-8')
+                         skiprows=1, encoding='utf-8')
     except TypeError:
         # When there are no more codes to download, the file object will be an
         #   empty CSV. This will cause the read_csv function to fail on a
@@ -259,9 +264,11 @@ def download_quandl_codes(quandl_token, db_url, db_name, page_num,
                           'the %s database. Quitting after 10 failed attempts.'
                           % (page_num, db_name))
 
-    df['start_date'] = df.apply(dt_to_iso, axis=1, args=('start_date',))
-    df['end_date'] = df.apply(dt_to_iso, axis=1, args=('end_date',))
-    df['last_updated'] = df.apply(dt_to_iso, axis=1, args=('last_updated',))
+    df['newest_available_date'] = df.apply(dt_to_iso, axis=1,
+                                           args=('newest_available_date',))
+    df['oldest_available_date'] = df.apply(dt_to_iso, axis=1,
+                                           args=('oldest_available_date',))
+    df['refreshed_at'] = df.apply(dt_to_iso, axis=1, args=('refreshed_at',))
 
     df.insert(len(df.columns), 'page_num', page_num)
     df.insert(len(df.columns), 'created_date', datetime.utcnow().isoformat())
@@ -270,32 +277,32 @@ def download_quandl_codes(quandl_token, db_url, db_name, page_num,
     return df
 
 
-def download_quandl_data(quandl_token, db_url, q_code, beg_date=None):
+def download_quandl_data(quandl_token, db_url, q_code_id, beg_date=None):
     """ Receives a Quandl Code as a string, and it calls the QuandlDownload
     class to actually download it. Once downloaded, this adds titles to the
     column headers, depending on what type of Quandl Code it is. Last, a
     column for the q_code is added to the DataFrame.
 
-    :param q_code: A string of the Quandl Code.
+    :param q_code_id: A string of the Quandl Code.
     :param beg_date: String of the start date (YYYY-MM-DD) to download
     :return: A DataFrame with the data points for the Quandl Code.
     """
 
     # Download the data to a CSV file
     if beg_date is not None:
-        file = quandl_download_csv(quandl_token, db_url, q_code,
+        file = quandl_download_csv(quandl_token, db_url, q_code_id,
                                    beg_date=beg_date)
     else:
-        file = quandl_download_csv(quandl_token, db_url, q_code)
+        file = quandl_download_csv(quandl_token, db_url, q_code_id)
 
     # Specify the column headers
-    if q_code[:4] == 'WIKI':
+    if q_code_id[:4] == 'WIKI':
         column_names = ['date', 'open', 'high', 'low', 'close', 'volume',
                         'ex_dividend', 'split_ratio', 'adj_open',
                         'adj_high', 'adj_low', 'adj_close', 'adj_volume']
-    elif q_code[:4] == 'GOOG':
+    elif q_code_id[:4] == 'GOOG':
         column_names = ['date', 'open', 'high', 'low', 'close', 'volume']
-    elif q_code[:5] == 'YAHOO':
+    elif q_code_id[:5] == 'YAHOO':
         column_names = ['date', 'open', 'high', 'low', 'close',
                         'volume', 'adjusted_close']
     else:
@@ -311,7 +318,7 @@ def download_quandl_data(quandl_token, db_url, q_code, beg_date=None):
 
     df = df[1:]     # Removes the column headers from the Quandl download
     df['date'] = df.apply(dt_to_iso, axis=1, args=('date',))
-    df.insert(0, 'q_code', q_code)
+    df.insert(0, 'q_code', q_code_id)
     df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
 
     return df
@@ -319,17 +326,17 @@ def download_quandl_data(quandl_token, db_url, q_code, beg_date=None):
 
 # Received captch after about 2000 queries (100 queries/60 sec; 4 threads)
 @rate_limit(rate=25, period_sec=60, threads=4)
-def download_google_data(db_url, q_code):
+def download_google_data(db_url, q_code_id):
     """ Receives a Quandl Code as a string, splits the code into ticker and
     exchange, then passes it to the url to download the data. Once downloaded,
     this adds titles to the column headers.
 
-    :param q_code: A string of the Quandl Code.
+    :param q_code_id: A string of the Quandl Code.
     :return: A DataFrame with the data points for the Quandl Code.
     """
 
-    ticker = q_code[q_code.find('_') + 1:]
-    exchange = q_code[q_code.find('/') + 1:q_code.find('_')]
+    ticker = q_code_id[q_code_id.find('_') + 1:]
+    exchange = q_code_id[q_code_id.find('/') + 1:q_code_id.find('_')]
     download_try = 0
 
     # Make the url string; aside from the root, the items can be in any order
@@ -362,7 +369,7 @@ def download_google_data(db_url, q_code):
                 raise OSError('HTTPError %s: Reached API call limit. Make the '
                               'RateLimit more restrictive.' % (e.reason,))
             elif str(e) == 'HTTP Error 404: Not Found':
-                raise OSError('HTTPError %s: %s not found' % (e.reason, q_code))
+                raise OSError('HTTPError %s: %s not found' % (e.reason, q_code_id))
             elif str(e) == 'HTTP Error 429: Too Many Requests':
                 if download_try <= 5:
                     print('HTTPError %s: Exceeded API limit. Make the '
@@ -417,7 +424,7 @@ def download_google_data(db_url, q_code):
             else:
                 print('Base URL used: %s' % (url,))
                 raise OSError('HTTPError %s: Unknown error when downloading %s'
-                              % (e.reason, q_code))
+                              % (e.reason, q_code_id))
 
         except URLError as e:
             if download_try <= 10:
@@ -436,7 +443,7 @@ def download_google_data(db_url, q_code):
             print(e)
             raise OSError('Warning: Encountered an unknown error when '
                           'downloading %s in download_data in download.py' %
-                          (q_code,))
+                          (q_code_id,))
 
     def google_data_processing(url_obj):
         """ Takes the url object returned from Google, and format the text data
@@ -503,23 +510,23 @@ def download_google_data(db_url, q_code):
         # Data successfully downloaded; check to see if code was on the list
         file_local = 'load_tables/goog_min_codes_wo_data.csv'
         codes_wo_data_df = pd.read_csv(file_local, index_col=False)
-        if len(codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code]) > 0:
+        if len(codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code_id]) > 0:
             # The q_code that was downloaded had no data on the previous run.
             #   Remove the code from the CSV list.
-            wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != q_code]
+            wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != q_code_id]
             wo_data_df.to_csv(file_local, index=False)
             print('%s was removed from the wo_data CSV file since data was '
-                  'available for download.' % (q_code,))
+                  'available for download.' % (q_code_id,))
     except IndexError:
         # There is no minute data for this code; add to CSV file via DF
-        min_df = pd.DataFrame(data=[(q_code, datetime.utcnow().isoformat())],
+        min_df = pd.DataFrame(data=[(q_code_id, datetime.utcnow().isoformat())],
                               columns=['q_code', 'date_tried'])
         with open('load_tables/goog_min_codes_wo_data.csv', 'a') as f:
             min_df.to_csv(f, mode='a', header=False, index=False)
         # print('Flag: Not able to process data for %s' % (q_code,))
         return pd.DataFrame()
     except Exception as e:
-        print('Flag: Error occurred when processing data for %s' % (q_code,))
+        print('Flag: Error occurred when processing data for %s' % (q_code_id,))
         print(e)
         return pd.DataFrame()
 
@@ -530,7 +537,7 @@ def download_google_data(db_url, q_code):
         return row[column].isoformat()
 
     df['date'] = df.apply(datetime_to_iso, axis=1, args=('date',))
-    df.insert(0, 'q_code', q_code)
+    df.insert(0, 'q_code', q_code_id)
     df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
 
     return df

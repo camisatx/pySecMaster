@@ -79,8 +79,8 @@ database_list = ['WIKI']
 update_range = 30
 
 # Don't change these unless you know what you are doing
-database_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
-                'source_code=', '&per_page=300&page=']
+database_url = ['https://www.quandl.com/api/v3/datasets.csv?database_code=',
+                '&per_page=100&page=']
 tables_to_load = ['data_vendor', 'exchanges']
 
 ###############################################################################
@@ -112,7 +112,7 @@ quandl_days_back = 30
 google_fin_days_back = 5
 
 # Don't change these unless you know what you are doing
-quandl_data_url = ['https://www.quandl.com/api/v1/datasets/', '.csv']
+quandl_data_url = ['https://www.quandl.com/api/v3/datasets/', '.csv']
 google_fin_url = {'root': 'http://www.google.com/finance/getprices?',
                   'ticker': 'q=',
                   'exchange': 'x=',
