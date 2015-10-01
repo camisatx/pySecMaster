@@ -534,3 +534,164 @@ def download_google_data(db_url, q_code):
     df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
 
     return df
+
+
+def download_csidata_factsheet(db_url, data_type, exchange_id=None,
+                               data_format='csv'):
+    """
+    Downloads the CSV factsheet for the provided data_type (stocks, commodities,
+    currencies, etc.). A DataFrame is returned.
+
+    http://www.csidata.com/factsheets.php?type=stock&format=csv
+
+    :param db_url: String of the url root for the CSI Data website
+    :param data_type: String of the data to download
+    :param exchange_id: None or integer of the specific exchange to download
+    :param data_format: String of the type of file that should be returned.
+        Default as a CSV
+    :return:
+    """
+
+    url_string = db_url + 'type=' + data_type + '&format=' + data_format
+    if exchange_id:
+        url_string += '&exchangeid=' + exchange_id
+
+    download_try = 0
+
+    def download_data(url, download_try):
+        """ Downloads the data from the url provided.
+
+        :param url: String that contains the url of the data to download.
+        :param download_try: Integer of the number of attempts to download data.
+        :return: A CSV file as a url object
+        """
+
+        download_try += 1
+        try:
+            # Download the data
+            return urlopen(url)
+
+        except HTTPError as e:
+            if str(e) == 'HTTP Error 403: Forbidden':
+                raise OSError('HTTPError %s: Reached API call limit. Make the '
+                              'RateLimit more restrictive.' % (e.reason,))
+            elif str(e) == 'HTTP Error 404: Not Found':
+                raise OSError('HTTPError %s: %s not found' %
+                              (e.reason, data_type))
+            elif str(e) == 'HTTP Error 429: Too Many Requests':
+                if download_try <= 5:
+                    print('HTTPError %s: Exceeded API limit. Make the '
+                          'RateLimit more restrictive. Program will sleep for '
+                          '11 minutes and will try again...' % (e.reason,))
+                    time.sleep(11 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Exceeded API limit. After '
+                                  'trying 5 time, the download was still not '
+                                  'successful. You could have hit the per day '
+                                  'call limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 502: Bad Gateway':
+                if download_try <= 10:
+                    print('HTTPError %s: Encountered a bad gateway with the '
+                          'server. Maybe the network is down. Will sleep for '
+                          '5 minutes'
+                          % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 times, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
+            elif str(e) == 'HTTP Error 503: Service Unavailable':
+                # Received this HTTP Error after 2000 queries. Browser showed
+                #   captch message upon loading url.
+                if download_try <= 10:
+                    print('HTTPError %s: Server is currently unavailable. '
+                          'Maybe the network is down or the server is blocking '
+                          'you. Will sleep for 5 minutes...' % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. '
+                                  'Quitting for now.' % (e.reason,))
+            elif str(e) == 'HTTP Error 504: GATEWAY_TIMEOUT':
+                if download_try <= 10:
+                    print('HTTPError %s: Server connection timed out. Maybe '
+                          'the network is down. Will sleep for 5 minutes'
+                          % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
+            else:
+                print('Base URL used: %s' % (url,))
+                raise OSError('HTTPError %s: Unknown error when downloading %s'
+                              % (e.reason, data_type))
+
+        except URLError as e:
+            if download_try <= 10:
+                print('Warning: Experienced URL Error %s. Program will '
+                      'sleep for 5 minutes and will then try again...' %
+                      (e.reason,))
+                time.sleep(5 * 60)
+                download_data(url, download_try)
+            else:
+                raise URLError('Warning: Still experiencing URL Error %s. '
+                               'After trying 10 times, the error remains. '
+                               'Quitting for now, but you can try again later.'
+                               % (e.reason,))
+
+        except Exception as e:
+            print(e)
+            raise OSError('Warning: Encountered an unknown error when '
+                          'downloading %s in download_data in download.py' %
+                          (data_type,))
+
+    def datetime_to_iso(row, column):
+        """
+        Change the default date format of "YYYY-MM-DD" to an ISO 8601 format
+        """
+        raw_date = row[column]
+        try:
+            raw_date_obj = datetime.strptime(raw_date, '%Y-%m-%d').isoformat()
+        except TypeError:   # Occurs if there is no date provided ("nan")
+            raw_date_obj = None
+        return raw_date_obj
+
+    csv_file = download_data(url_string, download_try)
+
+    try:
+        df = pd.read_csv(csv_file, encoding='latin_1', low_memory=False)
+
+        if data_type == 'stock':
+            df['StartDate'] = df.apply(datetime_to_iso, axis=1,
+                                       args=('StartDate',))
+            df['EndDate'] = df.apply(datetime_to_iso, axis=1,
+                                     args=('EndDate',))
+            df['SwitchCfDate'] = df.apply(datetime_to_iso, axis=1,
+                                          args=('SwitchCfDate',))
+
+    except Exception as e:
+        print('Flag: Error occurred when processing CSI %s data' % data_type)
+        print(e)
+        return pd.DataFrame()
+
+    return df
+
+
+if __name__ == '__main__':
+
+    output_dir = 'C:/Users/Josh/Desktop/'
+
+    url_root = 'http://www.csidata.com/factsheets.php?'
+    csi_data_type = 'commodity'     # commodity, stock
+    csi_exchange_id = '113'     # 113, 89
+    df = download_csidata_factsheet(url_root, csi_data_type, csi_exchange_id)
+
+    print(df.head(10))

@@ -6,7 +6,7 @@ from multiprocessing import Pool
 import csv
 
 from download import download_quandl_codes, download_quandl_data, \
-    download_google_data
+    download_google_data, download_csidata_factsheet
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
@@ -16,7 +16,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.0'
+__version__ = '1.1'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -560,10 +560,24 @@ class QuandlDataExtraction(object):
                                        WHERE abbrev IN ('NASDAQ','NYSE'))
                                    AND data_vendor='GOOG'""")
 
+                # Retrieve all codes from the WIKI database
                 elif download_selection == 'wiki':
                     cur.execute("""SELECT q_code
                                    FROM quandl_codes
                                    WHERE data_vendor='WIKI'""")
+
+                # Retrieve all codes from the WIKI database and the GOOG codes
+                #   from the main US exchanges (NYSE, NYSEARCA, AMEX)
+                elif download_selection == 'wiki_and_us_main_goog':
+                    cur.execute("""SELECT q_code
+                                   FROM quandl_codes
+                                   WHERE (data IN (
+                                       SELECT abbrev_goog
+                                       FROM exchange
+                                       WHERE abbrev IN ('NYSE', 'NYSEARCA',
+                                           'AMEX'))
+                                       AND data_vendor='GOOG')
+                                   OR data_vendor='WIKI'""")
 
                 else:
                     raise TypeError('Error: In query_q_codes, improper '
@@ -574,7 +588,7 @@ class QuandlDataExtraction(object):
                 if data:
                     df = pd.DataFrame(data, columns=['q_code'])
                     # ticker_list = df.values.flatten()
-                    # df.to_csv('query_q_code.csv')
+                    df.to_csv('query_q_code.csv')
                     return df
                 else:
                     raise TypeError('Not able to determine the q_codes from '
@@ -1037,3 +1051,36 @@ class GoogleFinanceDataExtraction(object):
             print('Error when trying to retrieve data from database in '
                   'retrieve_data_vendor_id')
             print(e)
+
+
+class CSIDataExtractor(object):
+
+    def __init__(self, db_location, db_url, data_type, exchange_id=None):
+
+        self.db_location = db_location
+        self.db_url = db_url
+        self.data_type = data_type
+        self.exchange_id = exchange_id
+
+        self.main()
+
+    def main(self):
+
+        start_time = time.time()
+
+        data = download_csidata_factsheet(self.db_url, self.data_type,
+                                          self.exchange_id)
+
+        if len(data.index) == 0:
+            print('No data returned for %s | %0.1f seconds' %
+                  (self.data_type, time.time() - start_time))
+
+        else:
+            if self.data_type == 'stock':
+                df_to_sql(data, self.db_location, 'csidata_stock_factsheet',
+                          'append', self.data_type)
+                print('Updated %s | %0.1f seconds' %
+                      (self.data_type, time.time() - start_time))
+            else:
+                print('No table exists for the CSI Data %s factsheet' %
+                      (self.data_type,))
