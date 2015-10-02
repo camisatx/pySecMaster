@@ -1055,12 +1055,14 @@ class GoogleFinanceDataExtraction(object):
 
 class CSIDataExtractor(object):
 
-    def __init__(self, db_location, db_url, data_type, exchange_id=None):
+    def __init__(self, db_location, db_url, data_type, redownload_time,
+                 exchange_id=None):
 
         self.db_location = db_location
         self.db_url = db_url
         self.data_type = data_type
         self.exchange_id = exchange_id
+        self.redownload_time = redownload_time
 
         self.main()
 
@@ -1068,19 +1070,94 @@ class CSIDataExtractor(object):
 
         start_time = time.time()
 
-        data = download_csidata_factsheet(self.db_url, self.data_type,
-                                          self.exchange_id)
+        # Add new CSI Data tables to this if block
+        if self.data_type == 'stock':
+            table = 'csidata_stock_factsheet'
+        else:
+            raise SystemError('No table exists for the CSI Data %s '
+                              'factsheet. Once the table has been added to '
+                              'the create_tables.py file, add an elif '
+                              'block to the main and query_existing_data '
+                              'methods in the CSIDataExtractor class of '
+                              'extractor.py.' % (self.data_type,))
 
-        if len(data.index) == 0:
-            print('No data returned for %s | %0.1f seconds' %
+        existing_data = self.query_existing_data(table)
+        if len(existing_data) != 0:
+            # If there is existing data, check if the data is older than the
+            #   specified update range. If so, ensure that data looks
+            #   reasonable, and then delete the existing data.
+
+            beg_date_obj = (datetime.utcnow() -
+                            timedelta(days=self.redownload_time))
+            if existing_data.loc[0, 'updated_date'] < beg_date_obj.isoformat():
+
+                # Download the latest data
+                print('Downloading the CSI Data factsheet for %s' %
+                      (self.data_type,))
+                data = download_csidata_factsheet(self.db_url, self.data_type,
+                                                  self.exchange_id)
+
+                if len(data.index) == 0:
+                    print('No data returned for %s | %0.1f seconds' %
+                          (self.data_type, time.time() - start_time))
+                    return
+
+                else:
+                    if ((len(data) >= 1.2 * len(existing_data)) |
+                            (len(data) <= len(existing_data) / 1.2)):
+                        # Check to make sure new data is within 20% of the
+                        #   existing data
+                        print('The new data was outside of the 20% band from '
+                              'the existing data')
+                        return
+
+                    # Delete old data
+                    query = ('DELETE FROM %s' % (table,))
+                    del_success = delete_sql_table_rows(self.db_location, query,
+                                                        table, self.data_type)
+
+                    if del_success == 'success':
+                        print('The data in the %s table was successfully '
+                              'deleted. Will now repopulate it...' % (table,))
+                    elif del_success == 'failure':
+                        print('There was an error deleting the data from %s' %
+                              (table,))
+                        return
+
+            else:
+                # The last update to the data was within the update window
+                print('The downloaded data is within the update window, '
+                      'thus the existing data will not be replaced')
+                return
+
+            # Re-add the new data to the specified table
+            df_to_sql(data, self.db_location, table, 'append', self.data_type)
+            print('Updated %s | %0.1f seconds' %
                   (self.data_type, time.time() - start_time))
 
-        else:
-            if self.data_type == 'stock':
-                df_to_sql(data, self.db_location, 'csidata_stock_factsheet',
-                          'append', self.data_type)
-                print('Updated %s | %0.1f seconds' %
-                      (self.data_type, time.time() - start_time))
-            else:
-                print('No table exists for the CSI Data %s factsheet' %
-                      (self.data_type,))
+    def query_existing_data(self, table):
+        """ Determine what prior CSI Data codes are in the database for the
+        current data type (stock, commodity, etc.).
+
+        :return: A DataFrame with the Quandl data set and the max page_num.
+        """
+
+        try:
+            conn = sqlite3.connect(self.db_location)
+            with conn:
+                # Add new CSI Data tables to this if block
+                if self.data_type == 'stock':
+                    df = pd.read_sql("SELECT CsiNumber, updated_date "
+                                     "FROM csidata_stock_factsheet", conn)
+                else:
+                    print('No table exists for the CSI Data %s factsheet. Once '
+                          'the table has been added to the create_tables.py'
+                          'file, add an elif block to the main and '
+                          'query_existing_data methods in the CSIDataExtractor '
+                          'class of extractor.py.' % (self.data_type,))
+                    df = pd.DataFrame()
+                return df
+        except sqlite3.Error as e:
+            print('Error when trying to connect to the database %s table in '
+                  'query_existing_data.' % (table,))
+            print(e)

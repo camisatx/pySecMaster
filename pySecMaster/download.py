@@ -682,6 +682,9 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
         print(e)
         return pd.DataFrame()
 
+    df.insert(len(df.columns), 'created_date', datetime.utcnow().isoformat())
+    df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
+
     return df
 
 

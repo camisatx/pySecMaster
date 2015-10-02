@@ -109,7 +109,9 @@ def stock_tables(db_location):
         LastVolume          INTEGER,
         Type                TEXT,
         ChildExchange       TEXT,
-        Currency            TEXT)''')
+        Currency            TEXT,
+        created_date        FLOAT,
+        updated_date        FLOAT)''')
 
     def exchange(c):
         c.execute('''CREATE TABLE IF NOT EXISTS exchange
