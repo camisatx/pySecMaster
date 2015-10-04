@@ -10,7 +10,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.1'
+__version__ = '1.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -171,9 +171,9 @@ database_location = 'C:/Users/####/Desktop/pySecMaster.db'
 index = 'S&P 500'  # 'S&P 500', 'Russell Midcap', 'Russell 2000', 'Russell 1000'
 
 ticker = 'AAPL'
-exchange = 'NASDAQ'
+exchange = 'Unknown'       # NASDAQ, NYSE, Unknown
 daily_data_vendor = 'WIKI'     # WIKI, GOOG
-beg_date = '2015-01-01 00:00:00'
+beg_date = '2009-01-01 00:00:00'
 end_date = '2015-12-30 00:00:00'
 frequency = 'daily'    # daily, minute
 

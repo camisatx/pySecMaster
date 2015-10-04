@@ -8,7 +8,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.1'
+__version__ = '1.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -91,6 +91,27 @@ def stock_tables(db_location):
 
     conn = sqlite3.connect(db_location)
     cur = conn.cursor()
+
+    def csidata_stock_factsheet(c):
+        c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
+        (CsiNumber          INTEGER PRIMARY KEY,
+        Symbol              TEXT,
+        Name                TEXT,
+        Exchange            TEXT,
+        IsActive            INTEGER,
+        StartDate           TEXT,
+        EndDate             TEXT,
+        Sector              TEXT,
+        Industry            TEXT,
+        ConversionFactor    INTEGER,
+        SwitchCfDate        TEXT,
+        PreSwitchCf         INTEGER,
+        LastVolume          INTEGER,
+        Type                TEXT,
+        ChildExchange       TEXT,
+        Currency            TEXT,
+        created_date        FLOAT,
+        updated_date        FLOAT)''')
 
     def exchange(c):
         c.execute('''CREATE TABLE IF NOT EXISTS exchange
@@ -220,6 +241,7 @@ def stock_tables(db_location):
         updated_date        FLOAT,
         FOREIGN KEY(data_vendor) REFERENCES data_vendor(data_vendor_id))''')
 
+    csidata_stock_factsheet(cur)
     exchange(cur)
     indices(cur)
     tickers(cur)
