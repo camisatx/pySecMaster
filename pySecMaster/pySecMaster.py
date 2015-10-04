@@ -1,7 +1,7 @@
 from create_tables import main_tables, stock_tables
-from extractor import QuandlCodeExtract
+from extractor import QuandlCodeExtract, QuandlDataExtraction,\
+    GoogleFinanceDataExtraction, CSIDataExtractor
 from load_aux_tables import LoadTables
-from extractor import QuandlDataExtraction, GoogleFinanceDataExtraction
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
@@ -11,7 +11,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.1'
+__version__ = '1.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -35,16 +35,18 @@ This manages the securities master database. It can be run daily.
 Database maintenance tasks:
     Creates the tables in the database.
     Downloads all available Quandl Codes for the Quandl Databases selected.
+    Downloads the specified CSI Data factsheet (stocks, commodities).
     Loads auxiliary tables from included CSV files.
 
 Database data download tasks:
-    Downloads Quandl data based on the download selection criteria.
+    Downloads Quandl data based on the download selection criteria using either
+        the official Quandl Codes or implied codes from CSI Data.
     Downloads Google Finance minute stock data.
     Can either append only the new data, or replace part of the existing data.
 
 Future expansions:
     Implement daily option chain data (from Google or Yahoo)
-    Further link the same data via unique code IDs
+    Further link the same data via unique code IDs (perhaps utilizing CSINum?)
 '''
 
 ###############################################################################
@@ -72,15 +74,18 @@ database_link = database_location + database_name
 # ToDo: Determine how to handle Futures; codes are a single item w/o a '_'
 # ToDo: Determine how to handle USDAFAS; codes have 3 item formats
 database_list = ['WIKI']
+csidata_type = 'stock'      # stock, commodity
 
-# Integer that represents the number of days before the Quandl Codes will be
-# refreshed. In addition, if a database wasn't completely downloaded within
-# this data range, the remainder of the codes will be attempted to download.
+# Integer that represents the number of days before the ticker tables will be
+#   refreshed. In addition, if a database wasn't completely downloaded within
+#   this data range, the remainder of the codes will attempt to download.
 update_range = 30
+csidata_update_range = 5
 
 # Don't change these unless you know what you are doing
 database_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
                 'source_code=', '&per_page=300&page=']
+csidata_url = 'http://www.csidata.com/factsheets.php?'
 tables_to_load = ['data_vendor', 'exchanges']
 
 ###############################################################################
@@ -90,11 +95,21 @@ tables_to_load = ['data_vendor', 'exchanges']
 # Examples: 'all', 'quandl', 'google_fin'
 download_source = 'quandl'
 
-# Specify the items that will have their data downloaded.
-# Examples: 'all', 'us_only', 'us_main'
-# To add a field or understand what is actually being downloaded, go to
-# 	query_q_codes in extractor.py, and look at the SQLite queries.
+# When the Quandl or Google Fin data is downloaded, where should the extractor
+#   get the ticker codes from? Either use the official list of codes from
+#   Quandl, or make reasonable guesses from the CSI Data stock factsheet, which
+#   is more accurate but produces more failed/empty downloads.
+quandl_ticker_source = 'quandl'        # quandl, csidata
+google_fin_ticker_source = 'quandl'        # quandl, csidata
+
+# Specify the items that will have their data downloaded. To add a field or
+#   to understand what is actually being downloaded, go to the query_q_codes
+#   method in either the QuandlDataExtraction class or the
+#   GoogleFinanceDataExtraction class in extractor.py, and look at the SQLite
+#   queries.
+# Quandl options: 'all', 'wiki', 'us_only', 'us_main', 'wiki_and_us_main_goog'
 quandl_selection = 'wiki'
+# Google Fin options: 'all', 'us_only', 'us_main_goog'
 google_fin_selection = 'us_main_goog'
 
 # Specify the time in seconds before the data is allowed to be re-downloaded.
@@ -133,6 +148,9 @@ def maintenance():
     main_tables(database_link)
     stock_tables(database_link)
 
+    # You can comment out either of these classes if you don't plan on using it
+    CSIDataExtractor(database_link, csidata_url, csidata_type,
+                     csidata_update_range)
     QuandlCodeExtract(database_link, quandl_token, database_list, database_url,
                       update_range)
 
@@ -141,21 +159,28 @@ def maintenance():
 
 def data_download():
 
-    if download_source in ['all', 'quandl']:
+    if (download_source in ['all', 'quandl']) and ('WIKI' in database_list):
         # Download data for selected Quandl Codes
         print('\nDownloading all Quandl fields for: %s \nNew data will %s the '
               'prior %s days data'
               % (quandl_selection, data_process, quandl_days_back))
-        QuandlDataExtraction(database_link, quandl_token, quandl_data_url,
-                             quandl_selection, redownload_time, data_process,
+        QuandlDataExtraction(database_link,
+                             quandl_token,
+                             quandl_data_url,
+                             quandl_ticker_source,
+                             quandl_selection,
+                             redownload_time,
+                             data_process,
                              quandl_days_back)
 
-    if download_source in ['all', 'google_fin']:
+    if (download_source in ['all', 'google_fin']) and ('GOOG' in database_list):
         # Download minute data for selected Google Finance codes
         print('\nDownloading all Google Finance fields for: %s \nNew data will '
               '%s the prior %s day''s data'
               % (google_fin_selection, data_process, google_fin_days_back))
-        GoogleFinanceDataExtraction(database_link, google_fin_url,
+        GoogleFinanceDataExtraction(database_link,
+                                    google_fin_url,
+                                    google_fin_ticker_source,
                                     google_fin_selection,
                                     google_fin_redwnld_time, data_process,
                                     google_fin_days_back)
