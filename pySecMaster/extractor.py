@@ -442,11 +442,12 @@ class QuandlCodeExtract(object):
 
 class QuandlDataExtraction(object):
 
-    def __init__(self, db_location, quandl_token, db_url, download_selection,
-                 redownload_time, data_process, days_back):
+    def __init__(self, db_location, quandl_token, db_url, ticker_source,
+                 download_selection, redownload_time, data_process, days_back):
         self.database_location = db_location
         self.quandl_token = quandl_token
         self.db_url = db_url
+        self.ticker_source = ticker_source
         self.download_selection = download_selection
         self.redownload_time = redownload_time
         self.data_process = data_process
@@ -468,13 +469,36 @@ class QuandlDataExtraction(object):
 
         print('Analyzing the Quandl Codes that will be downloaded...')
         # Create a list of securities to download
-        q_code_df = self.query_q_codes(self.download_selection)
+        q_code_df = self.query_q_codes(self.ticker_source,
+                                       self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
                               left_on='q_code', right_index=True, how='left')
         # Sort the DF with un-downloaded items first, then based on last update
         q_codes_df.sort('updated_date', ascending=True, na_position='first',
                         inplace=True)
+
+        try:
+            # Load the codes that did not have data from the last extractor run
+            codes_wo_data_df = pd.read_csv('load_tables/quandl_codes_wo_data'
+                                           '.csv', index_col=False)
+            # Exclude these codes that are within the 15 day re-download period
+            beg_date_obj_wo_data = (datetime.utcnow() - timedelta(days=15))
+            exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
+                                                beg_date_obj_wo_data.isoformat()]
+            # Change DF to a list of only the q_codes
+            list_to_exclude = exclude_codes_df['q_code'].values.flatten()
+            # Create a temp DF from q_codes_df with only the codes to exclude
+            q_codes_to_exclude = q_codes_df['q_code'].isin(list_to_exclude)
+            # From the main DF, remove any of the codes that are in the temp DF
+            # NOTE: Might be able to just use exclude_codes_df instead
+            q_codes_df = q_codes_df[~q_codes_to_exclude]
+        except IOError:
+            # The CSV file doesn't exist; create a file that will be appended to
+            with open('load_tables/quandl_codes_wo_data.csv', 'a',
+                      newline='') as f:
+                writer = csv.writer(f, delimiter=',')
+                writer.writerow(('q_code', 'date_tried'))
 
         # The cut-off time for when code data can be re-downloaded
         beg_date_obj = (datetime.utcnow() -
@@ -511,7 +535,7 @@ class QuandlDataExtraction(object):
         print('The price extraction took %0.2f seconds to complete' %
               (time.time() - start_time))
 
-    def query_q_codes(self, download_selection):
+    def query_q_codes(self, ticker_source, download_selection):
         """
         Builds a list of Quandl Codes from a SQL query. These codes are the
         items that will have their data downloaded. 
@@ -532,67 +556,110 @@ class QuandlDataExtraction(object):
 
                 # ToDo: MED: Will need to create queries for additional items
 
-                # Retrieve all q_codes
-                if download_selection == 'all':
-                    cur.execute("""SELECT q_code FROM quandl_codes""")
+                if ticker_source == 'quandl':
+                    # Retrieve all q_codes
+                    if download_selection == 'all':
+                        cur.execute("""SELECT q_code FROM quandl_codes""")
 
-                # Retrieve q_codes traded in any exchange located in the US
-                elif download_selection == 'us_only':
-                    cur.execute("""SELECT q_code
-                                    FROM quandl_codes
-                                    WHERE
-                                    exchange IN(
-                                        SELECT abbrev_goog
-                                        FROM exchange
-                                        WHERE country='United States')""")
+                    # Retrieve q_codes traded in any exchange located in the US
+                    elif download_selection == 'us_only':
+                        cur.execute("""SELECT q_code
+                                        FROM quandl_codes
+                                        WHERE
+                                        exchange IN(
+                                            SELECT abbrev_goog
+                                            FROM exchange
+                                            WHERE country='United States')""")
 
-                # Retrieve q_codes that are in these main US exchanges
-                elif download_selection == 'us_main_goog':
-                    # NASDAQ - 3173 items
-                    # NYSE - 4453 items
-                    # NYSEARCA - ETFs; 1572 items
-                    # NYSEMKT - Former AMEX; Small caps; 506 items
-                    cur.execute("""SELECT q_code
-                                   FROM quandl_codes
-                                   WHERE data IN (
-                                       SELECT abbrev_goog
-                                       FROM exchange
-                                       WHERE abbrev IN ('NASDAQ','NYSE'))
-                                   AND data_vendor='GOOG'""")
+                    # Retrieve q_codes that are in these main US exchanges
+                    elif download_selection == 'us_main_goog':
+                        # NASDAQ - 3173 items
+                        # NYSE - 4453 items
+                        # NYSEARCA - ETFs; 1572 items
+                        # NYSEMKT - Former AMEX; Small caps; 506 items
+                        cur.execute("""SELECT q_code
+                                       FROM quandl_codes
+                                       WHERE data IN (
+                                           SELECT abbrev_goog
+                                           FROM exchange
+                                           WHERE abbrev IN ('NASDAQ','NYSE'))
+                                       AND data_vendor='GOOG'""")
 
-                # Retrieve all codes from the WIKI database
-                elif download_selection == 'wiki':
-                    cur.execute("""SELECT q_code
-                                   FROM quandl_codes
-                                   WHERE data_vendor='WIKI'""")
+                    # Retrieve all codes from the WIKI database
+                    elif download_selection == 'wiki':
+                        cur.execute("""SELECT q_code
+                                       FROM quandl_codes
+                                       WHERE data_vendor='WIKI'""")
 
-                # Retrieve all codes from the WIKI database and the GOOG codes
-                #   from the main US exchanges (NYSE, NYSEARCA, AMEX)
-                elif download_selection == 'wiki_and_us_main_goog':
-                    cur.execute("""SELECT q_code
-                                   FROM quandl_codes
-                                   WHERE (data IN (
-                                       SELECT abbrev_goog
-                                       FROM exchange
-                                       WHERE abbrev IN ('NYSE', 'NYSEARCA',
-                                           'AMEX'))
-                                       AND data_vendor='GOOG')
-                                   OR data_vendor='WIKI'""")
+                    # Retrieve all codes from the WIKI database and the GOOG
+                    #   codes from the main US exchanges (NYSE, NYSEARCA, AMEX)
+                    elif download_selection == 'wiki_and_us_main_goog':
+                        cur.execute("""SELECT q_code
+                                       FROM quandl_codes
+                                       WHERE (data IN (
+                                           SELECT abbrev_goog
+                                           FROM exchange
+                                           WHERE abbrev IN ('NYSE', 'NYSEARCA',
+                                               'AMEX'))
+                                           AND data_vendor='GOOG')
+                                       OR data_vendor='WIKI'""")
 
+                    else:
+                        raise TypeError('Error: In query_q_codes, improper '
+                                        'download_selection was provided. If '
+                                        'this is a new query, ensure the SQL '
+                                        'is correct.')
+
+                elif ticker_source == 'csidata':
+
+                    # Retrieve all tickers
+                    if download_selection == 'all':
+                        cur.execute("""SELECT Symbol
+                                       FROM csidata_stock_factsheet""")
+
+                    # Retrieve tickers that trade only on main US exchanges
+                    elif download_selection == 'wiki' or 'us_main':
+                        # Restricts tickers to those that have been active
+                        #   within the prior two years.
+                        beg_date = (datetime.utcnow() - timedelta(days=730))
+                        cur.execute("""SELECT Symbol
+                                       FROM csidata_stock_factsheet
+                                       WHERE EndDate > ?
+                                       AND Exchange IN ('AMEX', 'NYSE', 'OTC')
+                                       AND ChildExchange IN ('AMEX',
+                                           'BATS Global Markets',
+                                           'Nasdaq Capital Market',
+                                           'Nasdaq Global Market',
+                                           'Nasdaq Global Select',
+                                           'NYSE', 'NYSE ARCA')""",
+                                    (beg_date.isoformat(),))
+
+                    else:
+                        raise TypeError('Error: In query_q_codes, improper '
+                                        'download_selection was provided. If '
+                                        'this is a new query, ensure the SQL '
+                                        'is correct.')
                 else:
-                    raise TypeError('Error: In query_q_codes, improper '
-                                    'download_selection was provided. If this '
-                                    'is a new query, ensure the SQL is proper')
-                
+                    raise TypeError('Improper ticker_source was provided in'
+                                    'query_q_codes of QuandlDataExtraction.')
+
                 data = cur.fetchall()
                 if data:
                     df = pd.DataFrame(data, columns=['q_code'])
+                    df.drop_duplicates(inplace=True)
+
+                    if ticker_source == 'csidata':
+                        # Need to add 'WIKI/' before every ticker to make it
+                        #   compatible with the Quandl WIKI code structure
+                        df['q_code'] = df.apply(lambda x: 'WIKI/' + x, axis=1)
+
                     # ticker_list = df.values.flatten()
-                    df.to_csv('query_q_code.csv')
+                    # df.to_csv('query_q_code.csv')
                     return df
                 else:
-                    raise TypeError('Not able to determine the q_codes from '
-                                    'the SQL query in query_q_codes')
+                    raise TypeError('Not able to determine the q_codes '
+                                    'from the SQL query in query_q_codes')
+
         except sqlite3.Error as e:
             print(e)
             raise TypeError('Error when trying to connect to the database '
@@ -748,10 +815,11 @@ class QuandlDataExtraction(object):
 
 class GoogleFinanceDataExtraction(object):
 
-    def __init__(self, db_location, db_url, dwnld_selection, redownload_time,
-                 data_process, days_back):
+    def __init__(self, db_location, db_url, ticker_source, dwnld_selection,
+                 redownload_time, data_process, days_back):
         self.db_location = db_location
         self.db_url = db_url
+        self.ticker_source = ticker_source
         self.dwnld_selection = dwnld_selection
         self.redownload_time = redownload_time
         self.data_process = data_process
@@ -773,7 +841,7 @@ class GoogleFinanceDataExtraction(object):
 
         print('Analyzing the Quandl Codes that will be downloaded...')
         # Create a list of securities to download
-        q_code_df = self.query_q_codes(self.dwnld_selection)
+        q_code_df = self.query_q_codes(self.ticker_source, self.dwnld_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
                               left_on='q_code', right_index=True, how='left')
@@ -802,7 +870,6 @@ class GoogleFinanceDataExtraction(object):
                       newline='') as f:
                 writer = csv.writer(f, delimiter=',')
                 writer.writerow(('q_code', 'date_tried'))
-            pass
 
         # The cut-off time for when code data can be re-downloaded
         beg_date_obj = (datetime.utcnow() -
@@ -838,7 +905,7 @@ class GoogleFinanceDataExtraction(object):
         print('The price extraction took %0.2f seconds to complete' %
               (time.time() - start_time))
 
-    def query_q_codes(self, download_selection):
+    def query_q_codes(self, ticker_source, download_selection):
         """
         Builds a list of Quandl Codes from a SQL query. These codes are the
         items that will have their data downloaded. NOTE: Only return GOOG
@@ -860,47 +927,125 @@ class GoogleFinanceDataExtraction(object):
 
                 # ToDo: MED: Will need to create queries for additional items
 
-                # Retrieve all GOOG q_codes
-                if download_selection == 'all':
-                    cur.execute("""SELECT q_code
-                                   FROM quandl_codes
-                                   WHERE data_vendor='GOOG'""")
-                # Retrieve GOOG q_codes traded in any exchange located in the US
-                elif download_selection == 'us_only':
-                    cur.execute("""SELECT q_code
-                                    FROM quandl_codes
-                                    WHERE
-                                    exchange IN(
-                                        SELECT abbrev_goog
-                                        FROM exchange
-                                        WHERE country='United States')
-                                    AND data_vendor='GOOG'""")
-                # Retrieve GOOG q_codes that are in these main US exchanges
-                elif download_selection == 'us_main_goog':
-                    # Restricts codes that have had updates in the past 45 days
-                    #   since Google only provides min data with 15 day history
-                    beg_date = (datetime.utcnow() - timedelta(days=45))
-                    # NASDAQ - 3173 items
-                    # NYSE - 4453 items
-                    # NYSEARCA - ETFs; 1572 items
-                    # NYSEMKT - Former AMEX; Small caps; 506 items
-                    cur.execute("""SELECT q_code
-                                   FROM quandl_codes
-                                   WHERE data IN (
-                                       SELECT abbrev_goog
-                                       FROM exchange
-                                       WHERE abbrev IN ('NASDAQ','NYSE'))
-                                   AND data_vendor='GOOG'
-                                   AND end_date>?""", (beg_date.isoformat(),))
+                if ticker_source == 'quandl':
+
+                    # Retrieve all GOOG q_codes
+                    if download_selection == 'all':
+                        cur.execute("""SELECT q_code
+                                       FROM quandl_codes
+                                       WHERE data_vendor='GOOG'""")
+                    # Retrieve GOOG q_codes traded in any exchange located in
+                    #   the US
+                    elif download_selection == 'us_only':
+                        cur.execute("""SELECT q_code
+                                        FROM quandl_codes
+                                        WHERE
+                                        exchange IN(
+                                            SELECT abbrev_goog
+                                            FROM exchange
+                                            WHERE country='United States')
+                                        AND data_vendor='GOOG'""")
+                    # Retrieve GOOG q_codes that are in these main US exchanges
+                    elif download_selection == 'us_main_goog':
+                        # Restricts codes that have had updates in the past
+                        #   45 days since Google only provides min data with
+                        #   15 day history
+                        beg_date = (datetime.utcnow() - timedelta(days=45))
+                        # NASDAQ - 3173 items
+                        # NYSE - 4453 items
+                        # NYSEARCA - ETFs; 1572 items
+                        # NYSEMKT - Former AMEX; Small caps; 506 items
+                        cur.execute("""SELECT q_code
+                                       FROM quandl_codes
+                                       WHERE data IN (
+                                           SELECT abbrev_goog
+                                           FROM exchange
+                                           WHERE abbrev IN ('NASDAQ','NYSE'))
+                                       AND data_vendor='GOOG'
+                                       AND end_date>?""",
+                                    (beg_date.isoformat(),))
+                    else:
+                        raise TypeError('Error: In query_q_codes, improper '
+                                        'download_selection was provided. If '
+                                        'this is a new query, ensure the SQL '
+                                        'has proper syntax.')
+
+                elif ticker_source == 'csidata':
+
+                    # Retrieve all tickers
+                    if download_selection == 'all':
+                        cur.execute("""SELECT Symbol, Exchange
+                                       FROM csidata_stock_factsheet""")
+
+                    # Retrieve tickers that trade only on main US exchanges
+                    elif download_selection == 'wiki' or 'us_main':
+                        # Restricts tickers to those that have been active
+                        #   within the prior two years.
+                        beg_date = (datetime.utcnow() - timedelta(days=730))
+                        cur.execute("""SELECT Symbol, ChildExchange
+                                       FROM csidata_stock_factsheet
+                                       WHERE EndDate > ?
+                                       AND Exchange IN ('AMEX', 'NYSE', 'OTC')
+                                       AND ChildExchange IN ('AMEX',
+                                           'BATS Global Markets',
+                                           'Nasdaq Capital Market',
+                                           'Nasdaq Global Market',
+                                           'Nasdaq Global Select',
+                                           'NYSE', 'NYSE ARCA')""",
+                                    (beg_date.isoformat(),))
+
+                    else:
+                        raise TypeError('Error: In query_q_codes, improper '
+                                        'download_selection was provided. If '
+                                        'this is a new query, ensure the SQL '
+                                        'is correct.')
+
                 else:
-                    raise TypeError('Error: In query_q_codes, improper '
-                                    'download_selection was provided. If this '
-                                    'is a new query, ensure the SQL has proper '
-                                    'syntax.')
+                    raise TypeError('Improper ticker_source was provided '
+                                    'in query_q_codes of '
+                                    'GoogleFinanceDataExtraction')
+
+                def format_tickers(row, column):
+                    # Used exclusively to create a Quandl code from the CSI
+                    #   Data stock factsheet
+
+                    ticker = row[column[0]]
+                    exchange = row[column[1]]
+
+                    if exchange == 'NYSE ARCA':
+                        exchange = 'NYSEARCA'
+                    elif exchange[:6] == 'Nasdaq':
+                        exchange = 'NASDAQ'
+                    elif exchange[:4] == 'BATS':
+                        exchange = 'BATS'
+                    # else use the default ChildExchange for exchange
+
+                    return 'GOOG/' + exchange + '_' + ticker
 
                 data = cur.fetchall()
                 if data:
-                    df = pd.DataFrame(data, columns=['q_code'])
+                    if ticker_source == 'quandl':
+                        # Tickers from Quandl require no additional formatting
+                        df = pd.DataFrame(data, columns=['q_code'])
+                        df.drop_duplicates(inplace=True)
+
+                    elif ticker_source == 'csidata':
+                        # Tickers and exchanges from CSI Data need to be merged
+                        df = pd.DataFrame(data, columns=['ticker', 'exchange'])
+
+                        # Need to add 'WIKI/' before every ticker to make it
+                        #   compatible with the Quandl WIKI code structure
+                        df['q_code'] = df.apply(format_tickers, axis=1,
+                                                args=(['ticker', 'exchange'],))
+
+                        df.drop(['ticker', 'exchange'], axis=1, inplace=True)
+                        df.drop_duplicates(inplace=True)
+
+                    else:
+                        raise TypeError('Improper ticker_source was provided '
+                                        'in query_q_codes of '
+                                        'GoogleFinanceDataExtraction')
+
                     # ticker_list = df.values.flatten()
                     # df.to_csv('query_q_code.csv')
                     return df

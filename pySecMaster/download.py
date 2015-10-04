@@ -301,10 +301,32 @@ def download_quandl_data(quandl_token, db_url, q_code, beg_date=None):
     else:
         print('The chosen data source is not setup within the price '
               'extractor. Please define the columns in DownloadQData.')
-        column_names = []
+        return pd.DataFrame()
 
-    df = pd.read_csv(file, index_col=False, names=column_names,
-                     encoding='utf-8')
+    if file:
+        df = pd.read_csv(file, index_col=False, names=column_names,
+                         encoding='utf-8')
+
+        # Data successfully downloaded; check to see if code was on the list
+        file_local = 'load_tables/quandl_codes_wo_data.csv'
+        codes_wo_data_df = pd.read_csv(file_local, index_col=False)
+        if len(codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code]) > 0:
+            # The q_code that was downloaded had no data on the previous run.
+            #   Remove the code from the CSV list.
+            wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != q_code]
+            wo_data_df.to_csv(file_local, index=False)
+            print('%s was removed from the wo_data CSV file since data was '
+                  'available for download.' % (q_code,))
+
+    else:
+        # There is no minute data for this code; add to CSV file via DF
+        no_data = pd.DataFrame(data=[(q_code, datetime.utcnow().isoformat())],
+                               columns=['q_code', 'date_tried'])
+        with open('load_tables/quandl_codes_wo_data.csv', 'a') as f:
+            no_data.to_csv(f, mode='a', header=False, index=False)
+
+        # Return an empty DF; the QuandlDataExtractor will be able to handle it
+        return pd.DataFrame()
 
     if len(df.index) == 0:
         return df
