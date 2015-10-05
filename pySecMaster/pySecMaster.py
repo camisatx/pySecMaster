@@ -99,8 +99,8 @@ download_source = 'quandl'
 #   get the ticker codes from? Either use the official list of codes from
 #   Quandl, or make reasonable guesses from the CSI Data stock factsheet, which
 #   is more accurate but produces more failed/empty downloads.
-quandl_ticker_source = 'quandl'        # quandl, csidata
-google_fin_ticker_source = 'quandl'        # quandl, csidata
+quandl_ticker_source = 'csidata'        # quandl, csidata
+google_fin_ticker_source = 'csidata'        # quandl, csidata
 
 # Specify the items that will have their data downloaded. To add a field or
 #   to understand what is actually being downloaded, go to the query_q_codes
@@ -149,10 +149,18 @@ def maintenance():
     stock_tables(database_link)
 
     # You can comment out either of these classes if you don't plan on using it
-    CSIDataExtractor(database_link, csidata_url, csidata_type,
-                     csidata_update_range)
-    QuandlCodeExtract(database_link, quandl_token, database_list, database_url,
-                      update_range)
+    if (quandl_ticker_source == 'csidata' or
+            google_fin_ticker_source == 'csidata'):
+        CSIDataExtractor(database_link, csidata_url, csidata_type,
+                         csidata_update_range)
+    elif (quandl_ticker_source == 'quandl' or
+            google_fin_ticker_source == 'quandl'):
+        QuandlCodeExtract(database_link, quandl_token, database_list,
+                          database_url, update_range)
+    else:
+        raise SystemError('Provide a correct type data selection for Quandl'
+                          'and Google Fin in pySecMaster.py in the database'
+                          'options section.')
 
     LoadTables(database_link, tables_to_load)
 
