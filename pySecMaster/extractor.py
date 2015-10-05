@@ -1227,7 +1227,21 @@ class CSIDataExtractor(object):
                               'extractor.py.' % (self.data_type,))
 
         existing_data = self.query_existing_data(table)
-        if len(existing_data) != 0:
+
+        if len(existing_data) == 0:
+            # The csidata_stock_factsheet table is empty; download new data
+
+            print('Downloading the CSI Data factsheet for %s' %
+                  (self.data_type,))
+            data = download_csidata_factsheet(self.db_url, self.data_type,
+                                              self.exchange_id)
+
+            if len(data.index) == 0:
+                print('No data returned for %s | %0.1f seconds' %
+                      (self.data_type, time.time() - start_time))
+                return
+
+        else:
             # If there is existing data, check if the data is older than the
             #   specified update range. If so, ensure that data looks
             #   reasonable, and then delete the existing data.
@@ -1275,10 +1289,10 @@ class CSIDataExtractor(object):
                       'thus the existing data will not be replaced')
                 return
 
-            # Re-add the new data to the specified table
-            df_to_sql(data, self.db_location, table, 'append', self.data_type)
-            print('Updated %s | %0.1f seconds' %
-                  (self.data_type, time.time() - start_time))
+        # Add the new data to the specified table
+        df_to_sql(data, self.db_location, table, 'append', self.data_type)
+        print('Updated %s | %0.1f seconds' %
+              (self.data_type, time.time() - start_time))
 
     def query_existing_data(self, table):
         """ Determine what prior CSI Data codes are in the database for the
