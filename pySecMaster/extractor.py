@@ -1,5 +1,6 @@
 import time
 from datetime import datetime, timedelta
+import re
 import pandas as pd
 import sqlite3
 from multiprocessing import Pool
@@ -625,17 +626,17 @@ class QuandlDataExtraction(object):
                         cur.execute("""SELECT Symbol
                                        FROM csidata_stock_factsheet
                                        WHERE EndDate > ?
-                                       AND Exchange IN ('AMEX', 'NYSE', 'OTC')
-                                       AND ChildExchange IN ('AMEX',
+                                       AND (Exchange IN ('AMEX', 'NYSE')
+                                       OR ChildExchange IN ('AMEX',
                                            'BATS Global Markets',
                                            'Nasdaq Capital Market',
                                            'Nasdaq Global Market',
                                            'Nasdaq Global Select',
-                                           'NYSE', 'NYSE ARCA')""",
+                                           'NYSE', 'NYSE ARCA'))""",
                                     (beg_date.isoformat(),))
 
                     else:
-                        raise TypeError('Error: In query_q_codes, improper '
+                        raise TypeError('In query_q_codes, improper '
                                         'download_selection was provided. If '
                                         'this is a new query, ensure the SQL '
                                         'is correct.')
@@ -649,6 +650,10 @@ class QuandlDataExtraction(object):
                     df.drop_duplicates(inplace=True)
 
                     if ticker_source == 'csidata':
+                        # If a ticker has a ". + -", change it to an underscore
+                        df['q_code'].replace(regex=True, inplace=True,
+                                             to_replace=r'[.+-]', value=r'_')
+
                         # Need to add 'WIKI/' before every ticker to make it
                         #   compatible with the Quandl WIKI code structure
                         df['q_code'] = df.apply(lambda x: 'WIKI/' + x, axis=1)
@@ -985,17 +990,17 @@ class GoogleFinanceDataExtraction(object):
                         cur.execute("""SELECT Symbol, ChildExchange
                                        FROM csidata_stock_factsheet
                                        WHERE EndDate > ?
-                                       AND Exchange IN ('AMEX', 'NYSE', 'OTC')
-                                       AND ChildExchange IN ('AMEX',
+                                       AND (Exchange IN ('AMEX', 'NYSE')
+                                       OR ChildExchange IN ('AMEX',
                                            'BATS Global Markets',
                                            'Nasdaq Capital Market',
                                            'Nasdaq Global Market',
                                            'Nasdaq Global Select',
-                                           'NYSE', 'NYSE ARCA')""",
+                                           'NYSE', 'NYSE ARCA'))""",
                                     (beg_date.isoformat(),))
 
                     else:
-                        raise TypeError('Error: In query_q_codes, improper '
+                        raise TypeError('In query_q_codes, improper '
                                         'download_selection was provided. If '
                                         'this is a new query, ensure the SQL '
                                         'is correct.')
@@ -1012,15 +1017,26 @@ class GoogleFinanceDataExtraction(object):
                     ticker = row[column[0]]
                     exchange = row[column[1]]
 
-                    if exchange == 'NYSE ARCA':
-                        exchange = 'NYSEARCA'
-                    elif exchange[:6] == 'Nasdaq':
-                        exchange = 'NASDAQ'
-                    elif exchange[:4] == 'BATS':
-                        exchange = 'BATS'
-                    # else use the default ChildExchange for exchange
+                    # If a ticker has a ". + -", change it to an underscore
+                    ticker = re.sub('[.+-]', '_', ticker)
 
-                    return 'GOOG/' + exchange + '_' + ticker
+                    if exchange:
+                        if exchange == 'NYSE ARCA':
+                            exchange = 'NYSEARCA'
+                        elif exchange[:6] == 'Nasdaq':
+                            exchange = 'NASDAQ'
+                        elif exchange[:4] == 'BATS':
+                            exchange = 'BATS'
+                        elif exchange[:11] == 'OTC Markets':
+                            exchange = 'OTCMKTS'
+                        # else use the default ChildExchange for exchange
+
+                        return 'GOOG/' + exchange + '_' + ticker
+
+                    else:
+                        # ToDo: Determine if this should return no exchange or
+                        #   if it is better to guess an exchange
+                        return 'GOOG/' + ticker
 
                 data = cur.fetchall()
                 if data:

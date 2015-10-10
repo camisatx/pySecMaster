@@ -121,7 +121,10 @@ def quandl_download_csv(token, db_url_comp, name, page_num=None, beg_date=None,
         return csv_file
 
     except HTTPError as e:
-        if str(e) == 'HTTP Error 403: Forbidden':
+        if str(e) == 'HTTP Error 400: Bad Request':
+            # Don't raise an exception, as this indicates a non existant code
+            print('HTTPError %s: %s does not exist.' % (e.reason, name))
+        elif str(e) == 'HTTP Error 403: Forbidden':
             raise OSError('HTTPError %s: Reached Quandl API call limit. '
                           'Make the RateLimit more restrictive.' % e.reason)
         elif str(e) == 'HTTP Error 404: Not Found':

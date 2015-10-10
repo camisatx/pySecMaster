@@ -128,17 +128,22 @@ def pull_minute_prices(query_type, beg_date, end_date, *args):
             cur = conn.cursor()
             if query_type == 'ticker':
                 ticker, exchange = args
+                google_fin_q_code = 'GOOG/' + exchange + '_' + ticker
                 print('Extracting the minute prices for %s that is traded on %s'
                       % (ticker, exchange))
                 cur.execute(
+                    # """ SELECT date, q_code, open, high, low, close, volume
+                    #     FROM minute_prices
+                    #     WHERE q_code IN (SELECT q_code
+                    #                      FROM quandl_codes
+                    #                      WHERE component=? AND data=?
+                    #                      AND data_vendor='GOOG')
+                    #     AND date>=? AND date<=?""",
                     """ SELECT date, q_code, open, high, low, close, volume
                         FROM minute_prices
-                        WHERE q_code IN (SELECT q_code
-                                         FROM quandl_codes
-                                         WHERE component=? AND data=?
-                                         AND data_vendor='GOOG')
+                        WHERE q_code=?
                         AND date>=? AND date<=?""",
-                    (ticker, exchange, beg_date, end_date))
+                    (google_fin_q_code, beg_date, end_date))
 
             else:
                 raise SystemExit('Error on query_type in pull_daily_prices. '
@@ -171,11 +176,11 @@ database_location = 'C:/Users/####/Desktop/pySecMaster.db'
 index = 'S&P 500'  # 'S&P 500', 'Russell Midcap', 'Russell 2000', 'Russell 1000'
 
 ticker = 'AAPL'
-exchange = 'Unknown'       # NASDAQ, NYSE, Unknown
-daily_data_vendor = 'WIKI'     # WIKI, GOOG
+exchange = 'NASDAQ'       # NASDAQ, NYSE, Unknown
+daily_data_vendor = 'GOOG'     # WIKI, GOOG
 beg_date = '2009-01-01 00:00:00'
 end_date = '2015-12-30 00:00:00'
-frequency = 'daily'    # daily, minute
+frequency = 'minute'    # daily, minute
 
 query_type = 'ticker'     # index, ticker, exchange, country, etc.
 
