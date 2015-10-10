@@ -73,7 +73,7 @@ database_link = database_location + database_name
 # Examples: 'GOOG', 'WIKI', 'YAHOO', 'SEC', 'EIA', 'JODI', 'CURRFX', 'FINRA'
 # ToDo: Determine how to handle Futures; codes are a single item w/o a '_'
 # ToDo: Determine how to handle USDAFAS; codes have 3 item formats
-database_list = ['WIKI']
+database_list = ['WIKI', 'GOOG']
 csidata_type = 'stock'      # stock, commodity
 
 # Integer that represents the number of days before the ticker tables will be
@@ -93,7 +93,7 @@ tables_to_load = ['data_vendor', 'exchanges']
 
 # What source should the data be downloaded from? Quandl and/or Google Fin?
 # Examples: 'all', 'quandl', 'google_fin'
-download_source = 'quandl'
+download_source = 'google_fin'
 
 # When the Quandl or Google Fin data is downloaded, where should the extractor
 #   get the ticker codes from? Either use the official list of codes from
@@ -109,8 +109,8 @@ google_fin_ticker_source = 'csidata'        # quandl, csidata
 #   queries.
 # Quandl options: 'all', 'wiki', 'us_only', 'us_main', 'wiki_and_us_main_goog'
 quandl_selection = 'wiki'
-# Google Fin options: 'all', 'us_only', 'us_main_goog'
-google_fin_selection = 'us_main_goog'
+# Google Fin options: 'all', 'us_only', 'us_main', 'us_main_goog'
+google_fin_selection = 'us_main'
 
 # Specify the time in seconds before the data is allowed to be re-downloaded.
 redownload_time = 60 * 60 * 72      # 72 hours
@@ -138,7 +138,7 @@ google_fin_url = {'root': 'http://www.google.com/finance/getprices?',
 ###############################################################################
 
 
-def maintenance():
+def maintenance(database_link, quandl_ticker_source, google_fin_ticker_source):
 
     print('Starting Security Master table maintenance function. This can take '
           'some time to finish if large databases are used. If this fails, '
@@ -165,7 +165,8 @@ def maintenance():
     LoadTables(database_link, tables_to_load)
 
 
-def data_download():
+def data_download(database_link, quandl_ticker_source, google_fin_ticker_source,
+                  download_source, quandl_selection, google_fin_selection):
 
     if (download_source in ['all', 'quandl']) and ('WIKI' in database_list):
         # Download data for selected Quandl Codes
@@ -194,5 +195,8 @@ def data_download():
                                     google_fin_days_back)
 
 if __name__ == '__main__':
-    maintenance()
-    data_download()
+
+    maintenance(database_link, quandl_ticker_source, google_fin_ticker_source)
+
+    data_download(database_link, quandl_ticker_source, google_fin_ticker_source,
+                  download_source, quandl_selection, google_fin_selection)
