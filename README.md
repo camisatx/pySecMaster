@@ -1,44 +1,52 @@
 # pySecMaster
-An automated system to store and maintain financial data.
+An automated framework to store and maintain financial data.
 
 The system downloads specified data from Quandl to a SQLite3 database, which can then be quickly queried. Uses of the data include trading backtests and graph visualizations. Additionally, it is possible to use the Quandl GOOG code structure to download minute stock data from Google Finance.
 
-# Quick Start
-  1. Copy the pySecMaster folder to your computer.
+# Quick Start (Quandl daily data)
+  1. Clone the pySecMaster to your computer
 
-  2. Open pySecMaster.py in a code editor (IDLE, PyCharm, Sublime, etc.).
+  2. Open the folder called pySecMaster, and run main_gui.py
 
-  3. Navigate to the General Options area (lines 51 - 68): enter your Quandl API Token after 'quandl_token = ', and change the folder location after 'database_location = ' to match your computer (you can change the database name at this time, too).
+  3. Within the GUI, provide a file directory in 'Database Directory' where you want the database to be built
 
-  4. If you want to download only minute stock data from Google Finance, you can now save and run pySecMaster.py. Otherwise, continue the steps 5 and 6.
+  4. Enter a Quandl API Key (free at <https://www.quandl.com>)
 
-  5. Navigate to the Database Maintenance Options area (lines 69 - 86): change the Quandl databases to be downloaded. Do this by changing the database abbreviations after 'database_list = '. You can browse through Quandl's website to determine what databases are appropriate for you. NOTE: if you want to download minute stock data from Google Finance, you must have 'GOOG' included in the list.
+  5. Click on the 'Ok' button, and the database will start building itself
 
-  6. Navigate to the Database Data Download Options area (lines 88 - 123): change the 'download_source = ' variable to match the data you want downloaded (Quandl and/or Google Finance (for minute data)). By default, only Google provided stock data traded on NYSE and NASDAQ will be downloaded. If you want to change this, change the 'quandl_selection' variable to match one of the predefined SQLite queries. It is possible to download very specific items by writing a custom SQLite query in the query_q_codes function in the extractor.py file.
+# Quick Start (Google Finance minute data)
+  1. Clone the pySecMaster to your computer
 
-  7. You can now save and run pySecMaster.py.
+  2. Open the folder called pySecMaster, and run main_gui.py
 
-  8. To retrieve the data downloaded, open query_data.py in a code editor.
+  3. Within the GUI, provide a file directory in 'Database Directory' where you want the database to be built
 
-  9. Navigate to the query options (lines 172 - 181): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from GOOG). It is possible to retrieve very specific data by writing a custom SQLite query. By default, the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
+  4. In the 'Data' tab, change 'Download Source' combo-box from 'quandl' to 'google_fin'
 
-  10. You can now save and run query_data.py.
+  5. Click on the 'Ok' button, and the database will start building itself with minute data from Google Finance
+
+# Quick Start (Retrieve SQLite Data)
+  1. To retrieve the data in the SQLite database, open query_data.py in a code editor (IDE, PyCharm, Sublime, etc.)
+
+  2. Navigate to the query options (lines 173 - 185): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQLite query. By default, the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
+
+  3. You can now save and run query_data.py
 
 # System Requirements
-  - Python 3.x (sorry, no 2.7 support)
-  - Pandas 0.16.x
+  - Python 3.4+
+  - Pandas 0.16.2+
   - More than 10GB of storage space (depends on the data downloaded)
 
 # User Requirements
-  - Quandl API Token (free at quandl.com)
+  - Quandl API Token (free at <https://www.quandl.com>)
 
 # Additional Info
-To view the SQLite3 database, you can download SQLite Database Browser for free (http://sqlitebrowser.org). This allows you to view and edit all characteristics of the database.
+To view the SQLite3 database, you can download SQLite Database Browser for free (<http://sqlitebrowser.org>). This allows you to view and edit all characteristics of the database.
 
 # Disclaimer
 Before using this software, be sure to understand and follow the terms of all data providers (Quandl and Google). I am not responsible for how you use this software, so please be responsible in your use of it! Please see the following links for some information:
-  - http://help.quandl.com/category/133-terms-and-conditions
-  - https://www.google.com/intl/en/googlefinance/disclaimer
+  - <http://help.quandl.com/category/133-terms-and-conditions>
+  - <https://www.google.com/intl/en/googlefinance/disclaimer>
 
 For further information, please seek legal counsel.
 
