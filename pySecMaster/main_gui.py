@@ -1,7 +1,12 @@
-import sys
+import inspect
+from PyQt4 import QtGui, QtCore, uic
+import os.path
 from queue import Queue
-from PyQt4 import QtGui, QtCore
-import time
+import sys
+
+# Required to use resource file icons
+# Compile the qrc file in terminal "pyrcc4.exe -py3 'icons.qrc' -o 'icon_rc.py'"
+from icon_rc import *
 
 from pySecMaster import maintenance, data_download
 
@@ -31,214 +36,290 @@ __version__ = '1.2'
 '''
 
 
-class MainApp(QtGui.QMainWindow):
+class MainWindow(QtGui.QMainWindow):
 
-    def __init__(self):
-        super(MainApp, self).__init__()
+    def __init__(self, parent=None):
+        super(MainWindow, self).__init__(parent)
 
-        # self.app_ui()
+        # Set the default name of the ini file; used to load/save GUI settings
+        self.ini_name = 'pySecMaster_gui.ini'
 
-    def app_ui(self):
+        # Load the GUI structure from the ui file
+        uic.loadUi('main_gui.ui', self)
 
-        # Enable the bottom status bar
-        self.statusBar()
+        # Establish all menu bar connections
+        self.actionLoad_Settings.triggered.connect(lambda: self.select_restore())
+        self.actionSave_Settings.triggered.connect(lambda: self.save_settings(self.ini_name))
+        self.actionStart.triggered.connect(self.process)
+        self.actionExit.triggered.connect(lambda: self.confirm_close(self.ini_name))
+        self.actionPySecMaster.triggered.connect(lambda: self.open_url('https://github.com/camisatx/pySecMaster'))
+        self.actionCSI_Data.triggered.connect(lambda: self.open_url('http://www.csidata.com/'))
+        self.actionGoogle_Finance.triggered.connect(lambda: self.open_url('https://www.google.com/finance'))
+        self.actionQuandl.triggered.connect(lambda: self.open_url('https://www.quandl.com/'))
+        self.actionJosh_Schertz.triggered.connect(lambda: self.open_url('https://joshschertz.com/'))
 
-        # Build the File menu exit functionality
-        exit_act = QtGui.QAction(QtGui.QIcon('images/Solar System Black.png'),
-                                 '&Exit', self)
-        exit_act.setShortcut('Ctrl+Q')
-        exit_act.setStatusTip('Exit Application')
-        exit_act.triggered.connect(self.confirm_close)
+        # Establish all form button connections
+        self.toolbtn_dbdir.clicked.connect(self.select_dir)
+        self.toolbtn_details.clicked.connect(self.txtbrwsr_details_toggle)
+        self.btnbox_action.button(self.btnbox_action.Ok).\
+            clicked.connect(self.process)
+        self.btnbox_action.button(self.btnbox_action.Abort).\
+            clicked.connect(self.worker_finished)
+        self.btnbox_action.button(self.btnbox_action.Cancel).\
+            clicked.connect(lambda: self.confirm_close(self.ini_name))
 
-        # Create the menu
-        menubar = self.menuBar()
-        file_menu = menubar.addMenu('&File')
-        file_menu.addAction(exit_act)
+        # Set the default items for 'Quandl Databases'
+        quandl_databases_index = self.cmb_tickers_quandl_db.findText('WIKI')
+        self.cmb_tickers_quandl_db.setCurrentIndex(quandl_databases_index)
 
-        # # Create a Toolbar with an application exit
-        # toolbar = self.addToolBar('Exit')
-        # toolbar.addAction(exit_act)
+        # Modify the combobox items of 'Quandl Data' and 'Google Finance Data'
+        # (Data tab) to make sure they only show valid options
+        self.data_selection_toggle()
+        # If 'Download Source' or 'Google Finance Data' (Ticker Source tab) are
+        # changed, re-run the data_selection_toggle method to check selections
+        self.cmb_tickers_googfin.currentIndexChanged.\
+            connect(self.data_selection_toggle)
+        self.cmb_tickers_quandl.currentIndexChanged.\
+            connect(self.data_selection_toggle)
 
-        # self.resize(300, 150)
-        self.center()
-        self.setWindowTitle('pySecMaster')
-        self.setWindowIcon(QtGui.QIcon('images/Molecule 5 Black.png'))
+        # Hide the data fields if data won't be downloaded for them
+        self.data_provider_toggle()
+        # If 'Download Source' or 'Google Finance Data' (Ticker Source tab) are
+        # changed, re-run the data_provider_toggle method to re-process items
+        self.cmb_data_source.currentIndexChanged.\
+            connect(self.data_provider_toggle)
+        self.cmb_tickers_googfin.currentIndexChanged.\
+            connect(self.data_provider_toggle)
 
-        # Run the Options class, which will build all app buttons/features
-        builder = AppBuilder(self)
-        # central_widget = QtGui.QWidget()
-        # central_widget.setLayout(builder.app_builder())
-        self.setCentralWidget(builder)
-        # self.show()
+        # Hide the details text browser by default
+        # ToDo: Doesn't hide at startup; .isVisible() always returned 'False'
+        self.txtbrwsr_details_toggle()
 
-    def center(self):
-        # Reposition the widget frame to the center of the main screen
+        # Hide the Abort button; only show when pySecMaster function is running
+        self.btnbox_action.button(self.btnbox_action.Abort).hide()
+        # Change the default name from 'Abort' to 'Stop'
+        self.btnbox_action.button(self.btnbox_action.Abort).setText('Stop')
 
-        center = QtGui.QDesktopWidget().availableGeometry().center()
-        frame = self.frameGeometry()
-        frame.moveCenter(center)
-        self.move(frame.topLeft())
+        # ToDo: Integrate the progress bar
+        self.progressBar.hide()
+
+        # Load the prior settings if a ini files exists
+        if os.path.isfile(self.ini_name):
+            self.restore_settings(self.ini_name)
 
     def closeEvent(self, event):
-        # closeEvent method is called when the user clicks window close button
+        """
+        closeEvent method is called when the user clicks window close button
 
-        self.confirm_close(event)
+        :param event: A default system variable specifying a user action (exit)
+        """
 
-    def confirm_close(self, event=None):
-        """ Popup message box requiring user consent to close program
+        self.confirm_close(self.ini_name, event)
 
+    def confirm_close(self, ini_name, event=None):
+        """
+        Popup message box requiring user consent to close program
+
+        :param ini_name: String of the name of the ini file to save the
+            settings to
         :param event: A Qt object that is only used via the closeEvent method
         """
 
         reply = QtGui.QMessageBox.question(self, 'Confirm Exit',
-                                           'Are you sure you want to exit?',
+                                           'Do you want to save the current '
+                                           'settings?',
                                            QtGui.QMessageBox.Yes |
-                                           QtGui.QMessageBox.No,
-                                           QtGui.QMessageBox.No)
+                                           QtGui.QMessageBox.No |
+                                           QtGui.QMessageBox.Cancel,
+                                           QtGui.QMessageBox.Yes)
 
         if event:
             # Request originated from the closeEvent method
             if reply == QtGui.QMessageBox.Yes:
+                self.save_settings(ini_name)
+                event.accept()
+            elif reply == QtGui.QMessageBox.No:
                 event.accept()
             else:
                 event.ignore()
         else:
             # Request originated from a specific exit feature
             if reply == QtGui.QMessageBox.Yes:
+                self.save_settings(ini_name)
+                sys.exit()
+            elif reply == QtGui.QMessageBox.No:
                 sys.exit()
             else:
                 pass
 
+    def data_provider_toggle(self):
+        """
+        Hides the data fields if the data won't be downloaded for them.
+        """
 
-class AppBuilder(QtGui.QWidget):
+        provider_selected = self.cmb_data_source.currentText()
 
-    def __init__(self, parent):
-        super(AppBuilder, self).__init__(parent)
+        if provider_selected == 'google_fin':
+            # Downloading Google Fin data; hide Quandl options
 
-        self.app_builder()
+            self.lbl_data_googfin.show()
+            self.cmb_data_googfin.show()
+            self.lbl_tickers_googfin.show()
+            self.cmb_tickers_googfin.show()
 
-    def app_builder(self):
+            if self.cmb_tickers_googfin.currentText() == 'quandl':
+                # If the Goog Fin ticker source is set to quandl, show Qndl API
+                self.lbl_quandlkey.show()
+                self.lineedit_quandlkey.show()
+            else:
+                self.lbl_quandlkey.hide()
+                self.lineedit_quandlkey.hide()
 
-        # Button and Combo Box creation ----------------------------------------
-        # Set the database name
-        self.txt_ed_db_name = QtGui.QLineEdit(self)
-        self.txt_ed_db_name.setText('pySecMaster.db')   # setPlaceholderText
+            self.lbl_data_quandl.hide()
+            self.cmb_data_quandl.hide()
+            self.lbl_tickers_quandl.hide()
+            self.cmb_tickers_quandl.hide()
+            self.lbl_tickers_quandl_db.hide()
+            self.cmb_tickers_quandl_db.hide()
 
-        # Set the database directory
-        self.txt_ed_db_dir = QtGui.QLineEdit(self)
-        # Button to open a search window to select the database directory
-        btn_db_dir = QtGui.QPushButton(QtGui.QIcon('images/Open Folder.png'),
-                                       '')
-        btn_db_dir.setToolTip('Select directory')
-        btn_db_dir.resize(btn_db_dir.sizeHint())
-        btn_db_dir.clicked.connect(self.select_dir)
-        # Build HBox for db_dir text box and directory search button
-        hbox_db_dir = QtGui.QHBoxLayout()
-        hbox_db_dir.addWidget(self.txt_ed_db_dir)
-        hbox_db_dir.addWidget(btn_db_dir)
+        elif provider_selected == 'quandl':
+            # Downloading quandl data; hide all Google Fin options
 
-        # Combobox for source of downloaded data
-        self.cmb_dwnld_source = QtGui.QComboBox(self)
-        self.cmb_dwnld_source.addItems(['google_fin', 'quandl', 'all'])
+            self.lbl_quandlkey.show()
+            self.lineedit_quandlkey.show()
+            self.lbl_data_quandl.show()
+            self.cmb_data_quandl.show()
+            self.lbl_tickers_quandl.show()
+            self.cmb_tickers_quandl.show()
+            self.lbl_tickers_quandl_db.show()
+            self.cmb_tickers_quandl_db.show()
 
-        # Combobox for quandl and google fin data download selections (queries)
-        qndl_sel = ['all', 'wiki', 'us_only', 'us_main',
-                    'wiki_and_us_main_goog']
-        self.cmb_qndl_selection = QtGui.QComboBox(self)
-        self.cmb_qndl_selection.addItems(qndl_sel)
-        self.cmb_qndl_selection.setCurrentIndex(qndl_sel.index('us_main'))
-        googfin_sel = ['all', 'us_only', 'us_main', 'us_main_goog']
-        self.cmb_googfin_selection = QtGui.QComboBox(self)
-        self.cmb_googfin_selection.addItems(googfin_sel)
-        self.cmb_googfin_selection.setCurrentIndex(googfin_sel.index('us_main'))
+            self.lbl_data_googfin.hide()
+            self.cmb_data_googfin.hide()
+            self.lbl_tickers_googfin.hide()
+            self.cmb_tickers_googfin.hide()
 
-        # Combobox for quandl and google fin ticker source
-        self.cmb_qndl_ticker_source = QtGui.QComboBox(self)
-        self.cmb_qndl_ticker_source.addItems(['csidata', 'quandl'])
-        self.cmb_googfin_ticker_source = QtGui.QComboBox(self)
-        self.cmb_googfin_ticker_source.addItems(['csidata', 'quandl'])
-
-        # Tab creation ---------------------------------------------------------
-        tab_data = QtGui.QWidget()
-        form_layout_tab_data = QtGui.QFormLayout(tab_data)
-        form_layout_tab_data.addRow('Download Source',
-                                    self.cmb_dwnld_source)
-        form_layout_tab_data.addRow('Quandl Data Selection',
-                                    self.cmb_qndl_selection)
-        form_layout_tab_data.addRow('Google Fin Data Selection',
-                                    self.cmb_googfin_selection)
-
-        tab_tickers = QtGui.QWidget()
-        form_layout_tab_tickers = QtGui.QFormLayout(tab_tickers)
-        form_layout_tab_tickers.addRow('Quandl Ticker Source',
-                                       self.cmb_qndl_ticker_source)
-        form_layout_tab_tickers.addRow('Google Fin Ticker Source',
-                                       self.cmb_googfin_ticker_source)
-
-        tabs_options = QtGui.QTabWidget(self)
-        tabs_options.addTab(tab_data, 'Data')
-        tabs_options.addTab(tab_tickers, 'Tickers')
-
-        # Create the text editor that will show the code output ----------------
-        self.output = QtGui.QTextEdit()
-
-        # Main Form creation ---------------------------------------------------
-        form_layout = QtGui.QFormLayout()
-        form_layout.addRow('Database Name', self.txt_ed_db_name)
-        form_layout.addRow('Database Location', hbox_db_dir)
-        form_layout.addRow(tabs_options)
-        form_layout.addRow(self.output)
-
-        # Bottom - Call to Action ----------------------------------------------
-        # Button: Run
-        self.btn_run = QtGui.QPushButton('Run', self)
-        self.btn_run.setToolTip('Run the program')
-        self.btn_run.resize(self.btn_run.sizeHint())
-        self.btn_run.setDefault(True)
-        # self.btn_run.clicked.connect(self.run_pysecmaster)
-        self.btn_run.clicked.connect(self.process)
-        # self.btn_run.clicked.connect(QtCore.QCoreApplication.instance().quit)
-
-        # Button: Quit
-        btn_quit = QtGui.QPushButton('Quit', self)
-        btn_quit.setToolTip('Quit the application')
-        btn_quit.clicked.connect(self.confirm_close)
-        btn_quit.resize(btn_quit.sizeHint())
-
-        # Build Sub Layout
-        hbox = QtGui.QHBoxLayout()
-        hbox.addStretch(1)
-        hbox.addWidget(self.btn_run)
-        hbox.addWidget(btn_quit)
-        # Add Sub Layout to Main Layout
-        form_layout.addRow(hbox)
-
-        # Enable Main Layout ---------------------------------------------------
-        self.setLayout(form_layout)
-
-    def confirm_close(self):
-        """ Popup message box requiring user consent to close program. """
-
-        reply = QtGui.QMessageBox.question(self, 'Confirm Exit',
-                                           'Are you sure you want to exit?',
-                                           QtGui.QMessageBox.Yes |
-                                           QtGui.QMessageBox.No,
-                                           QtGui.QMessageBox.No)
-
-        if reply == QtGui.QMessageBox.Yes:
-            sys.exit()
         else:
-            pass
+            # Downloading all data (Quandl and Google Fin)
+
+            self.lbl_quandlkey.show()
+            self.lineedit_quandlkey.show()
+            self.lbl_data_quandl.show()
+            self.cmb_data_quandl.show()
+            self.lbl_tickers_quandl.show()
+            self.cmb_tickers_quandl.show()
+            self.lbl_tickers_quandl_db.show()
+            self.cmb_tickers_quandl_db.show()
+
+            self.lbl_data_googfin.show()
+            self.cmb_data_googfin.show()
+            self.lbl_tickers_googfin.show()
+            self.cmb_tickers_googfin.show()
+
+    def data_selection_toggle(self):
+        """
+        Modify the combobox items of 'Quandl Data' and 'Google Finance Data'
+        (Data tab) to make sure they only show valid options. Each one of these
+        options has explicit SQL queries established in the extractor.py file.
+        """
+
+        # Modify the Google Finance data selector
+        if self.cmb_tickers_googfin.currentText() == 'quandl':
+            possible_selections = ['all', 'us_only', 'us_main_goog']
+            default_selection = 1
+        elif self.cmb_tickers_googfin.currentText() == 'csidata':
+            possible_selections = ['all', 'us_main']
+            default_selection = 1
+        else:
+            possible_selections = ['all']
+            default_selection = 0
+
+        self.cmb_data_googfin.clear()
+        self.cmb_data_googfin.addItems(possible_selections)
+        self.cmb_data_googfin.setCurrentIndex(default_selection)
+
+        # Modify the Quandl data selector
+        if self.cmb_tickers_quandl.currentText() == 'quandl':
+            possible_selections = ['all', 'us_only_goog', 'us_main_goog',
+                                   'wiki', 'wiki_and_us_main_goog']
+            default_selection = 3
+        elif self.cmb_tickers_quandl.currentText() == 'csidata':
+            possible_selections = ['all', 'us_main']
+            default_selection = 1
+        else:
+            possible_selections = ['all']
+            default_selection = 0
+
+        self.cmb_data_quandl.clear()
+        self.cmb_data_quandl.addItems(possible_selections)
+        self.cmb_data_quandl.setCurrentIndex(default_selection)
 
     def onDataReady(self, string):
+        """
+        Special PyQt name; Write code output to txtbrwsr_details
+        """
+        # ToDo: Build functionality to handle stderr, using red font in GUI
 
-        # Write code output the the text editor 'output'
-        cursor = self.output.textCursor()
+        cursor = self.txtbrwsr_details.textCursor()
         cursor.movePosition(cursor.End)
         cursor.insertText(str(string))
-        self.output.ensureCursorVisible()
+        self.txtbrwsr_details.ensureCursorVisible()
+
+    def open_url(self, url):
+        """
+        Open the provided url in the system default browser
+
+        :param url: String of the url
+        """
+
+        print('Opening %s in the default browser' % (url,))
+        q_url = QtCore.QUrl(url)
+        if not QtGui.QDesktopServices.openUrl(q_url):
+            QtGui.QMessageBox.warning(self, 'Open Url',
+                                      'Could not open %s' % url)
 
     def process(self):
+        """
+        Invoke the thread worker, prepare the worker by providing it with the
+        variables the function it's to run needs, and then pass the thread
+        to the Worker class where it'll be executed.
+        """
+
+        # Determine if the database name and directory were provided
+        if (self.lineedit_dbname.text() or self.lineedit_dbdir.text()) == '':
+            raise ValueError('Blank database name and/or directory provided')
+
+        # Determine if the Quandl API Key is required; if so, was it provided?
+        if (self.cmb_data_source.currentText() in ['quandl', 'all'] and
+                self.lineedit_quandlkey.text() == ''):
+            raise ValueError('Blank Quandl API key provided')
+        else:
+            if (self.cmb_tickers_googfin.currentText() == 'quandl' and
+                    self.lineedit_quandlkey.text() == ''):
+                raise ValueError('Blank Quandl API key provided')
+
+        # Handles db_dir's with and without the end backslash
+        if self.lineedit_dbdir.text()[-1] == '\\':
+            db_link = self.lineedit_dbdir.text() + self.lineedit_dbname.text()
+        else:
+            db_link = (self.lineedit_dbdir.text() + '\\' +
+                       self.lineedit_dbname.text())
+
+        # Change the quandl database string to a list
+        quandl_db_list = [self.cmb_tickers_quandl_db.currentText()]
+
+        # Build the dictionary with all the pySecMaster settings
+        settings_dict = {'db_link': db_link,
+                         'quandl_ticker_source': self.cmb_tickers_quandl.currentText(),
+                         'quandl_db_list': quandl_db_list,
+                         'google_fin_ticker_source': self.cmb_tickers_googfin.currentText(),
+                         'download_source': self.cmb_data_source.currentText(),
+                         'quandl_selection': self.cmb_data_quandl.currentText(),
+                         'google_fin_selection': self.cmb_data_googfin.currentText(),
+                         'quandl_update_range': self.spinbx_settings_quandl_update.value(),
+                         'google_fin_update_range': self.spinbx_settings_csi_update.value(),
+                         'threads': self.spinbx_settings_threads.value(),
+                         'quandl_key': self.lineedit_quandlkey.text()}
 
         self.thread_worker = QtCore.QThread()
         self.worker = Worker()
@@ -246,9 +327,12 @@ class AppBuilder(QtGui.QWidget):
 
         self.worker.moveToThread(self.thread_worker)
 
-        # Stops the thread after the worker is done. If you need to start it
-        #   again, call thread.start()
+        # Stops the thread after the worker is done. To start it again, call
+        #   thread.start()
         self.worker.finished.connect(self.thread_worker.quit)
+        # ToDo: Figure out why worker_finished is unable to kill the thread
+        # self.worker.finished.connect(self.worker_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
 
         # # Calls the Worker process directly, but it's difficult to send data
         # #     to the worker object from the main gui thread.
@@ -260,97 +344,198 @@ class AppBuilder(QtGui.QWidget):
 
         # Invoke the Worker process with the ability of safely communicating
         #   with the worker through signals and slots. Worker must already be
-        #   running in order for the process to be invoked. If you need to use
-        #   arguments for the worker process, add a "QtCore.Q_ARG(str, 'arg')"
+        #   running in order for the process to be invoked. If you need to pass
+        #   arguments to the worker process, add a "QtCore.Q_ARG(str, 'arg')"
         #   variable for each argument in the invokeMethod statement after
-        #   the QueuedConnection item.
+        #   the QueuedConnection variable. Only able to handle 10 arguments.
         # QtCore.Q_ARG(str, 'Hello'),
         # QtCore.Q_ARG(list, ['Hello', 0, 1]))
         QtCore.QMetaObject.invokeMethod(self.worker, 'pysecmaster',
                                         QtCore.Qt.QueuedConnection,
-                                        QtCore.Q_ARG(str, self.txt_ed_db_dir.text()),
-                                        QtCore.Q_ARG(str, self.txt_ed_db_name.text()),
-                                        QtCore.Q_ARG(str, self.cmb_qndl_ticker_source.currentText()),
-                                        QtCore.Q_ARG(str, self.cmb_googfin_ticker_source.currentText()),
-                                        QtCore.Q_ARG(str, self.cmb_dwnld_source.currentText()),
-                                        QtCore.Q_ARG(str, self.cmb_qndl_selection.currentText()),
-                                        QtCore.Q_ARG(str, self.cmb_googfin_selection.currentText()))
+                                        QtCore.Q_ARG(dict, settings_dict))
 
-        # if self.thread_worker.isRunning():
-        #     self.btn_run.setEnabled(False)
-        # else:
-        #     self.btn_run.setEnabled(True)
+        # Disable the 'Ok' button while the worker thread is running
+        self.btnbox_action.button(self.btnbox_action.Ok).setEnabled(False)
+
+        # ToDo: Figure out why worker_finished is unable to kill the thread
+        # # Show the 'Stop' button and hide the 'Cancel' button
+        # self.btnbox_action.button(self.btnbox_action.Abort).show()
+        # self.btnbox_action.button(self.btnbox_action.Cancel).hide()
+
+    def restore_settings(self, ini_name):
+        """
+        Technique structured from the code from: "https://stackoverflow.com
+        /questions/23279125/python-pyqt4-functions-to-save-and-restore-ui-
+        widget-values"
+
+        :param ini_name: Name/path of the .ini file (Ex. pySecMaster_gui.ini)
+        """
+
+        settings = QtCore.QSettings(ini_name, QtCore.QSettings.IniFormat)
+
+        for name, obj in inspect.getmembers(self):
+            if isinstance(obj, QtGui.QComboBox):
+                name = obj.objectName()
+                value = str(settings.value(name))   # .toString())
+
+                if value == "":
+                    continue
+
+                # Get the corresponding index for specified string in combobox
+                index = obj.findText(value)
+                # Check if the value exists, otherwise add it to the combobox
+                if index == -1:
+                    obj.insertItems(0, [value])
+                    index = obj.findText(value)
+                    obj.setCurrentIndex(index)
+                else:
+                    obj.setCurrentIndex(index)
+
+            elif isinstance(obj, QtGui.QLineEdit):
+                name = obj.objectName()
+                value = str(settings.value(name))
+                obj.setText(value)
+
+            elif isinstance(obj, QtGui.QSpinBox):
+                name = obj.objectName()
+                value = int(settings.value(name))
+                obj.setValue(value)
+
+            elif isinstance(obj, QtGui.QCheckBox):
+                name = obj.objectName()
+                value = settings.value(name)
+                if value:
+                    obj.setChecked(value)   # setCheckState enables tristate
+
+    def save_settings(self, ini_name):
+        """
+        Technique structured from the code from: "https://stackoverflow.com
+        /questions/23279125/python-pyqt4-functions-to-save-and-restore-ui-
+        widget-values"
+
+        :param ini_name: Name of the .ini file (Ex. pysecmaster.ini)
+        :return:
+        """
+
+        settings = QtCore.QSettings(ini_name, QtCore.QSettings.IniFormat)
+
+        # For child in ui.children():  # works like getmembers, but because it
+        # traverses the hierarchy, you would have to call the method recursively
+        # to traverse down the tree.
+
+        for name, obj in inspect.getmembers(self):
+            if isinstance(obj, QtGui.QComboBox):
+                name = obj.objectName()
+                text = obj.currentText()
+                settings.setValue(name, text)
+
+            elif isinstance(obj, QtGui.QLineEdit):
+                name = obj.objectName()
+                value = obj.text()
+                settings.setValue(name, value)
+
+            elif isinstance(obj, QtGui.QSpinBox):
+                name = obj.objectName()
+                value = obj.value()
+                settings.setValue(name, value)
+
+            elif isinstance(obj, QtGui.QCheckBox):
+                name = obj.objectName()
+                state = obj.checkState()
+                settings.setValue(name, state)
 
     def select_dir(self):
-        """ Opens a PyQt folder search. If a folder is selected, it will
+        """
+        Opens a PyQt folder search. If a folder is selected, it will
         populate the db_dir text editor box.
         """
 
         db_dir = QtGui.QFileDialog.getExistingDirectory(self,
                                                         'Select Directory')
         if db_dir:
-            self.txt_ed_db_dir.setText(db_dir)
+            self.lineedit_dbdir.setText(db_dir)
+
+    def select_restore(self):
+        """
+        Opens a PyQt file search. If a file is selected, it will populate
+        the gui settings with the values from the selected ini file.
+        """
+
+        file = QtGui.QFileDialog.getOpenFileName(self, 'Select Saved Settings',
+                                                 '', 'INI (*.ini)')
+        if file:
+            self.restore_settings(file)
+
+    def txtbrwsr_details_toggle(self):
+
+        mw_size = [self.size().width(), self.size().height()]
+
+        if self.txtbrwsr_details.isVisible():
+
+            mw_size[1] -= self.txtbrwsr_details.size().height()
+            self.txtbrwsr_details.hide()
+
+            # Resize the main window
+            while self.size().height() > mw_size[1]:
+                QtGui.QApplication.sendPostedEvents()
+                self.resize(mw_size[0], mw_size[1])
+
+        else:
+            self.txtbrwsr_details.show()
+
+    def worker_finished(self):
+
+        # Enable the 'Ok' button and change the Stop button back to Cancel
+        self.btnbox_action.button(self.btnbox_action.Ok).setEnabled(True)
+        # Hide the 'Stop' button and show the 'Cancel' button
+        self.btnbox_action.button(self.btnbox_action.Abort).hide()
+        self.btnbox_action.button(self.btnbox_action.Cancel).show()
+
+        # ToDo: Figure out why none of these kill the thread...
+        # Safely shut down the thread
+        self.thread_worker.quit()
+        # self.thread_worker.terminate()
+        # self.thread_worker.wait()
+
+        print('Current process has been halted.')
 
 
 class Worker(QtCore.QObject):
     finished = QtCore.pyqtSignal()
     dataReady = QtCore.pyqtSignal(str)
 
-    @QtCore.pyqtSlot()
-    def processA(self):
-        print('Worker.processA()')
-        self.finished.emit()
-
-    @QtCore.pyqtSlot(str, list, list)
-    def processB(self, foo, bar=None):
-        print('Worker.processB()')
-        for thing in bar:
-            # lots of processing...
-            self.dataReady.emit(['dummy', 'data'], {'dummy': ['data']})
-        self.finished.emit()
-
-    @QtCore.pyqtSlot(str, str, str, str, str, str, str)
-    def pysecmaster(self, txt_ed_db_dir, txt_ed_db_name, cmb_qndl_ticker_source,
-                    cmb_googfin_ticker_source, cmb_dwnld_source,
-                    cmb_qndl_selection, cmb_googfin_selection):
+    @QtCore.pyqtSlot(dict)
+    def pysecmaster(self, settings_dict):
         """
         Prepares the db link, and then calls the actual functions that
         operate the pySecMaster. Emits signals back to the main gui for
         further processing, using the dataReady process.
         """
 
-        # # Create the QProcess object to be able to run the app externally
-        # self.process = QtCore.QProcess(self)
-        #
-        # self.process.start(temp())
-        #
-        # # QProcess emits 'readyRead' when there is data to be read
-        # self.process.readyRead.connect(self.dataReady)
-        #
-        # # Prevent running multiple instances; disable btn_run while running
-        # self.process.started.connect(lambda: self.options.
-        #                              btn_run.setEnabled(False))
-        # self.process.finished.connect(lambda: self.options.
-        #                               btn_run.setEnabled(True))
-
-        # Handles db_dir's with and without the end backslash
-        if txt_ed_db_dir[-1] == '\\':
-            db_link = txt_ed_db_dir + txt_ed_db_name
-        else:
-            db_link = (txt_ed_db_dir + '\\' + txt_ed_db_name)
-
+        db_link = settings_dict['db_link']
         self.dataReady.emit('Starting pySecMaster using the database %s '
-                            'located at %s\n' % (txt_ed_db_name, txt_ed_db_dir))
+                            'located at %s\n'
+                            % (db_link[db_link.rfind('\\') + 1:],
+                               db_link[:db_link.rfind('\\') + 1]))
 
         maintenance(db_link,
-                    cmb_qndl_ticker_source,
-                    cmb_googfin_ticker_source)
+                    settings_dict['quandl_ticker_source'],
+                    settings_dict['quandl_db_list'],
+                    settings_dict['google_fin_ticker_source'],
+                    settings_dict['download_source'],
+                    settings_dict['threads'],
+                    settings_dict['quandl_key'],
+                    settings_dict['quandl_update_range'],
+                    settings_dict['google_fin_update_range'])
         data_download(db_link,
-                      cmb_qndl_ticker_source,
-                      cmb_googfin_ticker_source,
-                      cmb_dwnld_source,
-                      cmb_qndl_selection,
-                      cmb_googfin_selection)
+                      settings_dict['quandl_ticker_source'],
+                      settings_dict['quandl_db_list'],
+                      settings_dict['google_fin_ticker_source'],
+                      settings_dict['download_source'],
+                      settings_dict['quandl_selection'],
+                      settings_dict['google_fin_selection'],
+                      settings_dict['threads'],
+                      settings_dict['quandl_key'])
 
         self.dataReady.emit('Finished running the pySecMaster process\n')
         self.finished.emit()
@@ -358,7 +543,7 @@ class Worker(QtCore.QObject):
 
 class StdoutQueue(object):
     """
-    This is a queue that acts like the default system standard output (stdout).
+    This is a queue that acts like the default system standard output (stdout)
     """
 
     def __init__(self, queue):
@@ -394,28 +579,27 @@ class Receiver(QtCore.QObject):
 
 def main():
 
-    # # Create Queue and redirect sys.stdout to this queue
-    # queue = Queue()
-    # sys.stdout = StdoutQueue(queue)
+    # Create Queue and redirect sys.stdout to this queue
+    queue = Queue()
+    sys.stdout = StdoutQueue(queue)
 
+    # Start the main GUI class
     app = QtGui.QApplication(sys.argv)
-    ma = MainApp()
-    ma.app_ui()
-    ma.show()
+    form = MainWindow()
+    form.show()
 
-    # # Create thread that will listen for new strings in the queue. Upon new
-    # #   items, it will send the text to the onDataReady method in the
-    # #   AppBuilder class, which will add the string to the text editor.
-    # # ab = AppBuilder(QtCore.QThread)
-    # thread = QtCore.QThread()
-    # receiver = Receiver(queue)
-    # # receiver.signal.connect(ab.onDataReady)
-    # receiver.moveToThread(thread)
-    # thread.started.connect(receiver.run)
-    # thread.start()
+    # Create thread that will listen for new strings in the queue. Upon new
+    #   items, Receiver will emit a signal, which will be sent to the
+    #   onDataReady method in the MainWindow class. The onDataReady method
+    #   will add the string to the text editor in the GUI.
+    thread = QtCore.QThread()
+    receiver = Receiver(queue)
+    receiver.signal.connect(form.onDataReady)
+    receiver.moveToThread(thread)
+    thread.started.connect(receiver.run)
+    thread.start()
 
     sys.exit(app.exec_())
-
 
 if __name__ == '__main__':
 
