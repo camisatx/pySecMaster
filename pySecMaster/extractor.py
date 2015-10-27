@@ -6,8 +6,8 @@ import sqlite3
 from multiprocessing import Pool
 import csv
 
-from download import download_quandl_codes, download_quandl_data, \
-    download_google_data, download_csidata_factsheet
+from download import QuandlDownload, download_google_data, \
+    download_csidata_factsheet
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
@@ -127,12 +127,13 @@ def delete_sql_table_rows(db_location, query, table, q_code):
 class QuandlCodeExtract(object):
 
     def __init__(self, db_location, quandl_token, database_list, database_url,
-                 update_range):
+                 update_range, threads):
         self.db_location = db_location
         self.quandl_token = quandl_token
         self.db_list = database_list
         self.db_url = database_url
         self.update_range = update_range
+        self.threads = threads
         self.main()
 
     def main(self):
@@ -268,8 +269,10 @@ class QuandlCodeExtract(object):
         dl_csv_start_time = time.time()
         next_page = True
         while next_page:
-            db_pg_df = download_quandl_codes(self.quandl_token, self.db_url,
-                                             db_name, page_num)
+            quandl_download = QuandlDownload(self.quandl_token, self.db_url,
+                                             self.threads)
+            db_pg_df = quandl_download.download_quandl_codes(db_name, page_num)
+
             if len(db_pg_df.index) == 0:  # finished downloading all pages
                 next_page = False
             else:
@@ -444,7 +447,8 @@ class QuandlCodeExtract(object):
 class QuandlDataExtraction(object):
 
     def __init__(self, db_location, quandl_token, db_url, ticker_source,
-                 download_selection, redownload_time, data_process, days_back):
+                 download_selection, redownload_time, data_process, days_back,
+                 threads):
         self.database_location = db_location
         self.quandl_token = quandl_token
         self.db_url = db_url
@@ -453,6 +457,7 @@ class QuandlDataExtraction(object):
         self.redownload_time = redownload_time
         self.data_process = data_process
         self.days_back = days_back
+        self.threads = threads
 
         print('Retrieving dates of the last price per ticker...')
         # Creates a DataFrame with the last price for each security
@@ -484,9 +489,9 @@ class QuandlDataExtraction(object):
             codes_wo_data_df = pd.read_csv('load_tables/quandl_codes_wo_data'
                                            '.csv', index_col=False)
             # Exclude these codes that are within the 15 day re-download period
-            beg_date_obj_wo_data = (datetime.utcnow() - timedelta(days=15))
+            beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
-                                                beg_date_obj_wo_data.isoformat()]
+                                                beg_date_ob_wo_data.isoformat()]
             # Change DF to a list of only the q_codes
             list_to_exclude = exclude_codes_df['q_code'].values.flatten()
             # Create a temp DF from q_codes_df with only the codes to exclude
@@ -531,7 +536,7 @@ class QuandlDataExtraction(object):
         of threads below to alter the speed of the downloads. If the
         query runs out of items, try lowering the number of threads.
         22 threads -> 932.65 seconds"""
-        multithread(self.extractor, q_code_list, threads=8)
+        multithread(self.extractor, q_code_list, threads=self.threads)
 
         print('The price extraction took %0.2f seconds to complete' %
               (time.time() - start_time))
@@ -546,7 +551,7 @@ class QuandlDataExtraction(object):
         Perhaps the best way will be to have some predefined queries, and if
         those don't work for the user, they write a custom query.
 
-        :download_selection: String that matches an if condition below
+        :param download_selection: String that matches an if condition below
         :return: List with each item being a Quandl Codes as a string
         """
 
@@ -558,12 +563,17 @@ class QuandlDataExtraction(object):
                 # ToDo: MED: Will need to create queries for additional items
 
                 if ticker_source == 'quandl':
+
+                    print('NOTE: For stock data, it is recommended to use CSI '
+                          'Data as the ticker provider. They provide a more '
+                          'inclusive selection of tickers than Quandl does.')
+
                     # Retrieve all q_codes
                     if download_selection == 'all':
                         cur.execute("""SELECT q_code FROM quandl_codes""")
 
                     # Retrieve q_codes traded in any exchange located in the US
-                    elif download_selection == 'us_only':
+                    elif download_selection == 'us_only_goog':
                         cur.execute("""SELECT q_code
                                         FROM quandl_codes
                                         WHERE
@@ -606,10 +616,13 @@ class QuandlDataExtraction(object):
                                        OR data_vendor='WIKI'""")
 
                     else:
-                        raise TypeError('Error: In query_q_codes, improper '
-                                        'download_selection was provided. If '
-                                        'this is a new query, ensure the SQL '
-                                        'is correct.')
+                        raise TypeError('Improper download_selection was '
+                                        'provided in query_q_codes. If this is '
+                                        'a new query, ensure the SQL is '
+                                        'correct. Valid Quandl download '
+                                        'selections include all, us_main_goog, '
+                                        'us_only_goog, wiki, and '
+                                        'wiki_and_us_main_goog.')
 
                 elif ticker_source == 'csidata':
 
@@ -619,7 +632,7 @@ class QuandlDataExtraction(object):
                                        FROM csidata_stock_factsheet""")
 
                     # Retrieve tickers that trade only on main US exchanges
-                    elif download_selection == 'wiki' or 'us_main':
+                    elif download_selection == 'us_main':
                         # Restricts tickers to those that have been active
                         #   within the prior two years.
                         beg_date = (datetime.utcnow() - timedelta(days=730))
@@ -636,10 +649,11 @@ class QuandlDataExtraction(object):
                                     (beg_date.isoformat(),))
 
                     else:
-                        raise TypeError('In query_q_codes, improper '
-                                        'download_selection was provided. If '
-                                        'this is a new query, ensure the SQL '
-                                        'is correct.')
+                        raise TypeError('Improper download_selection was '
+                                        'provided in query_q_codes. If this is '
+                                        'a new query, ensure the SQL is '
+                                        'correct. Valid CSI Data download '
+                                        'selections include all and us_main.')
                 else:
                     raise TypeError('Improper ticker_source was provided in'
                                     'query_q_codes of QuandlDataExtraction.')
@@ -706,11 +720,13 @@ class QuandlDataExtraction(object):
         """
 
         main_time_start = time.time()
+        quandl_download = QuandlDownload(self.quandl_token, self.db_url,
+                                         self.threads)
 
         # The ticker has no prior price; add all the downloaded data
         if q_code not in self.latest_prices.index:
-            clean_data = download_quandl_data(self.quandl_token, self.db_url,
-                                              q_code)
+
+            clean_data = quandl_download.download_quandl_data(q_code)
 
             # There is not new data, so do nothing to the database
             if len(clean_data.index) == 0:
@@ -737,17 +753,16 @@ class QuandlDataExtraction(object):
                     beg_date_obj = (last_date - timedelta(days=self.days_back))
                     # YYYY-MM-DD format needed for Quandl API download
                     beg_date = beg_date_obj.strftime('%Y-%m-%d')
-                    clean_data = download_quandl_data(self.quandl_token,
-                                                      self.db_url, q_code,
-                                                      beg_date)
+                    clean_data = quandl_download.download_quandl_data(q_code,
+                                                                      beg_date)
 
                 # This will download the entire data set, but only keep new
                 #   data after the latest existing data point.
                 else:
-                    raw_data = download_quandl_data(self.quandl_token,
-                                                    self.db_url, q_code)
+                    raw_data = quandl_download.download_quandl_data(q_code)
                     # DataFrame of only the new data
                     clean_data = raw_data[raw_data.date > last_date.isoformat()]
+
             except Exception as e:
                 print('Failed to determine what data is new for %s in extractor'
                       % q_code)
@@ -821,7 +836,7 @@ class QuandlDataExtraction(object):
 class GoogleFinanceDataExtraction(object):
 
     def __init__(self, db_location, db_url, ticker_source, dwnld_selection,
-                 redownload_time, data_process, days_back):
+                 redownload_time, data_process, days_back, threads):
         self.db_location = db_location
         self.db_url = db_url
         self.ticker_source = ticker_source
@@ -829,6 +844,7 @@ class GoogleFinanceDataExtraction(object):
         self.redownload_time = redownload_time
         self.data_process = data_process
         self.days_back = days_back
+        self.threads = threads
 
         print('Retrieving dates of the last price per ticker...')
         # Creates a DataFrame with the last price for each security
@@ -859,9 +875,9 @@ class GoogleFinanceDataExtraction(object):
             codes_wo_data_df = pd.read_csv('load_tables/goog_min_codes_wo_data'
                                            '.csv', index_col=False)
             # Exclude these codes that are within the 15 day re-download period
-            beg_date_obj_wo_data = (datetime.utcnow() - timedelta(days=15))
+            beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
-                                                beg_date_obj_wo_data.isoformat()]
+                                                beg_date_ob_wo_data.isoformat()]
             # Change DF to a list of only the q_codes
             list_to_exclude = exclude_codes_df['q_code'].values.flatten()
             # Create a temp DF from q_codes_df with only the codes to exclude
@@ -905,7 +921,7 @@ class GoogleFinanceDataExtraction(object):
         multi-thread function above to change the type. Change the number
         of threads below to alter the speed of the downloads. If the
         query runs out of items, try lowering the number of threads."""
-        multithread(self.extractor, q_code_list, threads=4)
+        multithread(self.extractor, q_code_list, threads=self.threads)
 
         print('The price extraction took %0.2f seconds to complete' %
               (time.time() - start_time))
@@ -933,6 +949,10 @@ class GoogleFinanceDataExtraction(object):
                 # ToDo: MED: Will need to create queries for additional items
 
                 if ticker_source == 'quandl':
+
+                    print('NOTE: For stock data, it is recommended to use CSI '
+                          'Data as the ticker provider. They provide a more '
+                          'inclusive selection of tickers than Quandl does.')
 
                     # Retrieve all GOOG q_codes
                     if download_selection == 'all':
@@ -970,10 +990,12 @@ class GoogleFinanceDataExtraction(object):
                                        AND end_date>?""",
                                     (beg_date.isoformat(),))
                     else:
-                        raise TypeError('Error: In query_q_codes, improper '
-                                        'download_selection was provided. If '
-                                        'this is a new query, ensure the SQL '
-                                        'has proper syntax.')
+                        raise TypeError('Improper download_selection was '
+                                        'provided in query_q_codes. If this is '
+                                        'a new query, ensure the SQL has '
+                                        'proper syntax. Valid Quandl download '
+                                        'selections include all, us_only and '
+                                        'us_main_goog.')
 
                 elif ticker_source == 'csidata':
 
@@ -983,7 +1005,7 @@ class GoogleFinanceDataExtraction(object):
                                        FROM csidata_stock_factsheet""")
 
                     # Retrieve tickers that trade only on main US exchanges
-                    elif download_selection == 'wiki' or 'us_main':
+                    elif download_selection == 'us_main':
                         # Restricts tickers to those that have been active
                         #   within the prior two years.
                         beg_date = (datetime.utcnow() - timedelta(days=730))
@@ -1000,10 +1022,11 @@ class GoogleFinanceDataExtraction(object):
                                     (beg_date.isoformat(),))
 
                     else:
-                        raise TypeError('In query_q_codes, improper '
-                                        'download_selection was provided. If '
-                                        'this is a new query, ensure the SQL '
-                                        'is correct.')
+                        raise TypeError('Improper download_selection was '
+                                        'provided in query_q_codes. If this is '
+                                        'a new query, ensure the SQL is '
+                                        'correct. Valid CSI Data download '
+                                        'selections include all and us_main.')
 
                 else:
                     raise TypeError('Improper ticker_source was provided '
@@ -1112,7 +1135,7 @@ class GoogleFinanceDataExtraction(object):
 
         # The ticker has no prior price; add all the downloaded data
         if q_code not in self.latest_prices.index:
-            clean_data = download_google_data(self.db_url, q_code)
+            clean_data = download_google_data(self.db_url, q_code, self.threads)
 
             # There is no new data, so do nothing to the database
             if len(clean_data.index) == 0:
@@ -1133,7 +1156,8 @@ class GoogleFinanceDataExtraction(object):
         else:
             try:
                 last_date = self.latest_prices.loc[q_code, 'date']
-                raw_data = download_google_data(self.db_url, q_code)
+                raw_data = download_google_data(self.db_url, q_code,
+                                                self.threads)
 
                 # Only keep data that is after the days_back period
                 if self.data_process == 'replace' and self.days_back:
