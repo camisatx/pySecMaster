@@ -50,37 +50,9 @@ Future expansions:
 '''
 
 ###############################################################################
-# General options:
-
-# Go to quandl.com to signup for a free account to get a Quandl API Token
-# NOTE: DELETE THIS TOKEN BEFORE CONTRIBUTING CODE; keep it confidential!
-quandl_token = 'XXXXXXXXXXX'
-
-# Specify the name of the Security Master database
-# The name must have underscores instead of spaces and must have '.db' on end
-database_name = 'pySecMaster.db'
-
-# Change the location for where the database will be created
-# Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/'
-database_location = 'C:/Users/XXXX/Desktop/'
-
-database_link = database_location + database_name
-
-###############################################################################
 # Database maintenance options:
 
-# These are the Quandl Databases that will have all their codes downloaded
-# Examples: 'GOOG', 'WIKI', 'YAHOO', 'SEC', 'EIA', 'JODI', 'CURRFX', 'FINRA'
-# ToDo: Determine how to handle Futures; codes are a single item w/o a '_'
-# ToDo: Determine how to handle USDAFAS; codes have 3 item formats
-database_list = ['WIKI']
 csidata_type = 'stock'      # stock, commodity
-
-# Integer that represents the number of days before the ticker tables will be
-#   refreshed. In addition, if a database wasn't completely downloaded within
-#   this data range, the remainder of the codes will attempt to download.
-update_range = 30
-csidata_update_range = 5
 
 # Don't change these unless you know what you are doing
 database_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
@@ -90,27 +62,6 @@ tables_to_load = ['data_vendor', 'exchanges']
 
 ###############################################################################
 # Database data download options:
-
-# What source should the data be downloaded from? Quandl and/or Google Fin?
-# Examples: 'all', 'quandl', 'google_fin'
-download_source = 'quandl'
-
-# When the Quandl or Google Fin data is downloaded, where should the extractor
-#   get the ticker codes from? Either use the official list of codes from
-#   Quandl, or make reasonable guesses from the CSI Data stock factsheet, which
-#   is more accurate but produces more failed/empty downloads.
-quandl_ticker_source = 'csidata'        # quandl, csidata
-google_fin_ticker_source = 'csidata'        # quandl, csidata
-
-# Specify the items that will have their data downloaded. To add a field or
-#   to understand what is actually being downloaded, go to the query_q_codes
-#   method in either the QuandlDataExtraction class or the
-#   GoogleFinanceDataExtraction class in extractor.py, and look at the SQLite
-#   queries.
-# Quandl options: 'all', 'wiki', 'us_only', 'us_main', 'wiki_and_us_main_goog'
-quandl_selection = 'wiki'
-# Google Fin options: 'all', 'us_only', 'us_main_goog'
-google_fin_selection = 'us_main_goog'
 
 # Specify the time in seconds before the data is allowed to be re-downloaded.
 redownload_time = 60 * 60 * 72      # 72 hours
@@ -138,7 +89,9 @@ google_fin_url = {'root': 'http://www.google.com/finance/getprices?',
 ###############################################################################
 
 
-def maintenance():
+def maintenance(database_link, quandl_ticker_source, database_list,
+                google_fin_ticker_source, download_source, threads, quandl_key,
+                quandl_update_range, csidata_update_range):
 
     print('Starting Security Master table maintenance function. This can take '
           'some time to finish if large databases are used. If this fails, '
@@ -148,51 +101,123 @@ def maintenance():
     main_tables(database_link)
     stock_tables(database_link)
 
-    # You can comment out either of these classes if you don't plan on using it
-    if (quandl_ticker_source == 'csidata' or
-            google_fin_ticker_source == 'csidata'):
-        CSIDataExtractor(database_link, csidata_url, csidata_type,
-                         csidata_update_range)
-    elif (quandl_ticker_source == 'quandl' or
-            google_fin_ticker_source == 'quandl'):
-        QuandlCodeExtract(database_link, quandl_token, database_list,
-                          database_url, update_range)
-    else:
-        raise SystemError('Provide a correct type data selection for Quandl'
-                          'and Google Fin in pySecMaster.py in the database'
-                          'options section.')
+    if download_source in ['all', 'quandl']:
+        if quandl_ticker_source == 'csidata':
+            CSIDataExtractor(database_link, csidata_url, csidata_type,
+                             csidata_update_range)
+        elif quandl_ticker_source == 'quandl':
+            QuandlCodeExtract(database_link, quandl_key, database_list,
+                              database_url, quandl_update_range, threads)
+        else:
+            raise SystemError('Provide a correct type data selection for Quandl'
+                              'and Google Fin in pySecMaster.py in the database'
+                              'options section.')
+
+    if download_source in ['all', 'google_fin']:
+        if google_fin_ticker_source == 'csidata':
+            CSIDataExtractor(database_link, csidata_url, csidata_type,
+                             csidata_update_range)
+        elif google_fin_ticker_source == 'quandl':
+            QuandlCodeExtract(database_link, quandl_key, database_list,
+                              database_url, quandl_update_range, threads)
+        else:
+            raise SystemError('Provide a correct type data selection for Quandl'
+                              'and Google Fin in pySecMaster.py in the database'
+                              'options section.')
 
     LoadTables(database_link, tables_to_load)
 
 
-def data_download():
+def data_download(database_link, quandl_ticker_source, database_list,
+                  google_fin_ticker_source, download_source, quandl_selection,
+                  google_fin_selection, threads, quandl_key):
 
-    if (download_source in ['all', 'quandl']) and ('WIKI' in database_list):
+    if download_source in ['all', 'quandl']:
         # Download data for selected Quandl Codes
         print('\nDownloading all Quandl fields for: %s \nNew data will %s the '
               'prior %s days data'
               % (quandl_selection, data_process, quandl_days_back))
-        QuandlDataExtraction(database_link,
-                             quandl_token,
-                             quandl_data_url,
-                             quandl_ticker_source,
-                             quandl_selection,
-                             redownload_time,
-                             data_process,
-                             quandl_days_back)
+        QuandlDataExtraction(database_link, quandl_key, quandl_data_url,
+                             quandl_ticker_source, quandl_selection,
+                             redownload_time, data_process, quandl_days_back,
+                             threads)
 
-    if (download_source in ['all', 'google_fin']) and ('GOOG' in database_list):
+    if download_source in ['all', 'google_fin']:
         # Download minute data for selected Google Finance codes
         print('\nDownloading all Google Finance fields for: %s \nNew data will '
               '%s the prior %s day''s data'
               % (google_fin_selection, data_process, google_fin_days_back))
-        GoogleFinanceDataExtraction(database_link,
-                                    google_fin_url,
+        GoogleFinanceDataExtraction(database_link, google_fin_url,
                                     google_fin_ticker_source,
                                     google_fin_selection,
                                     google_fin_redwnld_time, data_process,
-                                    google_fin_days_back)
+                                    google_fin_days_back, threads)
 
 if __name__ == '__main__':
-    maintenance()
-    data_download()
+
+    ############################################################################
+    # General options:
+
+    # Go to quandl.com to signup for a free account to get a Quandl API Token
+    # NOTE: DELETE THIS TOKEN BEFORE CONTRIBUTING CODE; keep it confidential!
+    quandl_token = 'XXXXXXXXXXX'
+
+    # Specify the name of the Security Master database
+    # Name must have underscores instead of spaces and must have '.db' on end
+    database_name = 'pySecMaster.db'
+
+    # Change the location for where the database will be created
+    # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/'
+    database_location = 'C:/Users/XXXX/Desktop/'
+
+    database_link = database_location + database_name
+
+    ############################################################################
+    # Database maintenance options:
+
+    # These are the Quandl Databases that will have all their codes downloaded
+    # Examples: 'GOOG', 'WIKI', 'YAHOO', 'SEC', 'EIA', 'JODI', 'CURRFX', 'FINRA'
+    # ToDo: Determine how to handle Futures; codes are a single item w/o a '_'
+    # ToDo: Determine how to handle USDAFAS; codes have 3 item formats
+    database_list = ['WIKI', 'GOOG']
+
+    # Integer that represents the number of days before the ticker tables will
+    #   be refreshed. In addition, if a database wasn't completely downloaded
+    #   within this data range, the remainder of the codes will attempt to
+    #   download.
+    update_range = 30
+    csidata_update_range = 5
+
+    ############################################################################
+    # Database data download options:
+
+    # What source should the data be downloaded from? Quandl and/or Google Fin?
+    # Examples: 'all', 'quandl', 'google_fin'
+    download_source = 'google_fin'
+
+    # When the Quandl or Google Fin data is downloaded, where should the
+    #   extractor get the ticker codes from? Either use the official list of
+    #   codes from Quandl, or make reasonable guesses from the CSI Data stock
+    #   factsheet, which is more accurate but produces more failed/empty
+    #   downloads.
+    quandl_ticker_source = 'csidata'        # quandl, csidata
+    google_fin_ticker_source = 'csidata'        # quandl, csidata
+
+    # Specify the items that will have their data downloaded. To add a field or
+    #   to understand what is actually being downloaded, go to the query_q_codes
+    #   method in either the QuandlDataExtraction class or the
+    #   GoogleFinanceDataExtraction class in extractor.py, and look at the
+    #   SQLite queries.
+    # Options: 'all', 'wiki', 'us_only', 'us_main', 'wiki_and_us_main_goog'
+    quandl_selection = 'wiki'
+    # Google Fin options: 'all', 'us_only', 'us_main', 'us_main_goog'
+    google_fin_selection = 'us_main'
+    ############################################################################
+
+    maintenance(database_link, quandl_ticker_source, database_list,
+                google_fin_ticker_source, download_source, 8, quandl_token,
+                update_range, csidata_update_range)
+
+    data_download(database_link, quandl_ticker_source, database_list,
+                  google_fin_ticker_source, download_source, quandl_selection,
+                  google_fin_selection, 8, quandl_token)
