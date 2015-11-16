@@ -481,8 +481,14 @@ class QuandlDataExtraction(object):
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
                               left_on='q_code', right_index=True, how='left')
         # Sort the DF with un-downloaded items first, then based on last update
-        q_codes_df.sort('updated_date', ascending=True, na_position='first',
-                        inplace=True)
+        try:
+            # df.sort_values introduced in 0.17.0
+            q_code_df.sort_values('updated_date', axis=0, ascending=True,
+                                  na_position='first', inplace=True)
+        except:
+            # df.sort() depreciated in 0.17.0
+            q_codes_df.sort('updated_date', ascending=True, na_position='first',
+                            inplace=True)
 
         try:
             # Load the codes that did not have data from the last extractor run
@@ -867,8 +873,14 @@ class GoogleFinanceDataExtraction(object):
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
                               left_on='q_code', right_index=True, how='left')
         # Sort the DF with un-downloaded items first, then based on last update
-        q_codes_df.sort('updated_date', ascending=True, na_position='first',
-                        inplace=True)
+        try:
+            # df.sort_values introduced in 0.17.0
+            q_code_df.sort_values('updated_date', axis=0, ascending=True,
+                                  na_position='first', inplace=True)
+        except:
+            # df.sort() depreciated in 0.17.0
+            q_codes_df.sort('updated_date', ascending=True, na_position='first',
+                            inplace=True)
 
         try:
             # Load the codes that did not have data from the last extractor run
