@@ -134,6 +134,12 @@ class QuandlCodeExtract(object):
         self.db_url = database_url
         self.update_range = update_range
         self.threads = threads
+
+        # Rate limiter parameters based on Quandl API limitations
+        rate = 2000
+        period_sec = 600
+        self.min_interval = float((period_sec/rate)*threads)
+
         self.main()
 
     def main(self):
@@ -269,8 +275,11 @@ class QuandlCodeExtract(object):
         dl_csv_start_time = time.time()
         next_page = True
         while next_page:
-            quandl_download = QuandlDownload(self.quandl_token, self.db_url,
-                                             self.threads)
+
+            # Rate limit this function with non-reactive timer
+            time.sleep(self.min_interval)
+
+            quandl_download = QuandlDownload(self.quandl_token, self.db_url)
             db_pg_df = quandl_download.download_quandl_codes(db_name, page_num)
 
             if len(db_pg_df.index) == 0:  # finished downloading all pages
@@ -459,6 +468,11 @@ class QuandlDataExtraction(object):
         self.days_back = days_back
         self.threads = threads
 
+        # Rate limiter parameters based on Quandl API limitations
+        rate = 2000
+        period_sec = 600
+        self.min_interval = float((period_sec/rate)*threads)
+
         print('Retrieving dates of the last price per ticker...')
         # Creates a DataFrame with the last price for each security
         self.latest_prices = self.query_last_price()
@@ -483,8 +497,8 @@ class QuandlDataExtraction(object):
         # Sort the DF with un-downloaded items first, then based on last update
         try:
             # df.sort_values introduced in 0.17.0
-            q_code_df.sort_values('updated_date', axis=0, ascending=True,
-                                  na_position='first', inplace=True)
+            q_codes_df.sort_values('updated_date', axis=0, ascending=True,
+                                   na_position='first', inplace=True)
         except:
             # df.sort() depreciated in 0.17.0
             q_codes_df.sort('updated_date', ascending=True, na_position='first',
@@ -726,8 +740,11 @@ class QuandlDataExtraction(object):
         """
 
         main_time_start = time.time()
-        quandl_download = QuandlDownload(self.quandl_token, self.db_url,
-                                         self.threads)
+
+        # Rate limit this function with non-reactive timer
+        time.sleep(self.min_interval)
+
+        quandl_download = QuandlDownload(self.quandl_token, self.db_url)
 
         # The ticker has no prior price; add all the downloaded data
         if q_code not in self.latest_prices.index:
@@ -852,6 +869,12 @@ class GoogleFinanceDataExtraction(object):
         self.days_back = days_back
         self.threads = threads
 
+        # Rate limiter parameters based on guessed Google Finance limitations
+        # Received captch after about 2000 queries
+        rate = 70
+        period_sec = 60
+        self.min_interval = float((period_sec/rate)*threads)
+
         print('Retrieving dates of the last price per ticker...')
         # Creates a DataFrame with the last price for each security
         self.latest_prices = self.query_last_price()
@@ -875,9 +898,11 @@ class GoogleFinanceDataExtraction(object):
         # Sort the DF with un-downloaded items first, then based on last update
         try:
             # df.sort_values introduced in 0.17.0
-            q_code_df.sort_values('updated_date', axis=0, ascending=True,
-                                  na_position='first', inplace=True)
+            q_codes_df.sort_values('updated_date', axis=0, ascending=True,
+                                   na_position='first', inplace=True)
         except:
+            print('extractor.py is using the depreciated DataFrame sort '
+                  'function. Something is wrong (line 900)')
             # df.sort() depreciated in 0.17.0
             q_codes_df.sort('updated_date', ascending=True, na_position='first',
                             inplace=True)
@@ -1144,6 +1169,9 @@ class GoogleFinanceDataExtraction(object):
         """
 
         main_time_start = time.time()
+
+        # Rate limit this function with non-reactive timer
+        time.sleep(self.min_interval)
 
         # The ticker has no prior price; add all the downloaded data
         if q_code not in self.latest_prices.index:

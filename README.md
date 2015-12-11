@@ -1,6 +1,8 @@
 # pySecMaster
 An automated framework to store and maintain financial data.
 
+[![AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](http://opensource.org/licenses/AGPL-3.0)
+
 The system downloads specified data from Quandl to a SQLite3 database, which can then be quickly queried. Uses of the data include trading backtests and graph visualizations. Additionally, it is possible to use the Quandl GOOG code structure to download minute stock data from Google Finance.
 
 # Quick Start (Quandl daily data)
