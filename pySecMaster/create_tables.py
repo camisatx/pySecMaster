@@ -27,7 +27,6 @@ __version__ = '1.2'
 
 # Future table additions:
 #   corporate_actions
-#   holidays
 #   fundamentals    (company, energy, economic)
 #   futures_prices
 
@@ -36,6 +35,17 @@ def main_tables(db_location):
 
     conn = sqlite3.connect(db_location)
     cur = conn.cursor()
+
+    def symbology(c):
+        c.execute('''CREATE TABLE IF NOT EXISTS symbology
+        (symbol_id      INTEGER PRIMARY KEY,
+        source          TEXT,
+        source_id       TEXT,
+        type            TEXT,
+        created_date    FLOAT,
+        updated_date    FLOAT)''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_symbology_source_id
+                    ON symbology(source_id)""")
 
     def data_vendor(c):
         c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
@@ -80,6 +90,7 @@ def main_tables(db_location):
         c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_q_code
                     ON fundamental_data(q_code)""")
 
+    symbology(cur)
     data_vendor(cur)
     quandl_codes(cur)
     fundamental_data(cur)
@@ -142,16 +153,22 @@ def stock_tables(db_location):
 
     def tickers(c):
         c.execute('''CREATE TABLE IF NOT EXISTS tickers
-        (symbol_id              INTEGER PRIMARY KEY,
-        ticker                  TEXT,
-        exchange                TEXT,
-        sector                  TEXT,
-        industry                TEXT,
-        sub_industry            TEXT,
-        currency                TEXT,
-        hq_country              TEXT,
-        created_date            FLOAT,
-        updated_date            FLOAT,
+        (symbol_id      INTEGER PRIMARY KEY,
+        ticker          TEXT,
+        name            TEXT,
+        exchange        TEXT,
+        child_exchange  TEXT,
+        is_active       INTEGER,
+        start_date      FLOAT,
+        end_date        FLOAT,
+        type            TEXT,
+        sector          TEXT,
+        industry        TEXT,
+        sub_industry    TEXT,
+        currency        TEXT,
+        hq_country      TEXT,
+        created_date    FLOAT,
+        updated_date    FLOAT,
         FOREIGN KEY(symbol_id) REFERENCES quandl_codes(symbol_id),
         FOREIGN KEY(exchange) REFERENCES exchange(abbrev))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
@@ -251,3 +268,111 @@ def stock_tables(db_location):
     # options_prices(cur)
 
     print('All tables in StockTables are created')
+
+
+def events_tables(db_location):
+
+    conn = sqlite3.connect(db_location)
+    try:
+        with conn:
+            cur = conn.cursor()
+
+            def conference_calls(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS conference_calls
+                (conf_call_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol_id           INTEGER,
+                symbol              TEXT,
+                date                FLOAT,
+                event_title         TEXT,
+                created_date        FLOAT,
+                updated_date        FLOAT,
+                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_conf_sid
+                            ON conference_calls(symbol_id)""")
+
+            def earnings(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS earnings
+                (earnings_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol_id       INTEGER,
+                symbol          TEXT,
+                company_name    TEXT,
+                date            FLOAT,
+                reported_eps    FLOAT,
+                consensus_eps   FLOAT,
+                created_date    FLOAT,
+                updated_date    FLOAT,
+                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_earn_sid
+                            ON earnings(symbol_id)""")
+
+            def economic_events(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS economic_events
+                (event_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol_id           INTEGER,
+                event_name          TEXT,
+                date                FLOAT,
+                date_for            FLOAT,
+                actual              TEXT,
+                briefing_forecast   TEXT,
+                market_expects      TEXT,
+                prior               TEXT,
+                revised_from        TEXT,
+                created_date        FLOAT,
+                updated_date        FLOAT,
+                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_econ_event_sid
+                            ON economic_events(symbol_id)""")
+
+            def ipo_pricings(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS ipo_pricings
+                (ipo_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol_id       INTEGER,
+                symbol          TEXT,
+                company_name    TEXT,
+                offer_date      FLOAT,
+                shares_offered  TEXT,
+                proposed_price  TEXT,
+                initial_price   TEXT,
+                created_date    FLOAT,
+                updated_date    FLOAT,
+                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_ipop_sid
+                            ON ipo_pricings(symbol_id)""")
+
+            def splits(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS splits
+                (split_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol_id       INTEGER,
+                symbol          TEXT,
+                company_name    TEXT,
+                payable_date    FLOAT,
+                ex_date         FLOAT,
+                announced_date  FLOAT,
+                optionable      INTEGER,
+                ratio           FLOAT,
+                created_date    FLOAT,
+                updated_date    FLOAT,
+                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_splits_sid
+                            ON splits(symbol_id)""")
+
+            conference_calls(cur)
+            earnings(cur)
+            economic_events(cur)
+            ipo_pricings(cur)
+            splits(cur)
+
+            print('All tables in events_tables are in the database.')
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        print('Failed to create the main events tables in the database')
+        print(e)
+        return
+    except conn.OperationalError:
+        print('Unable to connect to the SQL Database in events_tables. Make '
+              'sure the database address/name are correct.')
+        return
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: An unknown issue occurred in events_tables')
