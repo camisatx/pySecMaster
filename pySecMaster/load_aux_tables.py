@@ -78,7 +78,7 @@ class LoadTables(object):
     def find_symbol_id_process(table_df, cur):
         """
         Finds the ticker's symbol_id. If the table provided has an exchange
-        column, then the ticker and exchange will be used to find they 
+        column, then the ticker and exchange will be used to find the
         symbol_id. The result should be a perfect match to the quandl_codes 
         table. If an exchange column doesn't exist, then only the ticker will
         be used, along with an implied US exchange. Thus, only tickers traded
@@ -205,15 +205,16 @@ tables = {
             updated_date)
             VALUES(NULL,?,?,?,?,?,?)''',
     'exchanges': '''INSERT INTO exchange(
-            exchange_id, abbrev, abbrev_goog, abbrev_yahoo, name, country, city,
-            currency, utc_offset, open, close,
-            lunch, created_date, updated_date)
-            VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            exchange_id, abbrev, abbrev_goog, abbrev_yahoo, abbrev_csi, name,
+            country, city, currency, utc_offset, open, close, lunch,
+            created_date, updated_date)
+            VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
     'tickers': '''INSERT INTO tickers(
             symbol_id, ticker, exchange, sector, industry, sub_industry,
             currency, hq_country, created_date, updated_date)
             VALUES(?,?,?,?,?,?,?,?,?,?)''',
     'indices': '''INSERT INTO indices(
-            index_id, stock_index, symbol_id, as_of, created_date, updated_date)
+            index_id, stock_index, symbol_id, as_of_date,
+            created_date, updated_date)
             VALUES(NULL,?,?,?,?,?)''',
 }

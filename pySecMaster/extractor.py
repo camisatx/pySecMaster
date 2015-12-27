@@ -1,10 +1,10 @@
-import time
-from datetime import datetime, timedelta
-import re
-import pandas as pd
-import sqlite3
-from multiprocessing import Pool
 import csv
+from datetime import datetime, timedelta
+from multiprocessing import Pool
+import pandas as pd
+import re
+import sqlite3
+import time
 
 from download import QuandlDownload, download_google_data, \
     download_csidata_factsheet
@@ -82,6 +82,7 @@ def df_to_sql(df, db_location, sql_table, exists, item):
 
     # Try and except block writes the new data to the SQL Database.
     try:
+        # if_exists options: append new df rows, replace all table values
         df.to_sql(sql_table, conn, if_exists=exists, index=False)
         conn.execute("PRAGMA journal_mode = MEMORY")
         conn.execute("PRAGMA busy_timeout = 60000")

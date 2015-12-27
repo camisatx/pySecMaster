@@ -1,4 +1,4 @@
-from create_tables import main_tables, stock_tables
+from create_tables import main_tables, data_tables, events_tables
 from extractor import QuandlCodeExtract, QuandlDataExtraction,\
     GoogleFinanceDataExtraction, CSIDataExtractor
 from load_aux_tables import LoadTables
@@ -57,6 +57,7 @@ csidata_type = 'stock'      # stock, commodity
 # Don't change these unless you know what you are doing
 database_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
                 'source_code=', '&per_page=300&page=']
+# http://www.csidata.com/factsheets.php?type=stock&format=html
 csidata_url = 'http://www.csidata.com/factsheets.php?'
 tables_to_load = ['data_vendor', 'exchanges']
 
@@ -99,7 +100,8 @@ def maintenance(database_link, quandl_ticker_source, database_list,
 
     # Create the SQL tables, if they don't already exist
     main_tables(database_link)
-    stock_tables(database_link)
+    data_tables(database_link)
+    events_tables(database_link)
 
     if download_source in ['all', 'quandl']:
         if quandl_ticker_source == 'csidata':

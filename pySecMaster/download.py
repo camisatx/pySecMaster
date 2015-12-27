@@ -1,16 +1,10 @@
-import time
-from functools import wraps
 from datetime import datetime, timedelta
+from functools import wraps
 import pandas as pd
+import time
+from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
 
-try:        # Python 3.4
-    from urllib.request import urlopen
-    from urllib.error import HTTPError
-    from urllib.error import URLError
-except ImportError:     # Python 2.7
-    from urllib2 import urlopen
-    from urllib2 import HTTPError
-    from urllib2 import URLError
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
