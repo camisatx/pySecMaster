@@ -36,72 +36,15 @@ def main_tables(db_location):
     conn = sqlite3.connect(db_location)
     cur = conn.cursor()
 
-    def symbology(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS symbology
-        (symbol_id      INTEGER PRIMARY KEY,
-        source          TEXT,
-        source_id       TEXT,
-        type            TEXT,
-        created_date    FLOAT,
-        updated_date    FLOAT)''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_symbology_source_id
-                    ON symbology(source_id)""")
-
-    def data_vendor(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
-        (data_vendor_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-        name                TEXT UNIQUE,
-        url                 TEXT,
-        support_email       TEXT,
-        api                 TEXT,
-        created_date        FLOAT,
-        updated_date        FLOAT)''')
-
-    def quandl_codes(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS quandl_codes
-        (q_code_id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_vendor         TEXT,
-        data                TEXT,
-        component           TEXT,
-        period              TEXT,
-        q_code              TEXT,
-        name                TEXT,
-        start_date          FLOAT,
-        end_date            FLOAT,
-        frequency           TEXT,
-        last_updated        FLOAT,
-        page_num            INTEGER,
-        created_date        FLOAT,
-        updated_date        FLOAT,
-        FOREIGN KEY(data_vendor) REFERENCES data_vendor(name))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_data
-                    ON quandl_codes(data)""")
-
-    def fundamental_data(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS fundamental_data
-        (fundamental_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        q_code          TEXT,
-        date            TEXT,
-        value           REAL,
-        note            TEXT,
+    def baskets(c):
+        c.execute('''CREATE TABLE IF NOT EXISTS basket
+        (basket_id      INTEGER PRIMARY KEY,
+        basket_desc     TEXT,
+        symbol_id       INTEGER,
+        as_of_date      FLOAT,
         created_date    FLOAT,
         updated_date    FLOAT,
-        FOREIGN KEY(q_code) REFERENCES quandl_codes(q_code))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_q_code
-                    ON fundamental_data(q_code)""")
-
-    symbology(cur)
-    data_vendor(cur)
-    quandl_codes(cur)
-    fundamental_data(cur)
-
-    print('All tables in MainTables are created')
-
-
-def stock_tables(db_location):
-
-    conn = sqlite3.connect(db_location)
-    cur = conn.cursor()
+        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
 
     def csidata_stock_factsheet(c):
         c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
@@ -121,6 +64,19 @@ def stock_tables(db_location):
         Type                TEXT,
         ChildExchange       TEXT,
         Currency            TEXT,
+        created_date        FLOAT,
+        updated_date        FLOAT,
+        FOREIGN KEY(CsiNumber) REFERENCES symbology(source_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_csidata_symbol
+                    ON csidata_stock_factsheet(Symbol)""")
+
+    def data_vendor(c):
+        c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
+        (data_vendor_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+        name                TEXT UNIQUE,
+        url                 TEXT,
+        support_email       TEXT,
+        api                 TEXT,
         created_date        FLOAT,
         updated_date        FLOAT)''')
 
@@ -143,13 +99,47 @@ def stock_tables(db_location):
 
     def indices(c):
         c.execute('''CREATE TABLE IF NOT EXISTS indices
-        (index_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        (index_id           INTEGER PRIMARY KEY,
         stock_index         TEXT,
         symbol_id           INTEGER,
-        as_of               TEXT,
+        as_of_date          FLOAT,
         created_date        FLOAT,
         updated_date        FLOAT,
-        FOREIGN KEY(symbol_id) REFERENCES quandl_codes(symbol_id))''')
+        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
+
+    def quandl_codes(c):
+        c.execute('''CREATE TABLE IF NOT EXISTS quandl_codes
+        (q_code_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        data_vendor         TEXT,
+        data                TEXT,
+        component           TEXT,
+        period              TEXT,
+        q_code              TEXT,
+        name                TEXT,
+        start_date          FLOAT,
+        end_date            FLOAT,
+        frequency           TEXT,
+        last_updated        FLOAT,
+        page_num            INTEGER,
+        created_date        FLOAT,
+        updated_date        FLOAT,
+        FOREIGN KEY(data_vendor) REFERENCES data_vendor(name),
+        FOREIGN KEY(q_code_id) REFERENCES symbology(source_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_data
+                    ON quandl_codes(data)""")
+
+    def symbology(c):
+        c.execute('''CREATE TABLE IF NOT EXISTS symbology
+        (symbol_id      INTEGER,
+        source          TEXT,
+        source_id       TEXT,
+        type            TEXT,
+        created_date    FLOAT,
+        updated_date    FLOAT)''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_symbology_symbol_id
+                    ON symbology(symbol_id)""")
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_symbology_source_id
+                    ON symbology(source_id)""")
 
     def tickers(c):
         c.execute('''CREATE TABLE IF NOT EXISTS tickers
@@ -174,12 +164,28 @@ def stock_tables(db_location):
         c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
                     ON tickers(sector)""")
 
+    csidata_stock_factsheet(cur)
+    data_vendor(cur)
+    exchange(cur)
+    indices(cur)
+    quandl_codes(cur)
+    symbology(cur)
+    # tickers(cur)
+
+    print('All tables in MainTables are created')
+
+
+def data_tables(db_location):
+
+    conn = sqlite3.connect(db_location)
+    cur = conn.cursor()
+
     def daily_prices(c):
         c.execute('''CREATE TABLE IF NOT EXISTS daily_prices
         (daily_price_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_vendor_id  INT,
-        q_code          TEXT,
-        date            TEXT,
+        data_vendor_id  INTEGER,
+        symbol_id       INTEGER,
+        date            FLOAT,
         open            REAL,
         high            REAL,
         low             REAL,
@@ -194,19 +200,45 @@ def stock_tables(db_location):
         adj_volume      REAL,
         updated_date    FLOAT,
         FOREIGN KEY(data_vendor_id) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(q_code) REFERENCES quandl_codes(q_code))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_q_code
-                    ON daily_prices(q_code)""")
+        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_symbol_id
+                    ON daily_prices(symbol_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_date
                     ON daily_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_updated_date
                     ON daily_prices(updated_date)""")
 
+    def finra_data(c):
+        c.execute('''CREATE TABLE IF NOT EXISTS finra_data
+        (finra_id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol_id               INTEGER,
+        date                    TEXT,
+        short_volume            REAL,
+        short_exempt_volume     REAL,
+        total_volume            REAL,
+        updated_date            FLOAT,
+        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
+        c.execute('''CREATE INDEX IF NOT EXISTS idx_finra_symbol_id
+                    ON finra_data(symbol_id)''')
+
+    def fundamental_data(c):
+        c.execute('''CREATE TABLE IF NOT EXISTS fundamental_data
+        (fundamental_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol_id       INTEGER,
+        date            TEXT,
+        value           FLOAT,
+        note            TEXT,
+        created_date    FLOAT,
+        updated_date    FLOAT,
+        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_symbol_id
+                    ON fundamental_data(symbol_id)""")
+
     def minute_prices(c):
         c.execute('''CREATE TABLE IF NOT EXISTS minute_prices
         (minute_price_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_vendor_id  INT,
-        q_code          TEXT,
+        data_vendor_id  INTEGER,
+        symbol_id       INTEGER,
         date            TEXT,
         close           REAL,
         high            REAL,
@@ -215,59 +247,44 @@ def stock_tables(db_location):
         volume          REAL,
         updated_date    FLOAT,
         FOREIGN KEY(data_vendor_id) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(q_code) REFERENCES quandl_codes(q_code))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_q_code
-                    ON minute_prices(q_code)""")
+        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_symbol_id
+                    ON minute_prices(symbol_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_date
                     ON minute_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_updated_date
                     ON minute_prices(updated_date)""")
 
-    def finra_data(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS finra_data
-        (finra_id               INTEGER PRIMARY KEY AUTOINCREMENT,
-        q_code                  TEXT,
-        date                    TEXT,
-        short_volume            REAL,
-        short_exempt_volume     REAL,
-        total_volume            REAL,
-        updated_date            FLOAT,
-        FOREIGN KEY(q_code) REFERENCES quandl_codes(q_code))''')
-        c.execute('''CREATE INDEX IF NOT EXISTS idx_finra_q_code
-                    ON finra_data(q_code)''')
-
     def options_prices(c):
         c.execute('''CREATE TABLE IF NOT EXISTS options_prices
-        (options_prices_id  INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_vendor         INT,
-        underlying          INT,
-        underlying_price    REAL,
-        quote_time          TEXT,
-        strike              REAL,
-        expiration          TEXT,
-        type                TEXT,
-        option_symbol       TEXT,
-        last                REAL,
-        bid                 REAL,
-        ask                 REAL,
-        chg                 REAL,
-        pct_chg             TEXT,
-        vol                 INT,
-        open_int            INT,
-        imp_vol             TEXT,
-        updated_date        FLOAT,
-        FOREIGN KEY(data_vendor) REFERENCES data_vendor(data_vendor_id))''')
+        (options_prices_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        data_vendor             INTEGER,
+        underlying_symbol_id    INTEGER,
+        underlying_price        REAL,
+        quote_time              TEXT,
+        strike                  REAL,
+        expiration              TEXT,
+        type                    TEXT,
+        option_symbol           TEXT,
+        last                    REAL,
+        bid                     REAL,
+        ask                     REAL,
+        chg                     REAL,
+        pct_chg                 TEXT,
+        vol                     INTEGER,
+        open_int                INTEGER,
+        imp_vol                 TEXT,
+        updated_date            FLOAT,
+        FOREIGN KEY(data_vendor) REFERENCES data_vendor(data_vendor_id),
+        FOREIGN KEY(underlying_symbol_id) REFERENCES symbology(symbol_id))''')
 
-    csidata_stock_factsheet(cur)
-    exchange(cur)
-    indices(cur)
-    tickers(cur)
     daily_prices(cur)
-    minute_prices(cur)
     finra_data(cur)
+    fundamental_data(cur)
+    minute_prices(cur)
     # options_prices(cur)
 
-    print('All tables in StockTables are created')
+    print('All tables in data_tables are created')
 
 
 def events_tables(db_location):
