@@ -37,14 +37,14 @@ def main_tables(db_location):
     cur = conn.cursor()
 
     def baskets(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS basket
+        c.execute('''CREATE TABLE IF NOT EXISTS baskets
         (basket_id      INTEGER PRIMARY KEY,
-        basket_desc     TEXT,
-        symbol_id       INTEGER,
-        as_of_date      FLOAT,
+        basket_name     TEXT,
+        tsid            TEXT,
+        date            FLOAT,
         created_date    FLOAT,
         updated_date    FLOAT,
-        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
+        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
 
     def csidata_stock_factsheet(c):
         c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
@@ -86,6 +86,7 @@ def main_tables(db_location):
          abbrev             TEXT UNIQUE,
          abbrev_goog        TEXT,
          abbrev_yahoo       TEXT,
+         abbrev_csi         TEXT,
          name               TEXT,
          country            TEXT,
          city               TEXT,
@@ -101,11 +102,11 @@ def main_tables(db_location):
         c.execute('''CREATE TABLE IF NOT EXISTS indices
         (index_id           INTEGER PRIMARY KEY,
         stock_index         TEXT,
-        symbol_id           INTEGER,
+        tsid                TEXT,
         as_of_date          FLOAT,
         created_date        FLOAT,
         updated_date        FLOAT,
-        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
+        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
 
     def quandl_codes(c):
         c.execute('''CREATE TABLE IF NOT EXISTS quandl_codes
@@ -143,7 +144,7 @@ def main_tables(db_location):
 
     def tickers(c):
         c.execute('''CREATE TABLE IF NOT EXISTS tickers
-        (symbol_id      INTEGER PRIMARY KEY,
+        (tsid           TEXT PRIMARY KEY,
         ticker          TEXT,
         name            TEXT,
         exchange        TEXT,
@@ -159,11 +160,12 @@ def main_tables(db_location):
         hq_country      TEXT,
         created_date    FLOAT,
         updated_date    FLOAT,
-        FOREIGN KEY(symbol_id) REFERENCES quandl_codes(symbol_id),
+        FOREIGN KEY(tsid) REFERENCES symbology(source_id),
         FOREIGN KEY(exchange) REFERENCES exchange(abbrev))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
                     ON tickers(sector)""")
 
+    baskets(cur)
     csidata_stock_factsheet(cur)
     data_vendor(cur)
     exchange(cur)
@@ -184,7 +186,7 @@ def data_tables(db_location):
         c.execute('''CREATE TABLE IF NOT EXISTS daily_prices
         (daily_price_id INTEGER PRIMARY KEY AUTOINCREMENT,
         data_vendor_id  INTEGER,
-        symbol_id       INTEGER,
+        tsid            TEXT,
         date            FLOAT,
         open            REAL,
         high            REAL,
@@ -200,9 +202,9 @@ def data_tables(db_location):
         adj_volume      REAL,
         updated_date    FLOAT,
         FOREIGN KEY(data_vendor_id) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_symbol_id
-                    ON daily_prices(symbol_id)""")
+        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_tsid
+                    ON daily_prices(tsid)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_date
                     ON daily_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_updated_date
@@ -211,34 +213,34 @@ def data_tables(db_location):
     def finra_data(c):
         c.execute('''CREATE TABLE IF NOT EXISTS finra_data
         (finra_id               INTEGER PRIMARY KEY AUTOINCREMENT,
-        symbol_id               INTEGER,
+        tsid                    TEXT,
         date                    TEXT,
         short_volume            REAL,
         short_exempt_volume     REAL,
         total_volume            REAL,
         updated_date            FLOAT,
-        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
-        c.execute('''CREATE INDEX IF NOT EXISTS idx_finra_symbol_id
-                    ON finra_data(symbol_id)''')
+        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
+        c.execute('''CREATE INDEX IF NOT EXISTS idx_finra_tsid
+                    ON finra_data(tsid)''')
 
     def fundamental_data(c):
         c.execute('''CREATE TABLE IF NOT EXISTS fundamental_data
         (fundamental_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        symbol_id       INTEGER,
+        tsid            TEXT,
         date            TEXT,
         value           FLOAT,
         note            TEXT,
         created_date    FLOAT,
         updated_date    FLOAT,
-        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_symbol_id
-                    ON fundamental_data(symbol_id)""")
+        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_tsid
+                    ON fundamental_data(tsid)""")
 
     def minute_prices(c):
         c.execute('''CREATE TABLE IF NOT EXISTS minute_prices
         (minute_price_id INTEGER PRIMARY KEY AUTOINCREMENT,
         data_vendor_id  INTEGER,
-        symbol_id       INTEGER,
+        tsid            TEXT,
         date            TEXT,
         close           REAL,
         high            REAL,
@@ -247,9 +249,9 @@ def data_tables(db_location):
         volume          REAL,
         updated_date    FLOAT,
         FOREIGN KEY(data_vendor_id) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_symbol_id
-                    ON minute_prices(symbol_id)""")
+        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_tsid
+                    ON minute_prices(tsid)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_date
                     ON minute_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_updated_date
@@ -259,7 +261,7 @@ def data_tables(db_location):
         c.execute('''CREATE TABLE IF NOT EXISTS options_prices
         (options_prices_id      INTEGER PRIMARY KEY AUTOINCREMENT,
         data_vendor             INTEGER,
-        underlying_symbol_id    INTEGER,
+        underlying_tsid         TEXT,
         underlying_price        REAL,
         quote_time              TEXT,
         strike                  REAL,
@@ -276,7 +278,7 @@ def data_tables(db_location):
         imp_vol                 TEXT,
         updated_date            FLOAT,
         FOREIGN KEY(data_vendor) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(underlying_symbol_id) REFERENCES symbology(symbol_id))''')
+        FOREIGN KEY(underlying_tsid) REFERENCES symbology(source_id))''')
 
     daily_prices(cur)
     finra_data(cur)
@@ -297,20 +299,20 @@ def events_tables(db_location):
             def conference_calls(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS conference_calls
                 (conf_call_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol_id           INTEGER,
+                tsid                TEXT,
                 symbol              TEXT,
                 date                FLOAT,
                 event_title         TEXT,
                 created_date        FLOAT,
                 updated_date        FLOAT,
-                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_conf_sid
-                            ON conference_calls(symbol_id)""")
+                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_conf_tsid
+                            ON conference_calls(tsid)""")
 
             def earnings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS earnings
                 (earnings_id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol_id       INTEGER,
+                tsid            TEXT,
                 symbol          TEXT,
                 company_name    TEXT,
                 date            FLOAT,
@@ -318,14 +320,14 @@ def events_tables(db_location):
                 consensus_eps   FLOAT,
                 created_date    FLOAT,
                 updated_date    FLOAT,
-                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_earn_sid
-                            ON earnings(symbol_id)""")
+                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_earn_tsid
+                            ON earnings(tsid)""")
 
             def economic_events(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS economic_events
                 (event_id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol_id           INTEGER,
+                tsid                TEXT,
                 event_name          TEXT,
                 date                FLOAT,
                 date_for            FLOAT,
@@ -336,14 +338,14 @@ def events_tables(db_location):
                 revised_from        TEXT,
                 created_date        FLOAT,
                 updated_date        FLOAT,
-                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_econ_event_sid
-                            ON economic_events(symbol_id)""")
+                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_econ_event_tsid
+                            ON economic_events(tsid)""")
 
             def ipo_pricings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS ipo_pricings
                 (ipo_id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol_id       INTEGER,
+                tsid            TEXT,
                 symbol          TEXT,
                 company_name    TEXT,
                 offer_date      FLOAT,
@@ -352,14 +354,14 @@ def events_tables(db_location):
                 initial_price   TEXT,
                 created_date    FLOAT,
                 updated_date    FLOAT,
-                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_ipop_sid
-                            ON ipo_pricings(symbol_id)""")
+                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_ipop_tsid
+                            ON ipo_pricings(tsid)""")
 
             def splits(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS splits
                 (split_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol_id       INTEGER,
+                tsid            TEXT,
                 symbol          TEXT,
                 company_name    TEXT,
                 payable_date    FLOAT,
@@ -369,9 +371,9 @@ def events_tables(db_location):
                 ratio           FLOAT,
                 created_date    FLOAT,
                 updated_date    FLOAT,
-                FOREIGN KEY(symbol_id) REFERENCES symbology(symbol_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_splits_sid
-                            ON splits(symbol_id)""")
+                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_splits_tsid
+                            ON splits(tsid)""")
 
             conference_calls(cur)
             earnings(cur)
