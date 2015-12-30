@@ -177,10 +177,10 @@ class LoadTables(object):
                         conn.execute("PRAGMA journal_mode = MEMORY")
                         conn.commit()
                         print('Loaded %s into the Securities Master' % (table,))
-                except conn.Error:
+                except conn.Error as e:
                     conn.rollback()
-                    print("Failed to insert the values for %s into the Database"
-                          % (table,))
+                    print("Failed to insert the values for %s into the "
+                          "Database because of: %s" % (table, e))
                 except conn.OperationalError:
                     raise ValueError('Unable to connect to the SQL Database in '
                                      'q_code_to_sql. Make sure the database '
@@ -205,16 +205,16 @@ tables = {
             updated_date)
             VALUES(NULL,?,?,?,?,?,?)''',
     'exchanges': '''INSERT INTO exchange(
-            exchange_id, abbrev, abbrev_goog, abbrev_yahoo, abbrev_csi, name,
-            country, city, currency, utc_offset, open, close, lunch,
-            created_date, updated_date)
-            VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            exchange_id, symbol, goog_symbol, yahoo_symbol, csi_symbol,
+            reuters_symbol, name, country, city, currency, time_zone,
+            utc_offset, open, close, lunch, created_date, updated_date)
+            VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
     'tickers': '''INSERT INTO tickers(
             symbol_id, ticker, exchange, sector, industry, sub_industry,
             currency, hq_country, created_date, updated_date)
             VALUES(?,?,?,?,?,?,?,?,?,?)''',
     'indices': '''INSERT INTO indices(
-            index_id, stock_index, symbol_id, as_of_date,
-            created_date, updated_date)
+            index_id, stock_index, symbol_id, as_of_date, created_date,
+            updated_date)
             VALUES(NULL,?,?,?,?,?)''',
 }
