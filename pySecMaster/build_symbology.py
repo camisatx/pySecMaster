@@ -19,7 +19,7 @@ def df_to_sql(df, db_location, sql_table, exists, item):
         df.to_sql(sql_table, conn, if_exists=exists, index=False)
         conn.execute("PRAGMA journal_mode = MEMORY")
         conn.execute("PRAGMA busy_timeout = 60000")
-        # print('Successfully entered the Quandl Codes into the SQL Database')
+        # print('Successfully entered %s into the SQL Database' % item)
     except conn.Error:
         conn.rollback()
         print("Failed to insert the DataFrame into the Database for %s" %
@@ -87,7 +87,7 @@ def query_existing_sid(db_location):
         raise SystemError('Error: Unknown issue occurred in query_existing_sid')
 
 
-def query_csi_stock_factsheet(db_location, query='all'):
+def query_csi_stocks(db_location, query='all'):
 
     conn = sqlite3.connect(db_location)
     try:
@@ -103,6 +103,38 @@ def query_csi_stock_factsheet(db_location, query='all'):
                                                      'childexchange'])
                 csi_df.sort_values('sid', axis=0, inplace=True)
                 csi_df.reset_index(drop=True, inplace=True)
+
+            elif query == 'exchanges_only':
+                # Restricts tickers to those that are traded on exchanges only
+                #   (AMEX, LSE, MSE, NYSE, OTC (NASDAQ, BATS), TSX, VSE). For
+                #   the few duplicate tickers, choose the active one over the
+                #   non-active one (same company but different start and end
+                #   dates, with one being active).
+                cur.execute("""SELECT CsiNumber, Symbol, Exchange, ChildExchange
+                               FROM (SELECT CsiNumber, Symbol, Exchange,
+                                   ChildExchange, IsActive
+                                   FROM csidata_stock_factsheet
+                                   WHERE (Exchange IN ('AMEX', 'LSE', 'NYSE',
+                                       'TSX', 'VSE')
+                                   OR ChildExchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA',
+                                       'OTC Markets Pink Sheets'))
+                                   AND Symbol IS NOT NULL
+                                   ORDER BY IsActive ASC)
+                               GROUP BY Symbol, Exchange, ChildExchange""")
+                rows = cur.fetchall()
+                if rows:
+                    csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
+                                                         'exchange',
+                                                         'childexchange'])
+                else:
+                    raise SystemExit('Not able to retrieve any tickers after '
+                                     'querying %s in query_csi_stocks'
+                                     % (query,))
 
             elif query == 'main_us':
                 # Restricts tickers to those that have been active within the
@@ -122,8 +154,10 @@ def query_csi_stock_factsheet(db_location, query='all'):
                                        'Nasdaq Global Market',
                                        'Nasdaq Global Select',
                                        'NYSE', 'NYSE ARCA'))
+                                   AND Symbol IS NOT NULL
                                    ORDER BY IsActive ASC)
-                               GROUP BY Symbol""", (beg_date.isoformat(),))
+                               GROUP BY Symbol, Exchange, ChildExchange""",
+                            (beg_date.isoformat(),))
                 rows = cur.fetchall()
                 if rows:
                     csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
@@ -131,24 +165,51 @@ def query_csi_stock_factsheet(db_location, query='all'):
                                                          'childexchange'])
                 else:
                     raise SystemExit('Not able to retrieve any tickers after '
-                                     'querying %s in query_csi_stock_factsheet'
+                                     'querying %s in query_csi_stocks'
                                      % (query,))
             else:
                 raise SystemExit('%s query does not exist within '
-                                 'query_csi_stock_factsheet. Valid queries '
+                                 'query_csi_stocks. Valid queries '
                                  'include all and main_us.' % (query,))
             return csi_df
     except sqlite3.Error as e:
         print(e)
         raise SystemError('Failed to query the data into the symbology table '
-                          'within create_symbology')
+                          'within query_csi_stocks')
     except conn.OperationalError:
         raise SystemError('Unable to connect to the SQL Database in '
-                          'create_symbology. Make sure the database '
+                          'query_csi_stocks. Make sure the database '
                           'address/name are correct.')
     except Exception as e:
         print(e)
-        raise SystemError('Error: Unknown issue occurred in create_symgology')
+        raise SystemError('Error: Unknown issue occurred in query_csi_stocks')
+
+
+def query_exchanges(db_location):
+
+    conn = sqlite3.connect(db_location)
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT symbol, name, goog_symbol, yahoo_symbol,
+                        csi_symbol, tsid_symbol
+                        FROM exchange""")
+            rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=['symbol', 'name', 'goog_symbol',
+                                             'yahoo_symbol', 'csi_symbol',
+                                             'tsid_symbol'])
+            return df
+    except sqlite3.Error as e:
+        print(e)
+        raise SystemError('Failed to query the data from the exchange table '
+                          'within query_exchanges')
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the SQL Database in '
+                          'query_exchanges. Make sure the database '
+                          'address/name are correct.')
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_exchanges')
 
 
 def insert_csi_data(db_location, df, source):
@@ -204,8 +265,7 @@ def create_symbology(db_location, source_list):
     :param source_list: List of strings with the symbology sources to use
     """
 
-    # Retrieve any existing ID values from the symbology table
-    symbology_df = query_existing_sid(db_location=db_location)
+    exch_df = query_exchanges(db_location=db_location)
 
     for source in source_list:
         source_start = time.time()
@@ -218,14 +278,17 @@ def create_symbology(db_location, source_list):
         #                       'the %s to the data_vendor table before trying '
         #                       'to build the symbology table.' % source)
 
+        # Retrieve any existing ID values from the symbology table
+        symbology_df = query_existing_sid(db_location=db_location)
+
         # A DF of all the values except the current source, which will be
         #   rebuilt and appended to this DF before being added to the database
         other_symbology_df = symbology_df[symbology_df['source'] != source]
 
         cur_time = datetime.utcnow().isoformat()
         if source == 'csi_data':
-            csi_stock_df = query_csi_stock_factsheet(db_location=db_location,
-                                                     query='all')
+            csi_stock_df = query_csi_stocks(db_location=db_location,
+                                            query='all')
 
             source_sym_df = pd.DataFrame()
             source_sym_df.insert(0, 'symbol_id', csi_stock_df['sid'])
@@ -243,15 +306,18 @@ def create_symbology(db_location, source_list):
             df_to_sql(df=new_symbology_df, db_location=db_location,
                       sql_table='symbology', exists='replace', item=source)
 
-        elif source in ['quandl_wiki']:
-            # DataFrame of main US active tickers and their exchange/child exch
-            csi_stock_df = query_csi_stock_factsheet(db_location=db_location,
-                                                     query='main_us')
+        elif source in ['quandl_wiki', 'seeking_alpha', 'tsid', 'yahoo']:
+            # These sources have a similar symbology creation process
 
             if source == 'quandl_wiki':
                 # I don't trust that Quandl provides all available WIKI codes
                 #   in the downloadable tables, thus I imply plausible WIKI
                 #   codes: NYSE and NASDAQ that are active or recently delisted.
+
+                # DataFrame of main US active tickers, their exchanges and
+                #   child exchanges
+                csi_stock_df = query_csi_stocks(db_location=db_location,
+                                                query='main_us')
 
                 # If a ticker has a ". + -", change it to an underscore
                 csi_stock_df['ticker'].replace(regex=True, inplace=True,
@@ -262,21 +328,111 @@ def create_symbology(db_location, source_list):
                 csi_stock_df['ticker'] = csi_stock_df['ticker'].\
                     apply(lambda x: 'WIKI/' + x)
 
-                source_sym_df = pd.DataFrame()
-                source_sym_df.insert(0, 'symbol_id', csi_stock_df['sid'])
-                source_sym_df.insert(1, 'source', source)
-                source_sym_df.insert(2, 'source_id', csi_stock_df['ticker'])
-                source_sym_df.insert(3, 'type', 'stock')
-                source_sym_df.insert(len(source_sym_df.columns), 'created_date',
-                                     cur_time)
-                source_sym_df.insert(len(source_sym_df.columns), 'updated_date',
-                                     cur_time)
+            elif source == 'seeking_alpha':
+                # Use main US tickers that should have Seeking Alpha articles
+                csi_stock_df = query_csi_stocks(db_location=db_location,
+                                                query='main_us')
 
-                # Append this new DF to the non-changing sources DF
-                new_symbology_df = other_symbology_df.append(source_sym_df,
-                                                             ignore_index=True)
-                df_to_sql(df=new_symbology_df, db_location=db_location,
-                          sql_table='symbology', exists='replace', item=source)
+                # If a ticker has a ". + -", change it to an underscore
+                csi_stock_df['ticker'].replace(regex=True, inplace=True,
+                                               to_replace=r'[.+-]', value=r'_')
+
+            elif source == 'tsid':
+                # Build tsid codes (<ticker>.<exchange>.<position>), albeit
+                #   only for American, Canadian and London exchanges.
+                csi_stock_df = query_csi_stocks(db_location=db_location,
+                                                query='exchanges_only')
+
+                # If a ticker has a ". + -", change it to an underscore
+                csi_stock_df['ticker'].replace(regex=True, inplace=True,
+                                               to_replace=r'[.+-]', value=r'_')
+
+                def csi_to_tsid(row):
+                    # Create the tsid symbol combination of
+                    #   <ticker>.<tsid exchange>.<count>
+                    ticker = row['ticker']
+                    exchange = row['exchange']
+                    child_exchange = row['childexchange']
+
+                    if exchange == 'OTC' and child_exchange:
+                        tsid_exch = (exch_df.loc[exch_df['name'] ==
+                                     child_exchange, 'tsid_symbol'].values)
+                        if tsid_exch:
+                            return ticker + '.' + tsid_exch[0] + '.0'
+                        else:
+                            tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                         exchange, 'tsid_symbol'].values)
+                            if tsid_exch:
+                                return ticker + '.' + tsid_exch[0] + '.0'
+                            else:
+                                print('Unable to find the tsid exchange symbol '
+                                      'for the child exchange %s in '
+                                      'csi_to_tsid' % child_exchange)
+                    else:
+                        tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                     exchange, 'tsid_symbol'].values)
+                        if tsid_exch:
+                            return ticker + '.' + tsid_exch[0] + '.0'
+                        else:
+                            print('Unable to find the tsid exchange symbol for '
+                                  'the exchange %s in csi_to_tsid' % exchange)
+
+                csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_tsid, axis=1)
+
+            elif source == 'yahoo':
+                # Imply plausible Yahoo codes, albeit only for American,
+                #   Canadian and London exchanges.
+                csi_stock_df = query_csi_stocks(db_location=db_location,
+                                                query='exchanges_only')
+
+                # If a ticker has a ". + -", change it to an underscore
+                csi_stock_df['ticker'].replace(regex=True, inplace=True,
+                                               to_replace=r'[.+-]', value=r'_')
+
+                def csi_to_yahoo(row):
+                    # Create the Yahoo symbol combination of <ticker>.<exchange>
+
+                    ticker = row['ticker']
+                    exchange = row['exchange']
+                    child_exchange = row['childexchange']
+                    us_exchanges = ['AMEX', 'BATS Global Markets',
+                                    'Nasdaq Capital Market', 'Nasdaq Global Market',
+                                    'Nasdaq Global Select', 'NYSE', 'NYSE ARCA']
+
+                    if exchange in ['AMEX', 'NYSE'] \
+                            or child_exchange in us_exchanges:
+                        return ticker           # US ticker; no exchange needed
+                    elif exchange == 'LSE':
+                        return ticker + '.L'    # LSE -> L
+                    elif exchange == 'TSX':
+                        return ticker + '.TO'   # TSX -> TO
+                    elif exchange == 'VSE':
+                        return ticker + '.V'    # VSE -> V
+                    elif child_exchange == 'OTC Markets Pink Sheets':
+                        return ticker + '.PK'   # OTC Pinks -> PK
+                    else:
+                        print('csi_to_yahoo did not find a match for %s with an'
+                              'exchange of %s and a child exchange of %s' %
+                              (ticker, exchange, child_exchange))
+
+                csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_yahoo,
+                                                            axis=1)
+
+            source_sym_df = pd.DataFrame()
+            source_sym_df.insert(0, 'symbol_id', csi_stock_df['sid'])
+            source_sym_df.insert(1, 'source', source)
+            source_sym_df.insert(2, 'source_id', csi_stock_df['ticker'])
+            source_sym_df.insert(3, 'type', 'stock')
+            source_sym_df.insert(len(source_sym_df.columns), 'created_date',
+                                 cur_time)
+            source_sym_df.insert(len(source_sym_df.columns), 'updated_date',
+                                 cur_time)
+
+            # Append this new DF to the non-changing sources DF
+            new_symbology_df = other_symbology_df.append(source_sym_df,
+                                                         ignore_index=True)
+            df_to_sql(df=new_symbology_df, db_location=db_location,
+                      sql_table='symbology', exists='replace', item=source)
 
         print('Finished processing the symbology IDs for %s taking '
               '%0.2f seconds' % (source, (time.time() - source_start)))
@@ -307,5 +463,6 @@ if __name__ == '__main__':
                       database_list=quandl_db_list, database_url=quandl_db_url,
                       update_range=3000, threads=4)
 
-    symbology_sources = ['csi_data', 'quandl_wiki']    # csi_data, quandl_wiki
+    symbology_sources = ['csi_data', 'quandl_wiki', 'seeking_alpha', 'tsid',
+                         'yahoo']
     create_symbology(database_location, symbology_sources)

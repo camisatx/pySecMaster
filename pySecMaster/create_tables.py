@@ -87,7 +87,7 @@ def main_tables(db_location):
          goog_symbol        TEXT UNIQUE,
          yahoo_symbol       TEXT UNIQUE,
          csi_symbol         TEXT UNIQUE,
-         reuters_symbol     TEXT UNIQUE,
+         tsid_symbol        TEXT,
          name               TEXT,
          country            TEXT,
          city               TEXT,

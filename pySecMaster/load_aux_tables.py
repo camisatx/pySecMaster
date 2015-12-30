@@ -206,7 +206,7 @@ tables = {
             VALUES(NULL,?,?,?,?,?,?)''',
     'exchanges': '''INSERT INTO exchange(
             exchange_id, symbol, goog_symbol, yahoo_symbol, csi_symbol,
-            reuters_symbol, name, country, city, currency, time_zone,
+            tsid_symbol, name, country, city, currency, time_zone,
             utc_offset, open, close, lunch, created_date, updated_date)
             VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
     'tickers': '''INSERT INTO tickers(
