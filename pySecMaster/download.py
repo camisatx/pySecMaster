@@ -113,11 +113,17 @@ class QuandlDownload(object):
         try:
             df = pd.read_csv(file, index_col=False, names=col_names,
                              encoding='utf-8')
+            if len(df) == 0:
+                # When there are no more codes to download, the file object
+                #   will be an empty CSV, and in turn, and empty DF. Return an
+                #   empty DF, which will indicate the no more pages to download.
+                return pd.DataFrame()
         except TypeError:
             # When there are no more codes to download, the file object will be
-            #   an empty CSV. This will cause the read_csv function to fail on a
-            #   TypeError since it can't add column names to an empty DF. Return
-            #   an empty DF, which will indicate the no more pages to download.
+            #   an empty CSV. With pandas prior to 0.17, this will cause the
+            #   read_csv function to fail on a TypeError since it's not able to
+            #   add column names to an empty DF. Return an empty DF, which will
+            #   indicate the no more pages to download.
             return pd.DataFrame()
         except Exception as e:
             print(e)
@@ -141,7 +147,7 @@ class QuandlDownload(object):
 
         return df
 
-    def download_quandl_data(self, q_code, beg_date=None,
+    def download_quandl_data(self, q_code, beg_date=None, verbose=True,
                              csv_out='load_tables/quandl_codes_wo_data.csv'):
         """ Receives a Quandl Code as a string, and it calls the QuandlDownload
         class to actually download it. Once downloaded, this adds titles to the
@@ -150,6 +156,7 @@ class QuandlDownload(object):
 
         :param q_code: A string of the Quandl Code.
         :param beg_date: String of the start date (YYYY-MM-DD) to download
+        :param verbose: Boolean
         :param csv_out: String of directory and CSV file name; used to store
             the quandl codes that do not have any data
         :return: A DataFrame with the data points for the Quandl Code.
@@ -172,48 +179,68 @@ class QuandlDownload(object):
             column_names = ['date', 'open', 'high', 'low', 'close',
                             'volume', 'adjusted_close']
         else:
-            print('The chosen data source is not setup within the price '
-                  'extractor. Please define the columns in DownloadQData.')
+            print('The chosen data source is not setup in the price extractor. '
+                  'Please define the columns in download_quandl_data.')
             return pd.DataFrame()
 
-        # ToDo: Ensure this is working correctly and actually updates dates
         if file:
-            df = pd.read_csv(file, index_col=False, names=column_names,
-                             encoding='utf-8')
+            raw_df = pd.read_csv(file, index_col=False, names=column_names,
+                                 encoding='utf-8')
 
             # Data successfully downloaded; check to see if code was on the list
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
             if len(codes_wo_data_df.
                     loc[codes_wo_data_df['q_code'] == q_code]) > 0:
-                # The q_code that was downloaded had no data on the previous
-                #   run. Remove the code from the CSV list.
+                # This q_code now has data whereas it didn't on that last run.
+                #   Remove the code from the DataFrame
                 wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != q_code]
-                wo_data_df = wo_data_df.dropna(how='all')   # Drop rows w/o data
-                wo_data_df.to_csv(csv_out, index=False)
-                print('%s was removed from the wo_data CSV file since data was '
-                      'available for download.' % (q_code,))
-
-        else:   # ToDo: does this update the date for existing w/o objects?
-            # There is no minute data for this code; add to CSV file via DF
-            no_data = pd.DataFrame(data=[(q_code,
-                                          datetime.utcnow().isoformat())],
-                                   columns=['q_code', 'date_tried'])
-            with open(csv_out, 'a') as f:
-                no_data.to_csv(f, mode='a', header=False, index=False)
+                # Remove any duplicates (keeping the latest) and save to a CSV
+                clean_wo_data_df = wo_data_df.drop_duplicates(subset='q_code',
+                                                              keep='last')
+                clean_wo_data_df.to_csv(csv_out, index=False)
+                if verbose:
+                    print('%s was removed from the wo_data CSV file since data '
+                          'was available for download.' % (q_code,))
+        else:
+            # There is no minute data for this code so add it to the CSV file
+            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+            cur_date = datetime.utcnow().isoformat()
+            if len(codes_wo_data_df.
+                    loc[codes_wo_data_df['q_code'] == q_code]) > 0:
+                # The code already exists within the CSV, so update the date
+                codes_wo_data_df.set_value(codes_wo_data_df['q_code'] == q_code,
+                                           'date_tried', cur_date)
+                # Remove any duplicates (keeping the latest) and save to a CSV
+                clean_wo_data_df = codes_wo_data_df.\
+                    drop_duplicates(subset='q_code', keep='last')
+                clean_wo_data_df.to_csv(csv_out, index=False)
+                if verbose:
+                    print('%s still did not have data. Date tried was updated '
+                          'in the wo_data CSV file.' % (q_code,))
+            else:
+                # The code does not exists within the CSV, so create and append
+                #   it to the CSV file. Do this via a DataFrame to CSV append
+                no_data_df = pd.DataFrame(data=[(q_code, cur_date)],
+                                          columns=['q_code', 'date_tried'])
+                with open(csv_out, 'a') as f:
+                    no_data_df.to_csv(f, mode='a', header=False, index=False)
+                if verbose:
+                    print('%s did not have data, thus it was added to the '
+                          'wo_data CSV file.' % (q_code,))
 
             # Return an empty DF; QuandlDataExtractor will be able to handle it
             return pd.DataFrame()
 
-        if len(df.index) == 0:
-            return df
+        if len(raw_df.index) == 0:
+            return raw_df
 
-        df = df[1:]     # Removes the column headers from the Quandl download
-        df['date'] = df.apply(dt_to_iso, axis=1, args=('date',))
-        df.insert(0, 'q_code', q_code)
-        df.insert(len(df.columns), 'updated_date',
-                  datetime.utcnow().isoformat())
+        raw_df = raw_df[1:]     # Removes the column headers from data download
+        raw_df['date'] = raw_df.apply(dt_to_iso, axis=1, args=('date',))
+        raw_df.insert(0, 'q_code', q_code)
+        raw_df.insert(len(raw_df.columns), 'updated_date',
+                      datetime.utcnow().isoformat())
 
-        return df
+        return raw_df
 
     def download_data(self, name, page_num=None, beg_date=None, download_try=0):
         """
@@ -341,7 +368,8 @@ class QuandlDownload(object):
                           (name,))
 
 
-def download_google_data(db_url, q_code, threads):
+def download_google_data(db_url, q_code, threads, verbose=True,
+                         csv_out='load_tables/goog_min_codes_wo_data.csv'):
     """ Receives a Quandl Code as a string, splits the code into ticker and
     exchange, then passes it to the url to download the data. Once downloaded,
     this adds titles to the column headers.
@@ -349,6 +377,9 @@ def download_google_data(db_url, q_code, threads):
     :param db_url: Dictionary of google finance url components
     :param q_code: A string of the Quandl Code.
     :param threads: Integer of the number of threads process is using
+    :param verbose: Boolean
+    :param csv_out: String with the file directory for the CSV file that has
+        all the codes that don't have any data
     :return: A DataFrame with the data points for the Quandl Code.
     """
 
@@ -521,43 +552,67 @@ def download_google_data(db_url, q_code, threads):
 
     url_obj = download_data(url_string)
 
-    # ToDo: Ensure this is working correctly and actually updates dates
     try:
-        df = google_data_processing(url_obj)
+        raw_df = google_data_processing(url_obj)
+
         # Data successfully downloaded; check to see if code was on the list
-        file_local = 'load_tables/goog_min_codes_wo_data.csv'
-        codes_wo_data_df = pd.read_csv(file_local, index_col=False)
+        codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
         if len(codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code]) > 0:
-            # The q_code that was downloaded had no data on the previous run.
-            #   Remove the code from the CSV list.
+            # This q_code now has data whereas it didn't on that last run.
+            #   Remove the code from the DataFrame
             wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != q_code]
-            wo_data_df.to_csv(file_local, index=False)
-            print('%s was removed from the wo_data CSV file since data was '
-                  'available for download.' % (q_code,))
+            # Remove any duplicates (keeping the latest) and save to a CSV
+            clean_wo_data_df = wo_data_df.drop_duplicates(subset='q_code',
+                                                          keep='last')
+            clean_wo_data_df.to_csv(csv_out, index=False)
+            if verbose:
+                print('%s was removed from the wo_data CSV file since data '
+                      'was available for download.' % (q_code,))
     except IndexError:
         # There is no minute data for this code; add to CSV file via DF
-        min_df = pd.DataFrame(data=[(q_code, datetime.utcnow().isoformat())],
-                              columns=['q_code', 'date_tried'])
-        with open('load_tables/goog_min_codes_wo_data.csv', 'a') as f:
-            min_df.to_csv(f, mode='a', header=False, index=False)
-        # print('Flag: Not able to process data for %s' % (q_code,))
+        codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+        cur_date = datetime.utcnow().isoformat()
+        if len(codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code]) > 0:
+            # The code already exists within the CSV, so update the date
+            codes_wo_data_df.set_value(codes_wo_data_df['q_code'] == q_code,
+                                       'date_tried', cur_date)
+            # Remove any duplicates (keeping the latest) and save to a CSV
+            clean_wo_data_df = codes_wo_data_df.drop_duplicates(subset='q_code',
+                                                                keep='last')
+            clean_wo_data_df.to_csv(csv_out, index=False)
+            if verbose:
+                print('%s still did not have data. Date tried was updated '
+                      'in the wo_data CSV file.' % (q_code,))
+        else:
+            # The code does not exists within the CSV, so create and append
+            #   it to the CSV file. Do this via a DataFrame to CSV append
+            no_data_df = pd.DataFrame(data=[(q_code, cur_date)],
+                                      columns=['q_code', 'date_tried'])
+            with open(csv_out, 'a') as f:
+                no_data_df.to_csv(f, mode='a', header=False, index=False)
+            if verbose:
+                print('%s did not have data, thus it was added to the '
+                      'wo_data CSV file.' % (q_code,))
+
+        # Return an empty DF; QuandlDataExtractor will be able to handle it
         return pd.DataFrame()
     except Exception as e:
         print('Flag: Error occurred when processing data for %s' % (q_code,))
         print(e)
         return pd.DataFrame()
 
-    if len(df.index) == 0:
-        return df
+    if len(raw_df.index) == 0:
+        return raw_df
 
     def datetime_to_iso(row, column):
         return row[column].isoformat()
 
-    df['date'] = df.apply(datetime_to_iso, axis=1, args=('date',))
-    df.insert(0, 'q_code', q_code)
-    df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
+    raw_df['date'] = raw_df.apply(datetime_to_iso, axis=1, args=('date',))
+    raw_df.insert(0, 'q_code', q_code)
+    raw_df.insert(len(raw_df.columns), 'updated_date',
+                  datetime.utcnow().isoformat())
 
-    return df
+    return raw_df
 
 
 def download_csidata_factsheet(db_url, data_type, exchange_id=None,
