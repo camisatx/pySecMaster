@@ -99,7 +99,7 @@ def df_to_sql(df, db_location, sql_table, exists, item):
         print(e)
 
 
-def delete_sql_table_rows(db_location, query, table, q_code):
+def delete_sql_table_rows(db_location, query, table, tsid):
 
     # print('Deleting all rows in %s that fit the provided criteria' % (table,))
     conn = sqlite3.connect(db_location)
@@ -112,7 +112,7 @@ def delete_sql_table_rows(db_location, query, table, q_code):
         conn.rollback()
         print(e)
         print('Error: Not able to delete the overlapping rows for %s in '
-              'the %s table.' % (q_code, table))
+              'the %s table.' % (tsid, table))
         return 'failure'
     except conn.OperationalError:
         print('Unable to connect to the SQL Database in delete_sql_table_rows. '
@@ -120,7 +120,7 @@ def delete_sql_table_rows(db_location, query, table, q_code):
         return 'failure'
     except Exception as e:
         print('Error: Unknown issue when trying to delete overlapping rows for'
-              '%s in the %s table.' % (q_code, table))
+              '%s in the %s table.' % (tsid, table))
         print(e)
         return 'failure'
 
@@ -494,7 +494,7 @@ class QuandlDataExtraction(object):
                                        self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
-                              left_on='q_code', right_index=True, how='left')
+                              left_on='tsid', right_index=True, how='left')
         # Sort the DF with un-downloaded items first, then based on last update
         try:
             # df.sort_values introduced in 0.17.0
@@ -506,6 +506,8 @@ class QuandlDataExtraction(object):
                             inplace=True)
 
         try:
+            # ToDo: Change this to remove empty cells and prevent duplicates
+
             # Load the codes that did not have data from the last extractor run
             codes_wo_data_df = pd.read_csv('load_tables/quandl_codes_wo_data'
                                            '.csv', index_col=False)
@@ -534,8 +536,9 @@ class QuandlDataExtraction(object):
         q_codes_final = q_codes_df[(q_codes_df['updated_date'] < beg_date_obj) |
                                    (q_codes_df['updated_date'].isnull())]
 
-        # Change the DF to a list
-        q_code_list = q_codes_final['q_code'].values.flatten()
+        # Change the DF to a list of tuples containing tsid and q_code
+        q_code_set = q_codes_final[['tsid', 'q_code']]
+        q_code_list = [tuple(x) for x in q_code_set.values]
 
         # Inform the user how many codes will be updated
         dl_codes = len(q_codes_final.index)
@@ -572,6 +575,7 @@ class QuandlDataExtraction(object):
         Perhaps the best way will be to have some predefined queries, and if
         those don't work for the user, they write a custom query.
 
+        :param ticker_source: String of ticker source
         :param download_selection: String that matches an if condition below
         :return: List with each item being a Quandl Codes as a string
         """
@@ -585,9 +589,10 @@ class QuandlDataExtraction(object):
 
                 if ticker_source == 'quandl':
 
-                    print('NOTE: For stock data, it is recommended to use CSI '
-                          'Data as the ticker provider. They provide a more '
-                          'inclusive selection of tickers than Quandl does.')
+                    print('NOTE: For stock data, it is recommended to use '
+                          'quandl codes that originate from the symbology '
+                          'table (quandl_wiki). The codes originate from the '
+                          'CSI Data stock factsheet and are more inclusive.')
 
                     # Retrieve all q_codes
                     if download_selection == 'all':
@@ -599,7 +604,7 @@ class QuandlDataExtraction(object):
                                         FROM quandl_codes
                                         WHERE
                                         exchange IN(
-                                            SELECT abbrev_goog
+                                            SELECT goog_symbol
                                             FROM exchange
                                             WHERE country='United States')""")
 
@@ -612,9 +617,9 @@ class QuandlDataExtraction(object):
                         cur.execute("""SELECT q_code
                                        FROM quandl_codes
                                        WHERE data IN (
-                                           SELECT abbrev_goog
+                                           SELECT goog_symbol
                                            FROM exchange
-                                           WHERE abbrev IN ('NASDAQ','NYSE'))
+                                           WHERE symbol IN ('NASDAQ','NYSE'))
                                        AND data_vendor='GOOG'""")
 
                     # Retrieve all codes from the WIKI database
@@ -629,9 +634,9 @@ class QuandlDataExtraction(object):
                         cur.execute("""SELECT q_code
                                        FROM quandl_codes
                                        WHERE (data IN (
-                                           SELECT abbrev_goog
+                                           SELECT goog_symbol
                                            FROM exchange
-                                           WHERE abbrev IN ('NYSE', 'NYSEARCA',
+                                           WHERE symbol IN ('NYSE', 'NYSEARCA',
                                                'AMEX'))
                                            AND data_vendor='GOOG')
                                        OR data_vendor='WIKI'""")
@@ -645,7 +650,19 @@ class QuandlDataExtraction(object):
                                         'us_only_goog, wiki, and '
                                         'wiki_and_us_main_goog.')
 
+                    data = cur.fetchall()
+                    if data:
+                        df = pd.DataFrame(data, columns=['q_code'])
+                        df.drop_duplicates(inplace=True)
+                    else:
+                        raise TypeError('Not able to determine the q_codes '
+                                        'from the SQL query in query_q_codes')
+
                 elif ticker_source == 'csidata':
+                    print('NOTE: For stock data, it is recommended to use '
+                          'quandl codes that originate from the symbology '
+                          'table (quandl_wiki). The codes originate from the '
+                          'CSI Data stock factsheet and are more inclusive.')
 
                     # Retrieve all tickers
                     if download_selection == 'all':
@@ -666,7 +683,10 @@ class QuandlDataExtraction(object):
                                            'Nasdaq Capital Market',
                                            'Nasdaq Global Market',
                                            'Nasdaq Global Select',
-                                           'NYSE', 'NYSE ARCA'))""",
+                                           'NYSE', 'NYSE ARCA'))
+                                       AND Symbol IS NOT NULL
+                                       GROUP BY Symbol, Exchange,
+                                       ChildExchange""",
                                     (beg_date.isoformat(),))
 
                     else:
@@ -675,16 +695,12 @@ class QuandlDataExtraction(object):
                                         'a new query, ensure the SQL is '
                                         'correct. Valid CSI Data download '
                                         'selections include all and us_main.')
-                else:
-                    raise TypeError('Improper ticker_source was provided in'
-                                    'query_q_codes of QuandlDataExtraction.')
 
-                data = cur.fetchall()
-                if data:
-                    df = pd.DataFrame(data, columns=['q_code'])
-                    df.drop_duplicates(inplace=True)
+                    data = cur.fetchall()
+                    if data:
+                        df = pd.DataFrame(data, columns=['q_code'])
+                        df.drop_duplicates(inplace=True)
 
-                    if ticker_source == 'csidata':
                         # If a ticker has a ". + -", change it to an underscore
                         df['q_code'].replace(regex=True, inplace=True,
                                              to_replace=r'[.+-]', value=r'_')
@@ -692,13 +708,33 @@ class QuandlDataExtraction(object):
                         # Need to add 'WIKI/' before every ticker to make it
                         #   compatible with the Quandl WIKI code structure
                         df['q_code'] = df.apply(lambda x: 'WIKI/' + x, axis=1)
+                    else:
+                        raise TypeError('Not able to determine the q_codes '
+                                        'from the SQL query in query_q_codes')
 
-                    # ticker_list = df.values.flatten()
-                    # df.to_csv('query_q_code.csv')
-                    return df
+                elif ticker_source == 'quandl_wiki':
+                    cur.execute("""SELECT tsid.source_id, wiki.source_id
+                                   FROM symbology tsid
+                                   INNER JOIN symbology wiki
+                                   ON tsid.symbol_id = wiki.symbol_id
+                                   WHERE tsid.source='tsid'
+                                   AND wiki.source='quandl_wiki'
+                                   GROUP BY wiki.source_id""")
+                    data = cur.fetchall()
+                    if data:
+                        df = pd.DataFrame(data, columns=['tsid', 'q_code'])
+                        # df.drop_duplicates(inplace=True)
+                    else:
+                        raise TypeError('Not able to determine the q_codes '
+                                        'from the SQL query in query_q_codes')
+
                 else:
-                    raise TypeError('Not able to determine the q_codes '
-                                    'from the SQL query in query_q_codes')
+                    raise TypeError('Improper ticker_source was provided in'
+                                    'query_q_codes of QuandlDataExtraction.')
+
+                # ticker_list = df.values.flatten()
+                # df.to_csv('query_q_code.csv')
+                return df
 
         except sqlite3.Error as e:
             print(e)
@@ -709,17 +745,16 @@ class QuandlDataExtraction(object):
         """ Queries the pricing database to find the latest dates for each item
         in the database, regardless of whether it is in the q_code_list.
         
-        :return: Returns a DataFrame with the Quandl Code and the date of the 
+        :return: Returns a DataFrame with the tsid and the date of the
         latest data point for all tickers in the database.
         """
 
         try:
             conn = sqlite3.connect(self.database_location)
             with conn:
-                df = pd.read_sql("SELECT q_code, MAX(date) as date, "
-                                 "updated_date "
-                                 "FROM  daily_prices "
-                                 "GROUP BY q_code", conn, index_col='q_code')
+                df = pd.read_sql("SELECT tsid, MAX(date) as date, updated_date "
+                                 "FROM daily_prices "
+                                 "GROUP BY tsid", conn, index_col='tsid')
                 if len(df.index) == 0:
                     return df
                 df['date'] = df.apply(dt_from_iso, axis=1, args=('date',))
@@ -732,15 +767,18 @@ class QuandlDataExtraction(object):
             raise TypeError('Error when trying to connect to the database '
                             'in query_last_price')
 
-    def extractor(self, q_code):
+    def extractor(self, codes):
         """ Takes the Quandl ticker quote, downloads the historical data,
         and then saves the data into the SQLite database.
 
-        :param q_code: String of the Quandl code
+        :param codes: String of tuples containing the tsid and Quandl code
         :return: Nothing. It saves the price data in the SQLite Database.
         """
 
         main_time_start = time.time()
+
+        tsid = codes[0]
+        q_code = codes[1]
 
         # Rate limit this function with non-reactive timer
         time.sleep(self.min_interval)
@@ -748,7 +786,7 @@ class QuandlDataExtraction(object):
         quandl_download = QuandlDownload(self.quandl_token, self.db_url)
 
         # The ticker has no prior price; add all the downloaded data
-        if q_code not in self.latest_prices.index:
+        if tsid not in self.latest_prices.index:
 
             clean_data = quandl_download.download_quandl_data(q_code)
 
@@ -762,15 +800,19 @@ class QuandlDataExtraction(object):
                 data_vendor = self.retrieve_data_vendor_id(q_code)
                 clean_data.insert(0, 'data_vendor_id', data_vendor)
 
+                # Add the tsid into the DataFrame, and then remove the q_code
+                clean_data.insert(1, 'tsid', tsid)
+                clean_data.drop('q_code', axis=1, inplace=True)
+
                 df_to_sql(clean_data, self.database_location, 'daily_prices',
-                          'append', q_code)
+                          'append', tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
 
         # The pricing database has prior values; append/replace new data points
         else:
             try:
-                last_date = self.latest_prices.loc[q_code, 'date']
+                last_date = self.latest_prices.loc[tsid, 'date']
 
                 # This will only download the data for the past x days.
                 if self.data_process == 'replace' and self.days_back:
@@ -803,6 +845,10 @@ class QuandlDataExtraction(object):
                 data_vendor = self.retrieve_data_vendor_id(q_code)
                 clean_data.insert(0, 'data_vendor_id', data_vendor)
 
+                # Add the tsid into the DataFrame, and then remove the q_code
+                clean_data.insert(1, 'tsid', tsid)
+                clean_data.drop('q_code', axis=1, inplace=True)
+
                 # If replacing existing data, delete the overlapping data points
                 if self.data_process == 'replace' and self.days_back:
                     # Data should be newest to oldest; gets the oldest date, as
@@ -810,18 +856,18 @@ class QuandlDataExtraction(object):
                     #   deleted before the new data can be added.
                     first_date_iso = clean_data['date'].min()
                     query = ("""DELETE FROM daily_prices
-                                WHERE q_code='%s'
-                                AND date>='%s'""" % (q_code, first_date_iso))
+                                WHERE tsid='%s'
+                                AND date>='%s'""" % (tsid, first_date_iso))
                     del_success = delete_sql_table_rows(self.database_location,
                                                         query, 'daily_prices',
-                                                        q_code)
+                                                        tsid)
                     # Not able to delete existing data, so skip ticker for now
                     if del_success == 'failure':
                         return
 
                 # Append the new data to the end, regardless of replacement
                 df_to_sql(clean_data, self.database_location, 'daily_prices',
-                          'append', q_code)
+                          'append', tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
 
