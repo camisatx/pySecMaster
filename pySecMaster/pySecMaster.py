@@ -2,6 +2,7 @@ from create_tables import main_tables, data_tables, events_tables
 from extractor import QuandlCodeExtract, QuandlDataExtraction,\
     GoogleFinanceDataExtraction, CSIDataExtractor
 from load_aux_tables import LoadTables
+from build_symbology import create_symbology
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2015 Josh Schertz'
@@ -34,9 +35,11 @@ This manages the securities master database. It can be run daily.
 
 Database maintenance tasks:
     Creates the tables in the database.
+    Loads auxiliary tables from included CSV files.
     Downloads all available Quandl Codes for the Quandl Databases selected.
     Downloads the specified CSI Data factsheet (stocks, commodities).
-    Loads auxiliary tables from included CSV files.
+    Creates the symbology table which establishes a unique code for every
+        item in the database, along with translating different source's codes
 
 Database data download tasks:
     Downloads Quandl data based on the download selection criteria using either
@@ -45,8 +48,7 @@ Database data download tasks:
     Can either append only the new data, or replace part of the existing data.
 
 Future expansions:
-    Implement daily option chain data (from Google or Yahoo)
-    Further link the same data via unique code IDs (perhaps utilizing CSINum?)
+    Implement daily option chain data (from Google or Yahoo).
 '''
 
 ###############################################################################
@@ -60,6 +62,8 @@ database_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
 # http://www.csidata.com/factsheets.php?type=stock&format=html
 csidata_url = 'http://www.csidata.com/factsheets.php?'
 tables_to_load = ['data_vendor', 'exchanges']
+symbology_sources = ['csi_data', 'quandl_wiki', 'seeking_alpha', 'tsid',
+                     'yahoo']
 
 ###############################################################################
 # Database data download options:
@@ -90,9 +94,9 @@ google_fin_url = {'root': 'http://www.google.com/finance/getprices?',
 ###############################################################################
 
 
-def maintenance(database_link, quandl_ticker_source, database_list,
-                google_fin_ticker_source, download_source, threads, quandl_key,
-                quandl_update_range, csidata_update_range):
+def maintenance(database_link, quandl_ticker_source, database_list, threads,
+                quandl_key, quandl_update_range, csidata_update_range,
+                symbology_sources):
 
     print('Starting Security Master table maintenance function. This can take '
           'some time to finish if large databases are used. If this fails, '
@@ -103,35 +107,20 @@ def maintenance(database_link, quandl_ticker_source, database_list,
     data_tables(database_link)
     events_tables(database_link)
 
-    if download_source in ['all', 'quandl']:
-        if quandl_ticker_source == 'csidata':
-            CSIDataExtractor(database_link, csidata_url, csidata_type,
-                             csidata_update_range)
-        elif quandl_ticker_source == 'quandl':
-            QuandlCodeExtract(database_link, quandl_key, database_list,
-                              database_url, quandl_update_range, threads)
-        else:
-            raise SystemError('Provide a correct type data selection for Quandl'
-                              'and Google Fin in pySecMaster.py in the database'
-                              'options section.')
-
-    if download_source in ['all', 'google_fin']:
-        if google_fin_ticker_source == 'csidata':
-            CSIDataExtractor(database_link, csidata_url, csidata_type,
-                             csidata_update_range)
-        elif google_fin_ticker_source == 'quandl':
-            QuandlCodeExtract(database_link, quandl_key, database_list,
-                              database_url, quandl_update_range, threads)
-        else:
-            raise SystemError('Provide a correct type data selection for Quandl'
-                              'and Google Fin in pySecMaster.py in the database'
-                              'options section.')
-
     LoadTables(database_link, tables_to_load)
 
+    # Always extract CSI values, as they are used for the symbology table
+    CSIDataExtractor(database_link, csidata_url, csidata_type,
+                     csidata_update_range)
 
-def data_download(database_link, quandl_ticker_source, database_list,
-                  google_fin_ticker_source, download_source, quandl_selection,
+    if quandl_ticker_source == 'quandl':
+        QuandlCodeExtract(database_link, quandl_key, database_list,
+                          database_url, quandl_update_range, threads)
+
+    create_symbology(db_location=database_link, source_list=symbology_sources)
+
+
+def data_download(database_link, download_source, quandl_selection,
                   google_fin_selection, threads, quandl_key):
 
     if download_source in ['all', 'quandl']:
@@ -140,9 +129,8 @@ def data_download(database_link, quandl_ticker_source, database_list,
               'prior %s days data'
               % (quandl_selection, data_process, quandl_days_back))
         QuandlDataExtraction(database_link, quandl_key, quandl_data_url,
-                             quandl_ticker_source, quandl_selection,
-                             redownload_time, data_process, quandl_days_back,
-                             threads)
+                             quandl_selection, redownload_time, data_process,
+                             quandl_days_back, threads)
 
     if download_source in ['all', 'google_fin']:
         # Download minute data for selected Google Finance codes
@@ -150,7 +138,6 @@ def data_download(database_link, quandl_ticker_source, database_list,
               '%s the prior %s day''s data'
               % (google_fin_selection, data_process, google_fin_days_back))
         GoogleFinanceDataExtraction(database_link, google_fin_url,
-                                    google_fin_ticker_source,
                                     google_fin_selection,
                                     google_fin_redwnld_time, data_process,
                                     google_fin_days_back, threads)
@@ -181,7 +168,7 @@ if __name__ == '__main__':
     # Examples: 'GOOG', 'WIKI', 'YAHOO', 'SEC', 'EIA', 'JODI', 'CURRFX', 'FINRA'
     # ToDo: Determine how to handle Futures; codes are a single item w/o a '_'
     # ToDo: Determine how to handle USDAFAS; codes have 3 item formats
-    database_list = ['WIKI', 'GOOG']
+    database_list = ['WIKI']
 
     # Integer that represents the number of days before the ticker tables will
     #   be refreshed. In addition, if a database wasn't completely downloaded
@@ -197,29 +184,26 @@ if __name__ == '__main__':
     # Examples: 'all', 'quandl', 'google_fin'
     download_source = 'google_fin'
 
-    # When the Quandl or Google Fin data is downloaded, where should the
-    #   extractor get the ticker codes from? Either use the official list of
-    #   codes from Quandl, or make reasonable guesses from the CSI Data stock
-    #   factsheet, which is more accurate but produces more failed/empty
-    #   downloads.
+    # When the Quandl data is downloaded, where should the extractor get the
+    #   ticker codes from? Either use the official list of codes from Quandl
+    #   (quandl), or make implied codes from the CSI Data stock factsheet
+    #   (csidata), which is more accurate but tries more non-existent companies.
     quandl_ticker_source = 'csidata'        # quandl, csidata
-    google_fin_ticker_source = 'csidata'        # quandl, csidata
 
     # Specify the items that will have their data downloaded. To add a field or
     #   to understand what is actually being downloaded, go to the query_q_codes
     #   method in either the QuandlDataExtraction class or the
     #   GoogleFinanceDataExtraction class in extractor.py, and look at the
     #   SQLite queries.
-    # Options: 'all', 'wiki', 'us_only', 'us_main', 'wiki_and_us_main_goog'
-    quandl_selection = 'wiki'
-    # Google Fin options: 'all', 'us_only', 'us_main', 'us_main_goog'
+    # Options: 'all', 'wiki', 'us_main', 'wiki_and_us_main_goog'
+    quandl_selection = 'quandl_wiki'
+    # Google Fin options: 'all', 'us_main', 'us_canada_london'
     google_fin_selection = 'us_main'
     ############################################################################
 
-    maintenance(database_link, quandl_ticker_source, database_list,
-                google_fin_ticker_source, download_source, 8, quandl_token,
-                update_range, csidata_update_range)
+    maintenance(database_link, quandl_ticker_source, database_list, 8,
+                quandl_token, update_range, csidata_update_range,
+                symbology_sources)
 
-    data_download(database_link, quandl_ticker_source, database_list,
-                  google_fin_ticker_source, download_source, quandl_selection,
+    data_download(database_link, download_source, quandl_selection,
                   google_fin_selection, 8, quandl_token)
