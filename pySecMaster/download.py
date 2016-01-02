@@ -368,14 +368,15 @@ class QuandlDownload(object):
                           (name,))
 
 
-def download_google_data(db_url, q_code, threads, verbose=True,
+def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                          csv_out='load_tables/goog_min_codes_wo_data.csv'):
     """ Receives a Quandl Code as a string, splits the code into ticker and
     exchange, then passes it to the url to download the data. Once downloaded,
     this adds titles to the column headers.
 
     :param db_url: Dictionary of google finance url components
-    :param q_code: A string of the Quandl Code.
+    :param tsid: A string of the tsid
+    :param exchanges_df: DataFrame with all exchanges and their symbols
     :param threads: Integer of the number of threads process is using
     :param verbose: Boolean
     :param csv_out: String with the file directory for the CSV file that has
@@ -383,8 +384,12 @@ def download_google_data(db_url, q_code, threads, verbose=True,
     :return: A DataFrame with the data points for the Quandl Code.
     """
 
-    ticker = q_code[q_code.find('_') + 1:]
-    exchange = q_code[q_code.find('/') + 1:q_code.find('_')]
+    ticker = tsid[:tsid.find('.')]
+    exchange_symbol = tsid[tsid.find('.')+1:tsid.find('.', tsid.find('.')+1)]
+
+    # Use the tsid exchange symbol to get the Google exchange symbol
+    exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] == exchange_symbol,
+                                 'goog_symbol'].values)
 
     # Make the url string; aside from the root, the items can be in any order
     url_string = db_url['root']      # Establish the url root
@@ -394,7 +399,8 @@ def download_google_data(db_url, q_code, threads, verbose=True,
         elif key == 'ticker':
             url_string += '&' + item + ticker
         elif key == 'exchange':
-            url_string += '&' + item + exchange
+            if exchange:
+                url_string += '&' + item + exchange[0]
         else:
             url_string += '&' + item
 
@@ -416,7 +422,7 @@ def download_google_data(db_url, q_code, threads, verbose=True,
                 raise OSError('HTTPError %s: Reached API call limit. Make the '
                               'RateLimit more restrictive.' % (e.reason,))
             elif str(e) == 'HTTP Error 404: Not Found':
-                raise OSError('HTTPError %s: %s not found' % (e.reason, q_code))
+                raise OSError('HTTPError %s: %s not found' % (e.reason, tsid))
             elif str(e) == 'HTTP Error 429: Too Many Requests':
                 if download_try <= 5:
                     print('HTTPError %s: Exceeded API limit. Make the '
@@ -471,7 +477,7 @@ def download_google_data(db_url, q_code, threads, verbose=True,
             else:
                 print('Base URL used: %s' % (url,))
                 raise OSError('HTTPError %s: Unknown error when downloading %s'
-                              % (e.reason, q_code))
+                              % (e.reason, tsid))
 
         except URLError as e:
             if download_try <= 10:
@@ -490,7 +496,7 @@ def download_google_data(db_url, q_code, threads, verbose=True,
             print(e)
             raise OSError('Warning: Encountered an unknown error when '
                           'downloading %s in download_data in download.py' %
-                          (q_code,))
+                          (tsid,))
 
     def google_data_processing(url_obj):
         """ Takes the url object returned from Google, and format the text data
@@ -557,47 +563,47 @@ def download_google_data(db_url, q_code, threads, verbose=True,
 
         # Data successfully downloaded; check to see if code was on the list
         codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-        if len(codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code]) > 0:
+        if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
             # This q_code now has data whereas it didn't on that last run.
             #   Remove the code from the DataFrame
-            wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != q_code]
+            wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != tsid]
             # Remove any duplicates (keeping the latest) and save to a CSV
-            clean_wo_data_df = wo_data_df.drop_duplicates(subset='q_code',
+            clean_wo_data_df = wo_data_df.drop_duplicates(subset='tsid',
                                                           keep='last')
             clean_wo_data_df.to_csv(csv_out, index=False)
             if verbose:
                 print('%s was removed from the wo_data CSV file since data '
-                      'was available for download.' % (q_code,))
+                      'was available for download.' % (tsid,))
     except IndexError:
         # There is no minute data for this code; add to CSV file via DF
         codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
         cur_date = datetime.utcnow().isoformat()
-        if len(codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code]) > 0:
+        if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
             # The code already exists within the CSV, so update the date
-            codes_wo_data_df.set_value(codes_wo_data_df['q_code'] == q_code,
+            codes_wo_data_df.set_value(codes_wo_data_df['tsid'] == tsid,
                                        'date_tried', cur_date)
             # Remove any duplicates (keeping the latest) and save to a CSV
-            clean_wo_data_df = codes_wo_data_df.drop_duplicates(subset='q_code',
+            clean_wo_data_df = codes_wo_data_df.drop_duplicates(subset='tsid',
                                                                 keep='last')
             clean_wo_data_df.to_csv(csv_out, index=False)
             if verbose:
                 print('%s still did not have data. Date tried was updated '
-                      'in the wo_data CSV file.' % (q_code,))
+                      'in the wo_data CSV file.' % (tsid,))
         else:
             # The code does not exists within the CSV, so create and append
             #   it to the CSV file. Do this via a DataFrame to CSV append
-            no_data_df = pd.DataFrame(data=[(q_code, cur_date)],
-                                      columns=['q_code', 'date_tried'])
+            no_data_df = pd.DataFrame(data=[(tsid, cur_date)],
+                                      columns=['tsid', 'date_tried'])
             with open(csv_out, 'a') as f:
                 no_data_df.to_csv(f, mode='a', header=False, index=False)
             if verbose:
                 print('%s did not have data, thus it was added to the '
-                      'wo_data CSV file.' % (q_code,))
+                      'wo_data CSV file.' % (tsid,))
 
-        # Return an empty DF; QuandlDataExtractor will be able to handle it
+        # Return an empty DF; the DataExtraction class will be able to handle it
         return pd.DataFrame()
     except Exception as e:
-        print('Flag: Error occurred when processing data for %s' % (q_code,))
+        print('Flag: Error occurred when processing data for %s' % (tsid,))
         print(e)
         return pd.DataFrame()
 
@@ -608,7 +614,7 @@ def download_google_data(db_url, q_code, threads, verbose=True,
         return row[column].isoformat()
 
     raw_df['date'] = raw_df.apply(datetime_to_iso, axis=1, args=('date',))
-    raw_df.insert(0, 'q_code', q_code)
+    raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
                   datetime.utcnow().isoformat())
 
