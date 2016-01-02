@@ -298,7 +298,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <property name="movable">
        <bool>true</bool>
@@ -378,6 +378,9 @@
         <string>&amp;Ticker Source</string>
        </attribute>
        <layout class="QFormLayout" name="formLayout_2">
+        <property name="fieldGrowthPolicy">
+         <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+        </property>
         <item row="0" column="0">
          <widget class="QLabel" name="lbl_tickers_quandl">
           <property name="text">
@@ -389,30 +392,6 @@
          <widget class="QComboBox" name="cmb_tickers_quandl">
           <property name="toolTip">
            <string>Select the provider of the available tickers (CSI Data is better)</string>
-          </property>
-          <item>
-           <property name="text">
-            <string>csidata</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>quandl</string>
-           </property>
-          </item>
-         </widget>
-        </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="lbl_tickers_googfin">
-          <property name="text">
-           <string>Google Finance Data</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QComboBox" name="cmb_tickers_googfin">
-          <property name="toolTip">
-           <string>Select the provider of available tickers (CSI Data is better)</string>
           </property>
           <item>
            <property name="text">
@@ -735,7 +714,6 @@
   <tabstop>cmb_data_quandl</tabstop>
   <tabstop>cmb_data_googfin</tabstop>
   <tabstop>cmb_tickers_quandl</tabstop>
-  <tabstop>cmb_tickers_googfin</tabstop>
   <tabstop>spinbx_settings_threads</tabstop>
   <tabstop>txtbrwsr_details</tabstop>
  </tabstops>
