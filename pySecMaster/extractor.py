@@ -456,13 +456,11 @@ class QuandlCodeExtract(object):
 
 class QuandlDataExtraction(object):
 
-    def __init__(self, db_location, quandl_token, db_url, ticker_source,
-                 download_selection, redownload_time, data_process, days_back,
-                 threads):
+    def __init__(self, db_location, quandl_token, db_url, download_selection,
+                 redownload_time, data_process, days_back, threads):
         self.database_location = db_location
         self.quandl_token = quandl_token
         self.db_url = db_url
-        self.ticker_source = ticker_source
         self.download_selection = download_selection
         self.redownload_time = redownload_time
         self.data_process = data_process
@@ -490,8 +488,7 @@ class QuandlDataExtraction(object):
 
         print('Analyzing the Quandl Codes that will be downloaded...')
         # Create a list of securities to download
-        q_code_df = self.query_q_codes(self.ticker_source,
-                                       self.download_selection)
+        q_code_df = self.query_q_codes(self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
                               left_on='tsid', right_index=True, how='left')
@@ -563,7 +560,7 @@ class QuandlDataExtraction(object):
         print('The price extraction took %0.2f seconds to complete' %
               (time.time() - start_time))
 
-    def query_q_codes(self, ticker_source, download_selection):
+    def query_q_codes(self, download_selection):
         """
         Builds a list of Quandl Codes from a SQL query. These codes are the
         items that will have their data downloaded. 
@@ -573,8 +570,7 @@ class QuandlDataExtraction(object):
         Perhaps the best way will be to have some predefined queries, and if
         those don't work for the user, they write a custom query.
 
-        :param ticker_source: String of ticker source
-        :param download_selection: String that matches an if condition below
+        :param download_selection: String that specifies which data is required
         :return: DataFrame with two columns (tsid, q_code)
         """
 
@@ -585,132 +581,7 @@ class QuandlDataExtraction(object):
 
                 # ToDo: MED: Will need to create queries for additional items
 
-                if ticker_source == 'quandl':
-
-                    print('NOTE: For stock data, it is recommended to use '
-                          'quandl codes that originate from the symbology '
-                          'table (quandl_wiki). The codes originate from the '
-                          'CSI Data stock factsheet and are more inclusive.')
-
-                    # Retrieve all q_codes
-                    if download_selection == 'all':
-                        cur.execute("""SELECT q_code FROM quandl_codes""")
-
-                    # Retrieve q_codes traded in any exchange located in the US
-                    elif download_selection == 'us_only_goog':
-                        cur.execute("""SELECT q_code
-                                        FROM quandl_codes
-                                        WHERE
-                                        exchange IN(
-                                            SELECT goog_symbol
-                                            FROM exchange
-                                            WHERE country='United States')""")
-
-                    # Retrieve q_codes that are in these main US exchanges
-                    elif download_selection == 'us_main_goog':
-                        # NASDAQ - 3173 items
-                        # NYSE - 4453 items
-                        # NYSEARCA - ETFs; 1572 items
-                        # NYSEMKT - Former AMEX; Small caps; 506 items
-                        cur.execute("""SELECT q_code
-                                       FROM quandl_codes
-                                       WHERE data IN (
-                                           SELECT goog_symbol
-                                           FROM exchange
-                                           WHERE symbol IN ('NASDAQ','NYSE'))
-                                       AND data_vendor='GOOG'""")
-
-                    # Retrieve all codes from the WIKI database
-                    elif download_selection == 'wiki':
-                        cur.execute("""SELECT q_code
-                                       FROM quandl_codes
-                                       WHERE data_vendor='WIKI'""")
-
-                    # Retrieve all codes from the WIKI database and the GOOG
-                    #   codes from the main US exchanges (NYSE, NYSEARCA, AMEX)
-                    elif download_selection == 'wiki_and_us_main_goog':
-                        cur.execute("""SELECT q_code
-                                       FROM quandl_codes
-                                       WHERE (data IN (
-                                           SELECT goog_symbol
-                                           FROM exchange
-                                           WHERE symbol IN ('NYSE', 'NYSEARCA',
-                                               'AMEX'))
-                                           AND data_vendor='GOOG')
-                                       OR data_vendor='WIKI'""")
-
-                    else:
-                        raise TypeError('Improper download_selection was '
-                                        'provided in query_q_codes. If this is '
-                                        'a new query, ensure the SQL is '
-                                        'correct. Valid Quandl download '
-                                        'selections include all, us_main_goog, '
-                                        'us_only_goog, wiki, and '
-                                        'wiki_and_us_main_goog.')
-
-                    data = cur.fetchall()
-                    if data:
-                        df = pd.DataFrame(data, columns=['q_code'])
-                        df.drop_duplicates(inplace=True)
-                    else:
-                        raise TypeError('Not able to determine the q_codes '
-                                        'from the SQL query in query_q_codes')
-
-                elif ticker_source == 'csidata':
-                    print('NOTE: For stock data, it is recommended to use '
-                          'quandl codes that originate from the symbology '
-                          'table (quandl_wiki). The codes originate from the '
-                          'CSI Data stock factsheet and are more inclusive.')
-
-                    # Retrieve all tickers
-                    if download_selection == 'all':
-                        cur.execute("""SELECT Symbol
-                                       FROM csidata_stock_factsheet""")
-
-                    # Retrieve tickers that trade only on main US exchanges
-                    elif download_selection == 'us_main':
-                        # Restricts tickers to those that have been active
-                        #   within the prior two years.
-                        beg_date = (datetime.utcnow() - timedelta(days=730))
-                        cur.execute("""SELECT Symbol
-                                       FROM csidata_stock_factsheet
-                                       WHERE EndDate > ?
-                                       AND (Exchange IN ('AMEX', 'NYSE')
-                                       OR ChildExchange IN ('AMEX',
-                                           'BATS Global Markets',
-                                           'Nasdaq Capital Market',
-                                           'Nasdaq Global Market',
-                                           'Nasdaq Global Select',
-                                           'NYSE', 'NYSE ARCA'))
-                                       AND Symbol IS NOT NULL
-                                       GROUP BY Symbol, Exchange,
-                                       ChildExchange""",
-                                    (beg_date.isoformat(),))
-
-                    else:
-                        raise TypeError('Improper download_selection was '
-                                        'provided in query_q_codes. If this is '
-                                        'a new query, ensure the SQL is '
-                                        'correct. Valid CSI Data download '
-                                        'selections include all and us_main.')
-
-                    data = cur.fetchall()
-                    if data:
-                        df = pd.DataFrame(data, columns=['q_code'])
-                        df.drop_duplicates(inplace=True)
-
-                        # If a ticker has a ". + -", change it to an underscore
-                        df['q_code'].replace(regex=True, inplace=True,
-                                             to_replace=r'[.+-]', value=r'_')
-
-                        # Need to add 'WIKI/' before every ticker to make it
-                        #   compatible with the Quandl WIKI code structure
-                        df['q_code'] = df.apply(lambda x: 'WIKI/' + x, axis=1)
-                    else:
-                        raise TypeError('Not able to determine the q_codes '
-                                        'from the SQL query in query_q_codes')
-
-                elif ticker_source == 'quandl_wiki':
+                if download_selection == 'quandl_wiki':
                     cur.execute("""SELECT tsid.source_id, wiki.source_id
                                    FROM symbology tsid
                                    INNER JOIN symbology wiki
@@ -718,26 +589,29 @@ class QuandlDataExtraction(object):
                                    WHERE tsid.source='tsid'
                                    AND wiki.source='quandl_wiki'
                                    GROUP BY wiki.source_id""")
-                    data = cur.fetchall()
-                    if data:
-                        df = pd.DataFrame(data, columns=['tsid', 'q_code'])
-                        # df.drop_duplicates(inplace=True)
-                    else:
-                        raise TypeError('Not able to determine the q_codes '
-                                        'from the SQL query in query_q_codes')
-
                 else:
-                    raise TypeError('Improper ticker_source was provided in'
-                                    'query_q_codes of QuandlDataExtraction.')
+                    raise SystemError('Improper download_selection was '
+                                      'provided in query_codes. If this is '
+                                      'a new query, ensure the SQL is '
+                                      'correct. Valid symbology download '
+                                      'selections include all, us_main and'
+                                      'us_canada_london.')
 
-                # ticker_list = df.values.flatten()
-                # df.to_csv('query_q_code.csv')
-                return df
+                data = cur.fetchall()
+                if data:
+                    df = pd.DataFrame(data, columns=['tsid', 'q_code'])
+                    # df.drop_duplicates(inplace=True)
 
+                    # ticker_list = df.values.flatten()
+                    # df.to_csv('query_q_code.csv')
+                    return df
+                else:
+                    raise SystemError('Not able to determine the q_codes '
+                                      'from the SQL query in query_q_codes')
         except sqlite3.Error as e:
             print(e)
-            raise TypeError('Error when trying to connect to the database '
-                            'in query_q_codes')
+            raise SystemError('Error when trying to connect to the database '
+                              'in query_q_codes')
 
     def query_last_price(self):
         """ Queries the pricing database to find the latest dates for each item
@@ -1020,7 +894,7 @@ class GoogleFinanceDataExtraction(object):
         Perhaps the best way will be to have some predefined queries, and if
         those don't work for the user, they write a custom query.
 
-        :param download_selection: String that matches an if condition below
+        :param download_selection: String that specifies which data is required
         :return: DataFrame with the the specified tsid values
         """
 
@@ -1095,15 +969,15 @@ class GoogleFinanceDataExtraction(object):
                     df.drop_duplicates(inplace=True)
 
                     # ticker_list = df.values.flatten()
-                    # df.to_csv('query_q_code.csv')
+                    # df.to_csv('query_tsid.csv')
                     return df
                 else:
                     raise TypeError('Not able to determine the tsid from '
-                                    'the SQL query in query_q_codes.')
+                                    'the SQL query in query_codes.')
         except sqlite3.Error as e:
             print(e)
             raise TypeError('Error when trying to connect to the database '
-                            'in query_q_codes')
+                            'in query_codes')
 
     def query_last_price(self):
         """ Queries the pricing database to find the latest dates for each item

@@ -309,6 +309,8 @@ def create_symbology(db_location, source_list):
         elif source in ['quandl_wiki', 'seeking_alpha', 'tsid', 'yahoo']:
             # These sources have a similar symbology creation process
 
+            # ToDo: Add quandl_goog codes
+
             if source == 'quandl_wiki':
                 # I don't trust that Quandl provides all available WIKI codes
                 #   in the downloadable tables, thus I imply plausible WIKI
