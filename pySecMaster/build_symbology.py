@@ -348,18 +348,33 @@ def create_symbology(db_location, source_list):
                                                to_replace=r'[.+-]', value=r'_')
 
                 def csi_to_tsid(row):
-                    # Create the tsid symbol combination of
-                    #   <ticker>.<tsid exchange>.<count>
+                    # Create the tsid symbol combination of:
+                    #   <ticker>.<tsid exchange symbol>.<count>
                     ticker = row['ticker']
                     exchange = row['exchange']
                     child_exchange = row['childexchange']
 
-                    if exchange == 'OTC' and child_exchange:
+                    if child_exchange == 'NYSE ARCA':
+                        # For NYSE ARCA traded objects, which can have an
+                        #   exchange of AMEX, NYSE or OTC.
+                        tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                     child_exchange, 'tsid_symbol'].values)
+                        if tsid_exch:
+                            return ticker + '.' + tsid_exch[0] + '.0'
+                        else:
+                            print('Unable to find the tsid exchange symbol for '
+                                  'the child exchange %s in csi_to_tsid' %
+                                  child_exchange)
+                    elif exchange == 'OTC' or \
+                            child_exchange == 'BATS Global Markets':
+                        # For OTC or BATS traded objects (except NYSE ARCA).
+                        #   First try to match the child exchange name...
                         tsid_exch = (exch_df.loc[exch_df['name'] ==
                                      child_exchange, 'tsid_symbol'].values)
                         if tsid_exch:
                             return ticker + '.' + tsid_exch[0] + '.0'
                         else:
+                            # If no name match is found, match the exchange
                             tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
                                          exchange, 'tsid_symbol'].values)
                             if tsid_exch:
@@ -369,6 +384,7 @@ def create_symbology(db_location, source_list):
                                       'for the child exchange %s in '
                                       'csi_to_tsid' % child_exchange)
                     else:
+                        # All other exchanges (AMEX, LSE, MSE, NSE, TSX, VSE)
                         tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
                                      exchange, 'tsid_symbol'].values)
                         if tsid_exch:

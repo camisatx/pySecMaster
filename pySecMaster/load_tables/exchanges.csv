@@ -5,24 +5,24 @@ AMEX,AMEX,,AMEX,AMEX,American Stock Exchange,United States,New York City,USD,EST
 ASE,ATH,AT,,ATH,Athens Stock Exchange,Greece,Athens,EUR,EET,2,10:00am,5:20pm,NONE
 ASX,ASX,AX,,ASX,Australian Stock Exchange,Australia,Sydney,AUD,AEST,10,10:00am,4:00pm,NONE
 BAR,BCN,BC,,BAR,Barcelona Stock Exchange,Spain,Barcelona,EUR,CET,1,9:00am,5:30pm,NONE
-BATS,,,BATS,NYSE,BATS Global Markets,United States,"Lenexa, Kansas",USD,CST,-6,9:30am,4:00pm,NONE
+BATS,BATS,,BATS,BATS,BATS Global Markets,United States,"Lenexa, Kansas",USD,CST,-6,9:30am,4:00pm,NONE
 BEL,EBR,BR,,BRU,NYSE Euronext Brussels,Belgium,Brussels,EUR,CET,1,9:00am,5:30pm,NONE
 BER,BER,BE,,BER,Berlin Stock Exchange,Germany,Berlin,EUR,CET,1,8:00am,8:00pm,NONE
 BIL,,BI,,BIL,Bilbao Stock Exchange,Spain,Bilbao,EUR,,1,,,
 BME,,,,BME,BME Spanish Exchanges,Spain,Madrid,EUR,,1,9:00am,5:30pm,NONE
-BSE,BSE,BO,,BSE,Bombay Stock Exchange Limited,India,Mumbai,INR,IST,5.5,9:00am,3:30pm,NONE
+BSE,BOM,BO,,BSE,Bombay Stock Exchange Limited,India,Mumbai,INR,IST,5.5,9:00am,3:30pm,NONE
 BUE,BCBA,BA,,BA,Bolsa de Comercio de Buenos Aires,Argentina,Buenos Aires,BRL,,-3,,,
 BVC,,CR,,CAR,Bolsa de Valores de Caracas,Venezuela,Caracas,VEF,,-4.5,,,
 BVMF,BVMF,,,BVMF,BM&F Bovespa,Brazil,Sao Paulo,BRL,,-3,10:00am,4:55pm,NONE
 CBOT,,CBT,,CBOT,Chicago Board of Trade,United States,Chicago,USD,CST,-6,,,
-CDNX,CNSX,,,CNSX,Canadian Venture Exchange,Canada,Ontario,CAD,EST,-5,,,
+CDNX,CNSX,,,CNSX,Canadian Securities Exchange,Canada,Ontario,CAD,EST,-5,,,
 CME,,CME,,CME,Chicago Mercantile Exchange,United States,Chicago,USD,CST,-6,,,
 CSE,CPH,CO,,COP,NASDAQ OMX Copenhagen,Denmark,Copenhagen,DKK,CET,1,9:00am,5:00pm,NONE
 DIV,,DIV,,DIV,DIV,NONE,NONE,USD,NONE,NONE,NONE,NONE,NONE
 DUS,,DU,,DUS,Dusseldorf Stock Exchange,Germany,Dusseldorf,EUR,CET,1,,,
-ETF,,ETF,,ETF,ETF,NONE,NONE,USD,NONE,NONE,NONE,NONE,NONE
+ETF,ETF,ETF,,ETF,ETF,NONE,NONE,USD,NONE,NONE,NONE,NONE,NONE
 FRA,FRA,F,,FRA,Deutsche Börse Frankfurt Stock Exchange,Germany,Frankfurt,EUR,CET,1,9:00am,8:00pm,NONE
-FUND,,FUND,FUND,FUND,Mutual Fund,NONE,NONE,USD,NONE,NONE,NONE,NONE,NONE
+FUND,MUTF,FUND,FUND,FUND,Mutual Fund,NONE,NONE,USD,NONE,NONE,NONE,NONE,NONE
 GREY,,,GREY,GREY,Grey Market,United States,NONE,USD,NONE,NONE,NONE,NONE,NONE
 HAM,,HM,,HAM,Hamburg Stock Exchange,Germany,Hamburg,EUR,EET,1,,,
 HAN,,HA,,HAN,Hanover Stock Exchange,Germany,Hanover,EUR,EET,1,,,
@@ -31,12 +31,12 @@ ICEX,ICE,,,ICE,NASDAQ OMX Iceland,Iceland,Rejkjavik,ISK,,0,10:00am,4:00pm,NONE
 IDX,JAK,JK,,INDO,Indonesia Stock Exchange,Indonesia,Jakarta,IDR,WIB,7,9:30am,4:00pm,NONE
 INDEX,INDEX,INDEX,INDEX,INDEX,Indices,NONE,NONE,USD,NONE,NONE,NONE,NONE,NONE
 IST,IST,IS,,IST,Borsa Istanbul,Turkey,Istanbul,TRY,EET,2,9:30am,5:30pm,NONE
-JSE,JNB,,,JSE,Johannesburg Stock Exchange,South Africa,Johannesburg,ZAR,SAST,2,9:00am,5:00pm,NONE
-KSC,SEO,KS,,KOR,Korea Stock Exchange,South Korea,Seoul,KRW,KST,9,8:00am,3:00pm,NONE
-KSCQ,KDQ,KQ,,KOSDAQ,KOSDAQ,South Korea,Seoul,KRW,KST,9,8:00am,3:00pm,NONE
+JSE,JSE,,,JSE,Johannesburg Stock Exchange,South Africa,Johannesburg,ZAR,SAST,2,9:00am,5:00pm,NONE
+KSC,KRX,KS,,KOR,Korea Stock Exchange,South Korea,Seoul,KRW,KST,9,8:00am,3:00pm,NONE
+KSCQ,KOSDAQ,KQ,,KOSDAQ,KOSDAQ,South Korea,Seoul,KRW,KST,9,8:00am,3:00pm,NONE
 LSE,LON,L,LSE,LON,London Stock Exchange,United Kingdom,London,GBP,GMT,0,8:00am,4:30pm,NONE
 MAD,MCE,MA,,MAD,Madrid Stock Exchange,Spain,Madrid,EUR,CET,1,9:00am,5:30pm,NONE
-MEX,,MX,,MEX,Mexico Stock Exchange,Mexico,Mexico City,MXN,,-6,,,
+MEX,BMV,MX,,MEX,Mexico Stock Exchange,Mexico,Mexico City,MXN,,-6,,,
 MF,,MF,,MADF,Madrid Fixed Income Market,Spain,Madrid,EUR,EET,1,,,
 MICEX,MCX,ME,,MCX,Moscow Exchange,Russia,Moscow,RUB,MSK,3,10:30am,7:00pm,NONE
 MIL,BIT,MI,,MIL,Borsa Italiana Milan Stock Exchange,Italy,Milan,EUR,CET,1,9:05am,5:35pm,NONE
@@ -51,16 +51,17 @@ NSE,NSE,NS,,NSE,National Stock Exchange of India,India,Mumbai,INR,IST,5.5,9:00am
 NYBOT,,NYB,,NYB,New York Board of Trade,United States,New York City,USD,EST,-5,,,
 NYMEX,,NYM,,NYMEX,New York Mercantile Exchange,United States,New York City,USD,EST,-5,,,
 NYSE,NYSE,,NYSE,N,New York Stock Exchange,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-NYSEARCA,NYSEARCA,,NYSEARCA,N,New York Stock Exchange ARCA,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-NYSEMKT,NYSEMKT,,,N,New York Stock Exchange MKT,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+NYSEARCA,NYSEARCA,,NYSE ARCA,NARCA,New York Stock Exchange ARCA,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+NYSEMKT,NYSEMKT,,,NMKT,New York Stock Exchange MKT,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 NZE,NZE,NZ,,NZE,New Zealand Stock Exchange,New Zealand,Wellington,NZD,NZST,12,10:00am,5:00pm,NONE
 OMXH,HEL,HE,,HEL,NASDAQ OMX Helsinki,Finland,Helsinki,EUR,EET,2,10:00am,6:30pm,NONE
+OPRA,OPRA,,,OPRA,Options Pricing Authority Options Chains,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 OSL,OSL,OL,,OSL,Oslo Stock Exchange,Norway,Oslo,NOK,CET,1,9:00am,5:30pm,NONE
 OTC,OTC,,,OTC,OTC Market,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 OTCBB,OTCBB,OB,,OTCBB,OTC Bulletin Board Market,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-OTCMKTS,OTCMKTS,,,OTC,OTC Other Issues,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-OTCQB,,,,OTC,OTC Markets QB,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-OTCQX,,,,OTC,OTC Markets QX,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+OTCMKTS,OTCMKTS,,,OTCMKTS,OTC Other Issues,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+OTCQB,,,,OTCMKTS,OTC Markets QB,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+OTCQX,,,,OTCMKTS,OTC Markets QX,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 PAR,EPA,PA,,PAR,NYSE Euronext Paris,France,Paris,EUR,CET,1,9:00am,5:30pm,NONE
 PINK,PINK,PK,OTC,PINK,OTC Markets Pink Sheets,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 PSI,ELI,LS,,LIS,NYSE Euronext Lisbon,Portugal,Lisbon,EUR,CET,1,9:00am,5:30pm,NONE
@@ -70,7 +71,7 @@ SAO,,SA,,SAO,Sao Paolo Stock Exchange (BOVESPA),Brazil,Sao Paolo,BRL,,-3,,,
 SEK,STO,ST,,STO,NASDAQ OMX Stockholm,Sweden,Stockholm,SEK,CET,1,9:00am,5:30pm,NONE
 SET,BKK,BK,,THAI,Thailand Stock Exchange,Thailand,Bangkok,THB,,7,,,
 SGO,,SN,,SGO,Santiago Stock Exchange,Chile,Santiago,CLP,,-4,9:30am,4:30pm,NONE
-SGX,SIN,SI,,SING,Singapore Stock Exchange,Singapore,Singapore,SGD,SST,8,9:00am,5:00pm,NONE
+SGX,SGX,SI,,SING,Singapore Stock Exchange,Singapore,Singapore,SGD,SST,8,9:00am,5:00pm,NONE
 SIX,SWX,SW,,SWX,SIX Swiss Exchange,Switzerland,Zurich,CHF,CET,1,9:00am,5:30pm,NONE
 SSE,SHA,SS,,SHA,Shanghai Stock Exchange,China,Shanghai,CNY,CST,8,9:30am,3:00pm,11:30am–1:00pm
 STU,STU,SG,,STU,Stuttgart Stock Exchange,Germany,Stuttgart,EUR,CET,1,9:00am,8:00pm,NONE
@@ -85,6 +86,6 @@ TSXV,CVE,V,VSE,TSXV,TSX Venture Exchange,Canada,Toronto,CAD,EST,-5,9:30am,4:00pm
 TWO,,TWO,,TAIO,Taiwan OTC Exchange,Taiwan,Taipei,TWD,,8,9:00am,2:00pm,NONE
 VSE,VSE,,,VILN,NASDAQ OMX Vilnius,Lithuania,Vilnius,LTL,EET,2,10:00am,2:00pm,NONE
 VTX,VTX,VX,,VTX,SIX Swiss Exchange,Switzerland,Zurich,CHF,CET,1,9:00am,5:30pm,NONE
-WBAG,WBAG,VI,,WBAG,Vienna Stock Exchange (Wiener Borse),Austria,Vienna,EUR,CET,1,9:15am,5:35pm,NONE
-WSE,WAR,,,WAR,Warsaw Stock Exchange,Poland,Warsaw,PLN,CET,1,9:00am,4:20pm,NONE
+WBAG,VIE,VI,,WBAG,Vienna Stock Exchange (Wiener Borse),Austria,Vienna,EUR,CET,1,9:15am,5:35pm,NONE
+WSE,WSE,,,WAR,Warsaw Stock Exchange,Poland,Warsaw,PLN,CET,1,9:00am,4:20pm,NONE
 XETRA,ETR,DE,,DE,Deutsche Borse XETRA,Germany,Frankfurt,EUR,CET,1,,,
