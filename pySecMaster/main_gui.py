@@ -208,7 +208,7 @@ class MainWindow(QtGui.QMainWindow):
         """
 
         # The default options for Quandl Data and Google Finance Data (Data tab)
-        possible_selections = ['all', 'us_main']
+        possible_selections = ['quandl_wiki']   # 'all', 'us_main'
         default_selection = 1
 
         self.cmb_data_googfin.clear()
