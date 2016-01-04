@@ -1,14 +1,14 @@
 import sqlite3
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2015 Josh Schertz'
+__copyright__ = 'Copyright (C) 2016 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.2'
+__version__ = '1.3.0'
 
 '''
     This program is free software: you can redistribute it and/or modify

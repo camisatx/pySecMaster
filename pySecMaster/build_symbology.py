@@ -7,6 +7,31 @@ from create_tables import main_tables, data_tables, events_tables
 from load_aux_tables import LoadTables
 from extractor import CSIDataExtractor, QuandlCodeExtract
 
+__author__ = 'Josh Schertz'
+__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__description__ = 'An automated system to store and maintain financial data.'
+__email__ = 'josh[AT]joshschertz[DOT]com'
+__license__ = 'GNU AGPLv3'
+__maintainer__ = 'Josh Schertz'
+__status__ = 'Development'
+__url__ = 'https://joshschertz.com/'
+__version__ = '1.3.0'
+
+'''
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+'''
+
 
 def df_to_sql(df, db_location, sql_table, exists, item):
 
@@ -309,7 +334,7 @@ def create_symbology(db_location, source_list):
         elif source in ['quandl_wiki', 'seeking_alpha', 'tsid', 'yahoo']:
             # These sources have a similar symbology creation process
 
-            # ToDo: Add quandl_goog codes
+            # ToDo: Add quandl_goog and economic_events codes
 
             if source == 'quandl_wiki':
                 # I don't trust that Quandl provides all available WIKI codes
@@ -460,7 +485,7 @@ def create_symbology(db_location, source_list):
 
 if __name__ == '__main__':
 
-    database_location = 'C:/Users/Josh/Desktop/pySecMaster_test.db'
+    database_location = 'C:/Users/####/Desktop/pySecMaster_test.db'
 
     main_tables(database_location)
     data_tables(database_location)
@@ -473,7 +498,7 @@ if __name__ == '__main__':
     CSIDataExtractor(db_location=database_location, db_url=csidata_url,
                      data_type=csidata_type, redownload_time=3000)
 
-    quandl_code = 'PXoR3E7FucJmxd8RFDkZ'
+    quandl_code = '##########'
     quandl_db_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
                      'source_code=', '&per_page=300&page=']
     quandl_db_list = ['WIKI']    # WIKI, GOOG, YAHOO, SEC, FINRA
