@@ -62,8 +62,8 @@ database_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
 # http://www.csidata.com/factsheets.php?type=stock&format=html
 csidata_url = 'http://www.csidata.com/factsheets.php?'
 tables_to_load = ['data_vendor', 'exchanges']
-symbology_sources = ['csi_data', 'quandl_wiki', 'seeking_alpha', 'tsid',
-                     'yahoo']
+symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
+                     'seeking_alpha', 'yahoo']
 
 ###############################################################################
 # Database data download options:
@@ -153,11 +153,11 @@ if __name__ == '__main__':
 
     # Specify the name of the Security Master database
     # Name must have underscores instead of spaces and must have '.db' on end
-    database_name = 'pySecMaster.db'
+    database_name = 'pySecMaster_m.db'
 
     # Change the location for where the database will be created
     # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/'
-    database_location = 'C:/Users/XXXX/Desktop/'
+    database_location = 'C:/Users/Josh/Desktop/'
 
     database_link = database_location + database_name
 

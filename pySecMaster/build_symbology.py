@@ -57,33 +57,6 @@ def df_to_sql(df, db_location, sql_table, exists, item):
         print(e)
 
 
-def query_source_id(db_location, source_name):
-
-    conn = sqlite3.connect(db_location)
-    try:
-        with conn:
-            cur = conn.cursor()
-            cur.execute("""SELECT data_vendor_id
-                        FROM data_vendor
-                        WHERE name=?""", (source_name,))
-            source_id = cur.fetchone()
-            if source_id:
-                return source_id[0]
-            else:
-                return None
-    except sqlite3.Error as e:
-        print(e)
-        raise SystemError('Failed to query the data from the data_vendor table '
-                          'within query_source_id')
-    except conn.OperationalError:
-        raise SystemError('Unable to connect to the SQL Database in '
-                          'query_source_id. Make sure the database '
-                          'address/name are correct.')
-    except Exception as e:
-        print(e)
-        raise SystemError('Error: Unknown issue occurred in query_source_id')
-
-
 def query_existing_sid(db_location):
 
     conn = sqlite3.connect(db_location)
@@ -195,7 +168,8 @@ def query_csi_stocks(db_location, query='all'):
             else:
                 raise SystemExit('%s query does not exist within '
                                  'query_csi_stocks. Valid queries '
-                                 'include all and main_us.' % (query,))
+                                 'include: all, main_us, exchanges_only' %
+                                 (query,))
             return csi_df
     except sqlite3.Error as e:
         print(e)
@@ -295,14 +269,6 @@ def create_symbology(db_location, source_list):
     for source in source_list:
         source_start = time.time()
 
-        # # Get the ID number for the source
-        # source_id = query_source_id(db_location=db_location,
-        #                             source_name=source)
-        # if not source_id:
-        #     raise SystemError('There is not a match for the source ID. Add '
-        #                       'the %s to the data_vendor table before trying '
-        #                       'to build the symbology table.' % source)
-
         # Retrieve any existing ID values from the symbology table
         symbology_df = query_existing_sid(db_location=db_location)
 
@@ -331,10 +297,11 @@ def create_symbology(db_location, source_list):
             df_to_sql(df=new_symbology_df, db_location=db_location,
                       sql_table='symbology', exists='replace', item=source)
 
-        elif source in ['quandl_wiki', 'seeking_alpha', 'tsid', 'yahoo']:
+        elif source in ['tsid', 'quandl_wiki', 'quandl_goog', 'seeking_alpha',
+                        'yahoo']:
             # These sources have a similar symbology creation process
 
-            # ToDo: Add quandl_goog and economic_events codes
+            # ToDo: Add economic_events codes
 
             if source == 'quandl_wiki':
                 # I don't trust that Quandl provides all available WIKI codes
@@ -354,6 +321,81 @@ def create_symbology(db_location, source_list):
                 #   compatible with the Quandl WIKI code structure
                 csi_stock_df['ticker'] = csi_stock_df['ticker'].\
                     apply(lambda x: 'WIKI/' + x)
+
+            if source == 'quandl_goog':
+                # Imply plausible Quandl codes for their GOOG database. Only
+                #   codes for American, Canadian and London exchanges
+                csi_stock_df = query_csi_stocks(db_location=db_location,
+                                                query='exchanges_only')
+
+                # If a ticker has a ". + -", change it to an underscore
+                csi_stock_df['ticker'].replace(regex=True, inplace=True,
+                                               to_replace=r'[.+-]', value=r'_')
+
+                def csi_to_quandl_goog(row):
+                    # Create the Quandl GOOG symbol combination of
+                    #   GOOG/<goog exchange symbol>_<ticker>
+                    ticker = row['ticker']
+                    exchange = row['exchange']
+                    child_exchange = row['childexchange']
+
+                    if child_exchange == 'NYSE ARCA':
+                        # NYSE ARCA is a special situation where the child
+                        #   exchange matches the csi_symbol
+                        goog_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                     child_exchange, 'goog_symbol'].values)
+                        if goog_exch:
+                            return 'GOOG/' + goog_exch[0] + '_' + ticker
+                        else:
+                            print('Unable to find the goog exchange symbol for '
+                                  'the child exchange %s in csi_to_quandl_goog'
+                                  % child_exchange)
+                    else:
+                        # For all non NYSE ARCA exchanges, see if there is a
+                        #   child exchange and if so, try matching that to the
+                        #   csi_symbol (first) or name (second). If no child
+                        #   exchange, try matching to the csi_symbol.
+
+                        if child_exchange:
+                            # (exch: AMEX | chld_exch: NYSE)
+                            goog_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                         child_exchange, 'goog_symbol'].values)
+                            if goog_exch:
+                                return 'GOOG/' + goog_exch[0] + '_' + ticker
+                            else:
+                                # (exch: NYSE | chld_exch: OTC Markets QX)
+                                # (exch: AMEX | chld_exch: BATS Global Markets)
+                                goog_exch = (exch_df.loc[exch_df['name'] ==
+                                             child_exchange, 'goog_symbol'].
+                                             values)
+                                if goog_exch:
+                                    return 'GOOG/' + goog_exch[0] + '_' + ticker
+                                else:
+                                    print('Unable to find the goog exchange'
+                                          'symbol for the child exchange %s in '
+                                          'csi_to_quandl_goog. Will try to '
+                                          'find a match for the exchange now.'
+                                          % child_exchange)
+                                    # If there is an exchange, try to match that
+
+                        if exchange:
+                            # Either no child exchange or the child exchange
+                            #   never found a match
+                            goog_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                         exchange, 'goog_symbol'].values)
+                            if goog_exch:
+                                return 'GOOG/' + goog_exch[0] + '_' + ticker
+                            else:
+                                print('Unable to find the goog exchange symbol '
+                                      'for the exchange %s in '
+                                      'csi_to_quandl_goog' % exchange)
+                        else:
+                            print('Unable to find the goog exchange symbol for '
+                                  'either the exchange or child exchange for '
+                                  '%s:%s' % (exchange, child_exchange))
+
+                csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_quandl_goog,
+                                                            axis=1)
 
             elif source == 'seeking_alpha':
                 # Use main US tickers that should have Seeking Alpha articles
@@ -382,8 +424,8 @@ def create_symbology(db_location, source_list):
                     child_exchange = row['childexchange']
 
                     if child_exchange == 'NYSE ARCA':
-                        # For NYSE ARCA traded objects, which can have an
-                        #   exchange of AMEX, NYSE or OTC.
+                        # NYSE ARCA is a special situation where the child
+                        #   exchange matches the csi_symbol
                         tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
                                      child_exchange, 'tsid_symbol'].values)
                         if tsid_exch:
@@ -392,33 +434,48 @@ def create_symbology(db_location, source_list):
                             print('Unable to find the tsid exchange symbol for '
                                   'the child exchange %s in csi_to_tsid' %
                                   child_exchange)
-                    elif exchange == 'OTC' or \
-                            child_exchange == 'BATS Global Markets':
-                        # For OTC or BATS traded objects (except NYSE ARCA).
-                        #   First try to match the child exchange name...
-                        tsid_exch = (exch_df.loc[exch_df['name'] ==
-                                     child_exchange, 'tsid_symbol'].values)
-                        if tsid_exch:
-                            return ticker + '.' + tsid_exch[0] + '.0'
-                        else:
-                            # If no name match is found, match the exchange
+
+                    else:
+                        # For all non NYSE ARCA exchanges, see if there is a
+                        #   child exchange and if so, try matching that to the
+                        #   csi_symbol (first) or name (second). If no child
+                        #   exchange, try matching to the csi_symbol.
+                        if child_exchange:
+                            # (exch: AMEX | chld_exch: NYSE)
+                            tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                         child_exchange, 'tsid_symbol'].values)
+                            if tsid_exch:
+                                return ticker + '.' + tsid_exch[0] + '.0'
+                            else:
+                                # (exch: NYSE | chld_exch: OTC Markets QX)
+                                # (exch: AMEX | chld_exch: BATS Global Markets)
+                                tsid_exch = (exch_df.loc[exch_df['name'] ==
+                                             child_exchange, 'tsid_symbol'].
+                                             values)
+                                if tsid_exch:
+                                    return ticker + '.' + tsid_exch[0] + '.0'
+                                else:
+                                    print('Unable to find the tsid exchange'
+                                          'symbol for the child exchange %s in '
+                                          'csi_to_tsid. Will try to '
+                                          'find a match for the exchange now.'
+                                          % child_exchange)
+                                    # If there is an exchange, try to match that
+                        if exchange:
+                            # Either no child exchange or the child exchange
+                            #   never found a match
                             tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
                                          exchange, 'tsid_symbol'].values)
                             if tsid_exch:
                                 return ticker + '.' + tsid_exch[0] + '.0'
                             else:
                                 print('Unable to find the tsid exchange symbol '
-                                      'for the child exchange %s in '
-                                      'csi_to_tsid' % child_exchange)
-                    else:
-                        # All other exchanges (AMEX, LSE, MSE, NSE, TSX, VSE)
-                        tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
-                                     exchange, 'tsid_symbol'].values)
-                        if tsid_exch:
-                            return ticker + '.' + tsid_exch[0] + '.0'
+                                      'for the exchange %s in csi_to_tsid' %
+                                      exchange)
                         else:
                             print('Unable to find the tsid exchange symbol for '
-                                  'the exchange %s in csi_to_tsid' % exchange)
+                                  'either the exchange or child exchange for '
+                                  '%s:%s' % (exchange, child_exchange))
 
                 csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_tsid, axis=1)
 
@@ -439,8 +496,10 @@ def create_symbology(db_location, source_list):
                     exchange = row['exchange']
                     child_exchange = row['childexchange']
                     us_exchanges = ['AMEX', 'BATS Global Markets',
-                                    'Nasdaq Capital Market', 'Nasdaq Global Market',
-                                    'Nasdaq Global Select', 'NYSE', 'NYSE ARCA']
+                                    'Nasdaq Capital Market',
+                                    'Nasdaq Global Market',
+                                    'Nasdaq Global Select',
+                                    'NYSE', 'NYSE ARCA']
 
                     if exchange in ['AMEX', 'NYSE'] \
                             or child_exchange in us_exchanges:
@@ -502,10 +561,10 @@ if __name__ == '__main__':
     quandl_db_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
                      'source_code=', '&per_page=300&page=']
     quandl_db_list = ['WIKI']    # WIKI, GOOG, YAHOO, SEC, FINRA
-    QuandlCodeExtract(db_location=database_location, quandl_token=quandl_code,
-                      database_list=quandl_db_list, database_url=quandl_db_url,
-                      update_range=3000, threads=4)
+    # QuandlCodeExtract(db_location=database_location, quandl_token=quandl_code,
+    #                   database_list=quandl_db_list, database_url=quandl_db_url,
+    #                   update_range=3000, threads=4)
 
     symbology_sources = ['csi_data', 'quandl_wiki', 'seeking_alpha', 'tsid',
-                         'yahoo']
+                         'yahoo', 'quandl_goog']
     create_symbology(database_location, symbology_sources)

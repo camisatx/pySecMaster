@@ -84,9 +84,9 @@ def main_tables(db_location):
         c.execute('''CREATE TABLE IF NOT EXISTS exchange
          (exchange_id       INTEGER PRIMARY KEY AUTOINCREMENT,
          symbol             TEXT UNIQUE,
-         goog_symbol        TEXT UNIQUE,
-         yahoo_symbol       TEXT UNIQUE,
-         csi_symbol         TEXT UNIQUE,
+         goog_symbol        TEXT,
+         yahoo_symbol       TEXT,
+         csi_symbol         TEXT,
          tsid_symbol        TEXT,
          name               TEXT,
          country            TEXT,

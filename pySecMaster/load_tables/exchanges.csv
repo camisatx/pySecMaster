@@ -23,7 +23,7 @@ DUS,,DU,,DUS,Dusseldorf Stock Exchange,Germany,Dusseldorf,EUR,CET,1,,,
 ETF,ETF,ETF,,ETF,ETF,NONE,NONE,USD,NONE,NONE,NONE,NONE,NONE
 FRA,FRA,F,,FRA,Deutsche Börse Frankfurt Stock Exchange,Germany,Frankfurt,EUR,CET,1,9:00am,8:00pm,NONE
 FUND,MUTF,FUND,FUND,FUND,Mutual Fund,NONE,NONE,USD,NONE,NONE,NONE,NONE,NONE
-GREY,,,GREY,GREY,Grey Market,United States,NONE,USD,NONE,NONE,NONE,NONE,NONE
+GREY,OTCMKTS,,GREY,GREY,Grey Market,United States,NONE,USD,NONE,NONE,NONE,NONE,NONE
 HAM,,HM,,HAM,Hamburg Stock Exchange,Germany,Hamburg,EUR,EET,1,,,
 HAN,,HA,,HAN,Hanover Stock Exchange,Germany,Hanover,EUR,EET,1,,,
 HKEX,HKG,HK,,HKG,Hong Kong Stock Exchange,Hong Kong,Hong Kong,HKD,HKT,8,9:30am,4:00pm,12:00pm–1:00pm
@@ -44,9 +44,9 @@ MSE,,MC,,MADC,Madrid SE C.A.T.S.,Spain,Madrid,EUR,EET,1,,,
 MUN,,MU,,MUN,Munich Stock Exchange,Germany,Munich,EUR,CET,1,,,
 MX,,,MSE,MONT,Montreal Stock Exchange,Canada,Montreal,CAD,EST,-5,9:30am,4:00pm,NONE
 NASDAQ,NASDAQ,,,Q,NASDAQ Stock Exchange,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-NASDAQCM,,,NASDAQCM,Q,Nasdaq Capital Market,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-NASDAQGM,,,NASDAQGM,Q,Nasdaq Global Market,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-NASDAQGS,,,NASDAQGS,Q,Nasdaq Global Select,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+NASDAQCM,NASDAQ,,NASDAQCM,Q,Nasdaq Capital Market,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+NASDAQGM,NASDAQ,,NASDAQGM,Q,Nasdaq Global Market,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+NASDAQGS,NASDAQ,,NASDAQGS,Q,Nasdaq Global Select,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 NSE,NSE,NS,,NSE,National Stock Exchange of India,India,Mumbai,INR,IST,5.5,9:00am,3:30pm,NONE
 NYBOT,,NYB,,NYB,New York Board of Trade,United States,New York City,USD,EST,-5,,,
 NYMEX,,NYM,,NYMEX,New York Mercantile Exchange,United States,New York City,USD,EST,-5,,,
@@ -60,8 +60,8 @@ OSL,OSL,OL,,OSL,Oslo Stock Exchange,Norway,Oslo,NOK,CET,1,9:00am,5:30pm,NONE
 OTC,OTC,,,OTC,OTC Market,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 OTCBB,OTCBB,OB,,OTCBB,OTC Bulletin Board Market,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 OTCMKTS,OTCMKTS,,,OTCMKTS,OTC Other Issues,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-OTCQB,,,,OTCMKTS,OTC Markets QB,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
-OTCQX,,,,OTCMKTS,OTC Markets QX,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+OTCQB,OTCMKTS,,,OTCMKTS,OTC Markets QB,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
+OTCQX,OTCMKTS,,,OTCMKTS,OTC Markets QX,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 PAR,EPA,PA,,PAR,NYSE Euronext Paris,France,Paris,EUR,CET,1,9:00am,5:30pm,NONE
 PINK,PINK,PK,OTC,PINK,OTC Markets Pink Sheets,United States,New York City,USD,EST,-5,9:30am,4:00pm,NONE
 PSI,ELI,LS,,LIS,NYSE Euronext Lisbon,Portugal,Lisbon,EUR,CET,1,9:00am,5:30pm,NONE

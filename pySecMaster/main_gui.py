@@ -276,8 +276,8 @@ class MainWindow(QtGui.QMainWindow):
         quandl_db_list = [self.cmb_tickers_quandl_db.currentText()]
 
         # ToDo: Add these source options as an interactive setup
-        symbology_sources = ['csi_data', 'quandl_wiki', 'seeking_alpha', 'tsid',
-                             'yahoo']
+        symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
+                             'seeking_alpha', 'yahoo']
 
         # Build the dictionary with all the pySecMaster settings
         settings_dict = {'db_link': db_link,
