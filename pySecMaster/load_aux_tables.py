@@ -31,9 +31,10 @@ __version__ = '1.3.0'
 
 class LoadTables(object):
 
-    def __init__(self, database_location, tables_to_load):
+    def __init__(self, database_location, tables_to_load,
+                 table_location='load_tables'):
         self.database_location = database_location
-        self.load_to_sql(tables_to_load)
+        self.load_to_sql(tables_to_load, table_location)
 
     @staticmethod
     def load_table(table_name, folder=''):
@@ -131,14 +132,16 @@ class LoadTables(object):
         # ToDo: Implement a way to show the tickers that are not included
         return df
 
-    def load_to_sql(self, tables_to_load):
+    def load_to_sql(self, tables_to_load, table_location):
         """
         The main function that processes and loads the auxiliary data into
         the database. For each table listed in the tables_to_load list, their
         CSV file is loaded and the data moved into the SQL database. If the
         table is for indices, the CSV data is passed to the find_symbol_id
         function, where the ticker is replaced with it's respective symbol_id.
+
         :param tables_to_load: List of strings
+        :param table_location: String of the directory for the load tables
         :return: Nothing. Data is just loaded into the SQL database.
         """
 
@@ -151,7 +154,7 @@ class LoadTables(object):
                         cur = conn.cursor()
 
                         try:
-                            table_df = self.load_table(table, 'load_tables')
+                            table_df = self.load_table(table, table_location)
                         except Exception as e:
                             print('Unable to load %s csv load file. '
                                   'Skipping it for now...' % (table,))

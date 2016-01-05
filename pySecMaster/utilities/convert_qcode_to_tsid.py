@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import sqlite3
 import time
@@ -156,7 +157,7 @@ def query_symbology(db_location):
         print('Error: Unknown issue occurred in query_symbology')
 
 
-def convert_qcode_to_tsid(db_location, price_df, table, qcode, verbose=False):
+def convert_qcode_to_tsid(db_location, price_df, table, qcode):
 
     # Remove the price_id and the q_code columns
     if table == 'daily_prices':
@@ -180,7 +181,7 @@ def convert_qcode_to_tsid(db_location, price_df, table, qcode, verbose=False):
     return price_df
 
 
-def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
+def df_to_sql(db_location, df, sql_table, exists, item, verbose=False):
 
     if verbose:
         print('Entering the data for %s into %s.' % (item, sql_table))
@@ -207,56 +208,136 @@ def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
         print(e)
 
 
+def delete_sql_table_rows(db_location, query, table, tsid):
+
+    # print('Deleting all rows in %s that fit the provided criteria' % (table,))
+    conn = sqlite3.connect(db_location)
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute(query)
+        return 'success'
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(e)
+        print('Error: Not able to delete the overlapping rows for %s in '
+              'the %s table.' % (tsid, table))
+        return 'failure'
+    except conn.OperationalError:
+        print('Unable to connect to the SQL Database in delete_sql_table_rows. '
+              'Make sure the database address/name are correct.')
+        return 'failure'
+    except Exception as e:
+        print('Error: Unknown issue when trying to delete overlapping rows for'
+              '%s in the %s table.' % (tsid, table))
+        print(e)
+        return 'failure'
+
+
+def insert_df_to_db(db_location, price_df, table, verbose=False):
+
+    # Information about the new data
+    tsid = price_df.loc[0, 'tsid']
+    max_date = price_df['date'].max()
+    min_date = price_df['date'].min()
+
+    # Check if the database table already has data for this ticker
+    conn = sqlite3.connect(db_location)
+    try:
+        with conn:
+            cur = conn.cursor()
+            query = ("""SELECT tsid, MAX(date), MIN(date)
+                        FROM %s
+                        WHERE tsid='%s'""" % (table, tsid))
+            cur.execute(query)
+            data = cur.fetchall()
+            existing_df = pd.DataFrame(data, columns=['tsid', 'max', 'min'])
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise SystemError('Failed to query the existing data from %s within '
+                          'insert_df_to_db because of %s' % (table, e))
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the SQL Database in '
+                          'insert_df_to_db. Make sure the database '
+                          'address/name are correct.')
+    except Exception as e:
+        raise SystemError('Error occurred in insert_df_to_db: %s' % e)
+
+    # If there is existing data and the new data's date range is more extensive
+    #   than the stored data, delete the old data and add the new data
+    if existing_df.loc[0, 'tsid']:
+        if (max_date > existing_df.loc[0, 'max'] and
+                min_date <= existing_df.loc[0, 'min']):
+            if verbose:
+                print('Replacing the %s values because it had more data than '
+                      'the currently stored data.' % tsid)
+
+            # Delete the existing data for this tsid
+            query = ("""DELETE FROM %s
+                        WHERE tsid='%s'""" % (table, tsid))
+            del_success = delete_sql_table_rows(db_location=db_location,
+                                                query=query, table=table,
+                                                tsid=tsid)
+            if del_success == 'success':
+                # Delete was successful, so insert the new data into the table
+                df_to_sql(df=price_df, db_location=db_location, sql_table=table,
+                          exists='append', item=tsid, verbose=False)
+            elif del_success == 'failure':
+                # delete_sql_table_rows will issue a failure notice
+                pass
+        else:
+            if verbose:
+                print('Not inserting data for %s because duplicate data was '
+                      'found in the database' % tsid)
+    else:
+        # There is not existing data for this ticker, so insert the data
+        df_to_sql(df=price_df, db_location=db_location, sql_table=table,
+                  exists='append', item=tsid, verbose=False)
+
+
 def main(verbose=False):
 
-    old_database_location = 'C:/Users/Josh/Desktop/pySecMaster_m old.db'
-    new_database_location = 'C:/Users/Josh/Desktop/pySecMaster_m.db'
+    old_db_location = 'C:/Users/Josh/Desktop/pySecMaster_m old.db'
+    new_db_location = 'C:/Users/Josh/Desktop/pySecMaster_m.db'
     table = 'minute_prices'    # daily_prices, minute_prices
 
     # Create a new database where the old prices will be copied to
     symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
                          'seeking_alpha', 'yahoo']
 
-    # ToDo: This can't load the tables from the load_tables folder
-    maintenance(database_link=new_database_location,
-                quandl_ticker_source='csidata', database_list=['WIKI'],
-                threads=8, quandl_key='', quandl_update_range=30,
-                csidata_update_range=5, symbology_sources=symbology_sources)
+    os.chdir('..')  # Need to move up a folder in order to access load_tables
+    maintenance(database_link=new_db_location, quandl_ticker_source='csidata',
+                database_list=['WIKI'], threads=8, quandl_key='',
+                quandl_update_range=30, csidata_update_range=5,
+                symbology_sources=symbology_sources)
 
-    # # Retrieve a list of all the tickers from the existing database table
-    qcodes_df = query_existing_qcodes(db_location=old_database_location,
-                                      table=table, verbose=verbose)
-    # Temp DF for testing purposes
-    # qcodes_df = pd.DataFrame([['GOOG/NASDAQ_AAPL'], ['GOOG/NYSE_WMT']],
-    #                          columns=['q_code'])
+    # Retrieve a list of all the tickers from the existing database table
+    qcodes_df = query_existing_qcodes(db_location=old_db_location,
+                                      table=table, verbose=True)
 
     for index, row in qcodes_df.iterrows():
         ticker = row['q_code']
         copy_start = time.time()
 
         # Retrieve all price data for this ticker
-        raw_price_df = query_qcode_data(db_location=old_database_location,
+        raw_price_df = query_qcode_data(db_location=old_db_location,
                                         table=table, qcode=ticker,
-                                        verbose=verbose)
+                                        verbose=False)
 
         # Change the q_code column to a tsid column
-        clean_price_df = convert_qcode_to_tsid(db_location=new_database_location,
+        clean_price_df = convert_qcode_to_tsid(db_location=new_db_location,
                                                price_df=raw_price_df,
-                                               table=table, qcode=ticker,
-                                               verbose=verbose)
+                                               table=table, qcode=ticker)
 
-        # ToDo: Add code to prevent adding duplicate data. Maybe check the
-        #   ticker and date ranges, and if they are the same, do nothing. If
-        #   there is more new data, delete the existing data and add the new
-        #   data, and do nothing if the new data is less than the existing data.
-
-        # Insert the clean price DF into the new database
-        df_to_sql(df=clean_price_df, db_location=new_database_location,
-                  sql_table=table, exists='append', item=ticker, verbose=False)
-
-        if verbose:
-            print('Moving the %s for %s took %0.2f seconds' %
-                  (table, ticker, time.time() - copy_start))
+        tsid = clean_price_df.loc[0, 'tsid']
+        # If there is no tsid, don't attempt to insert the data to the database
+        if tsid:
+            # Add the data to the database if there is not existing data
+            insert_df_to_db(db_location=new_db_location,
+                            price_df=clean_price_df, table=table, verbose=True)
+            if verbose:
+                print('Moving the %s from %s to %s took %0.2f seconds' %
+                      (table, ticker, tsid, time.time() - copy_start))
 
 
 if __name__ == '__main__':

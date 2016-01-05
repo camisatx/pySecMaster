@@ -107,7 +107,7 @@ def maintenance(database_link, quandl_ticker_source, database_list, threads,
     data_tables(database_link)
     events_tables(database_link)
 
-    LoadTables(database_link, tables_to_load)
+    LoadTables(database_location=database_link, tables_to_load=tables_to_load)
 
     # Always extract CSI values, as they are used for the symbology table
     CSIDataExtractor(database_link, csidata_url, csidata_type,
