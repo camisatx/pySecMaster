@@ -4,14 +4,14 @@ import sqlite3
 import pandas as pd
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2015 Josh Schertz'
+__copyright__ = 'Copyright (C) 2016 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.2'
+__version__ = '1.3.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -31,9 +31,10 @@ __version__ = '1.2'
 
 class LoadTables(object):
 
-    def __init__(self, database_location, tables_to_load):
+    def __init__(self, database_location, tables_to_load,
+                 table_location='load_tables'):
         self.database_location = database_location
-        self.load_to_sql(tables_to_load)
+        self.load_to_sql(tables_to_load, table_location)
 
     @staticmethod
     def load_table(table_name, folder=''):
@@ -78,7 +79,7 @@ class LoadTables(object):
     def find_symbol_id_process(table_df, cur):
         """
         Finds the ticker's symbol_id. If the table provided has an exchange
-        column, then the ticker and exchange will be used to find they 
+        column, then the ticker and exchange will be used to find the
         symbol_id. The result should be a perfect match to the quandl_codes 
         table. If an exchange column doesn't exist, then only the ticker will
         be used, along with an implied US exchange. Thus, only tickers traded
@@ -131,14 +132,16 @@ class LoadTables(object):
         # ToDo: Implement a way to show the tickers that are not included
         return df
 
-    def load_to_sql(self, tables_to_load):
+    def load_to_sql(self, tables_to_load, table_location):
         """
         The main function that processes and loads the auxiliary data into
         the database. For each table listed in the tables_to_load list, their
         CSV file is loaded and the data moved into the SQL database. If the
         table is for indices, the CSV data is passed to the find_symbol_id
         function, where the ticker is replaced with it's respective symbol_id.
+
         :param tables_to_load: List of strings
+        :param table_location: String of the directory for the load tables
         :return: Nothing. Data is just loaded into the SQL database.
         """
 
@@ -151,7 +154,7 @@ class LoadTables(object):
                         cur = conn.cursor()
 
                         try:
-                            table_df = self.load_table(table, 'load_tables')
+                            table_df = self.load_table(table, table_location)
                         except Exception as e:
                             print('Unable to load %s csv load file. '
                                   'Skipping it for now...' % (table,))
@@ -177,10 +180,10 @@ class LoadTables(object):
                         conn.execute("PRAGMA journal_mode = MEMORY")
                         conn.commit()
                         print('Loaded %s into the Securities Master' % (table,))
-                except conn.Error:
+                except conn.Error as e:
                     conn.rollback()
-                    print("Failed to insert the values for %s into the Database"
-                          % (table,))
+                    print("Failed to insert the values for %s into the "
+                          "Database because of: %s" % (table, e))
                 except conn.OperationalError:
                     raise ValueError('Unable to connect to the SQL Database in '
                                      'q_code_to_sql. Make sure the database '
@@ -205,15 +208,16 @@ tables = {
             updated_date)
             VALUES(NULL,?,?,?,?,?,?)''',
     'exchanges': '''INSERT INTO exchange(
-            exchange_id, abbrev, abbrev_goog, abbrev_yahoo, name, country, city,
-            currency, utc_offset, open, close,
-            lunch, created_date, updated_date)
-            VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            exchange_id, symbol, goog_symbol, yahoo_symbol, csi_symbol,
+            tsid_symbol, name, country, city, currency, time_zone,
+            utc_offset, open, close, lunch, created_date, updated_date)
+            VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
     'tickers': '''INSERT INTO tickers(
             symbol_id, ticker, exchange, sector, industry, sub_industry,
             currency, hq_country, created_date, updated_date)
             VALUES(?,?,?,?,?,?,?,?,?,?)''',
     'indices': '''INSERT INTO indices(
-            index_id, stock_index, symbol_id, as_of, created_date, updated_date)
+            index_id, stock_index, symbol_id, as_of_date, created_date,
+            updated_date)
             VALUES(NULL,?,?,?,?,?)''',
 }
