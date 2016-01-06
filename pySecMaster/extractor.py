@@ -1019,7 +1019,8 @@ class GoogleFinanceDataExtraction(object):
                 cur = conn.cursor()
                 cur.execute("""SELECT symbol, goog_symbol, tsid_symbol
                             FROM exchange
-                            WHERE goog_symbol NOT NULL""")
+                            WHERE goog_symbol NOT NULL
+                            GROUP BY tsid_symbol""")
                 rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=['symbol', 'goog_symbol',
                                                  'tsid_symbol'])
