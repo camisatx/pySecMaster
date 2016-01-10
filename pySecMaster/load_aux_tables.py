@@ -28,6 +28,8 @@ __version__ = '1.3.0'
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
+# Todo: Add code to replace specified tables every x periods or upon CSV updates
+
 
 class LoadTables(object):
 

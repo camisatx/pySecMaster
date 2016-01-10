@@ -371,7 +371,7 @@ def create_symbology(db_location, source_list):
                                 if goog_exch:
                                     return 'GOOG/' + goog_exch[0] + '_' + ticker
                                 else:
-                                    print('Unable to find the goog exchange'
+                                    print('Unable to find the goog exchange '
                                           'symbol for the child exchange %s in '
                                           'csi_to_quandl_goog. Will try to '
                                           'find a match for the exchange now.'
