@@ -55,7 +55,8 @@ if __name__ == '__main__':
 
     start_time = time.time()
 
-    db_local = 'C:/Users/Josh/Desktop/pySecMaster_d.db'
+    db_local = 'C:/Users/Josh/Programming/Databases/pySecMaster/' \
+               'pySecMaster_d.db'
     csv_dir = 'C:/Users/Josh/Desktop/'
     table = 'daily_prices'      # daily_prices, minute_prices, quandl_codes
 

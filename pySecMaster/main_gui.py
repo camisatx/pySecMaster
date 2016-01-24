@@ -207,22 +207,21 @@ class MainWindow(QtGui.QMainWindow):
         options has explicit SQL queries established in the extractor.py file.
         """
 
-        # The default options for Quandl Data and Google Finance Data (Data tab)
-        possible_selections = ['quandl_wiki']   # 'all', 'us_main'
+        # The default options for Google Finance Data (Data tab)
+        google_fin_possible_selections = ['all', 'us_main', 'us_canada_london']
         default_selection = 1
 
         self.cmb_data_googfin.clear()
-        self.cmb_data_googfin.addItems(possible_selections)
+        self.cmb_data_googfin.addItems(google_fin_possible_selections)
         self.cmb_data_googfin.setCurrentIndex(default_selection)
 
-        # Modify the Quandl data selector if Quandl Data (Ticker Source) is qndl
-        if self.cmb_tickers_quandl.currentText() == 'quandl':
-            possible_selections = ['all', 'us_only_goog', 'us_main_goog',
-                                   'wiki', 'wiki_and_us_main_goog']
-            default_selection = 3
+        # The default options for Google Finance Data (Data tab)
+        quandl_possible_selections = ['quandl_wiki', 'quandl_goog',
+                                      'quandl_goog_etf']
+        default_selection = 0
 
         self.cmb_data_quandl.clear()
-        self.cmb_data_quandl.addItems(possible_selections)
+        self.cmb_data_quandl.addItems(quandl_possible_selections)
         self.cmb_data_quandl.setCurrentIndex(default_selection)
 
     def onDataReady(self, string):

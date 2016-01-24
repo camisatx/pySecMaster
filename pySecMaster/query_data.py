@@ -125,13 +125,14 @@ def pull_minute_prices(query_type, beg_date, end_date, *args):
                          'database in pull_daily_prices')
 
 
-database_location = 'C:/Users/####/Desktop/pySecMaster_d.db'
+database_location = 'C:/Users/Josh/Programming/Databases/pySecMaster/' \
+                    'pySecMaster_d.db'
 
 query_type = 'ticker'     # index, ticker
 tsid = 'TSLA.Q.0'
 beg_date = '1950-01-01 00:00:00'
 end_date = '2016-12-30 00:00:00'
-frequency = 'minute'    # daily, minute
+frequency = 'daily'    # daily, minute
 
 index = 'S&P 500'  # 'S&P 500', 'Russell Midcap', 'Russell 2000', 'Russell 1000'
 as_of_date = '2015-01-01'

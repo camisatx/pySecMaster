@@ -35,26 +35,22 @@ __version__ = '1.3.0'
 '''
 
 
-def multithread(function, items, threads=4, *args):
+def multithread(function, items, threads=4):
     """ Takes the main function to run in parallel, inputs the variable(s)
     and returns the results.
 
     :param function: The main function to process in parallel.
     :param items: A list of strings that are passed into the function for
     each thread.
-    :param *args: Additional variables that can be passed into the function.
     :param threads: The number of threads to use. The default is 4, but
     the threads are not CPU core bound.
     :return: The results of the function passed into this function.
     """
 
-    # latest_prices = args
-
     """The async variant, which submits all processes at once and
     retrieve the results as soon as they are done."""
     pool = Pool(threads)
-    output = [pool.apply_async(function, args=(item,))
-              for item in items]
+    output = [pool.apply_async(function, args=(item,)) for item in items]
     results = [p.get() for p in output]
     pool.close()
     pool.join()
@@ -589,13 +585,34 @@ class QuandlDataExtraction(object):
                                    WHERE tsid.source='tsid'
                                    AND wiki.source='quandl_wiki'
                                    GROUP BY wiki.source_id""")
+                elif download_selection == 'quandl_goog':
+                    cur.execute("""SELECT tsid.source_id, wiki.source_id
+                                   FROM symbology tsid
+                                   INNER JOIN symbology wiki
+                                   ON tsid.symbol_id = wiki.symbol_id
+                                   WHERE tsid.source='tsid'
+                                   AND wiki.source='quandl_goog'
+                                   GROUP BY wiki.source_id""")
+                elif download_selection == 'quandl_goog_etf':
+                    cur.execute("""SELECT tsid.source_id, wiki.source_id
+                                   FROM symbology tsid
+                                   INNER JOIN symbology wiki
+                                   ON tsid.symbol_id = wiki.symbol_id
+                                   WHERE tsid.source='tsid'
+                                   AND wiki.source='quandl_goog'
+                                   AND wiki.symbol_id IN (
+                                       SELECT CsiNumber
+                                       FROM csidata_stock_factsheet
+                                       WHERE Type='Exchange-Traded Fund')
+                                   GROUP BY wiki.source_id
+                                   """)
                 else:
                     raise SystemError('Improper download_selection was '
                                       'provided in query_codes. If this is '
                                       'a new query, ensure the SQL is '
                                       'correct. Valid symbology download '
-                                      'selections include all, us_main and'
-                                      'us_canada_london.')
+                                      'selections include quandl_wiki,'
+                                      'quandl_goog, and quandl_goog_etf.')
 
                 data = cur.fetchall()
                 if data:

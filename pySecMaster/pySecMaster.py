@@ -156,8 +156,8 @@ if __name__ == '__main__':
     database_name = 'pySecMaster_m.db'
 
     # Change the location for where the database will be created
-    # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/'
-    database_location = 'C:/Users/Josh/Desktop/'
+    # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/' for Windows
+    database_location = 'C:/Users/###/Programming/Databases/pySecMaster/'
 
     database_link = database_location + database_name
 
@@ -195,7 +195,7 @@ if __name__ == '__main__':
     #   method in either the QuandlDataExtraction class or the
     #   GoogleFinanceDataExtraction class in extractor.py, and look at the
     #   SQLite queries.
-    # Options: 'all', 'wiki', 'us_main', 'wiki_and_us_main_goog'
+    # Options: 'quandl_wiki', 'quandl_goog', 'quandl_goog_etf'
     quandl_selection = 'quandl_wiki'
     # Google Fin options: 'all', 'us_main', 'us_canada_london'
     google_fin_selection = 'us_main'
