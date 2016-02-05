@@ -32,9 +32,10 @@ You can view (or download) the CSI Data stock factsheet [here](http://www.csidat
 #### TSID Exchange Abbreviations
 Custom exchange abbreviations are used in the tsid structure to allow for naming flexibility and prevent duplicate abbreviations.
 
-All abbreviations can be found by looking at the **tsid_symbol** column within [exchanges.csv](../blob/master/pySecMaster/load_tables/exchanges.csv) in pySecMaster/load_tables (or from the **exchange** table of the database).
+All abbreviations can be found by looking at the **tsid_symbol** column within [exchanges.csv](../master/pySecMaster/load_tables/exchanges.csv) in pySecMaster/load_tables (or from the **exchange** table of the database).
 
 Some common exchange abbreviation include:
+
 |          Exchange Name         | TSID Exchange Abbreviation |
 |:------------------------------:|:--------------------------:|
 |     American Stock Exchange    |            AMEX            |
@@ -51,6 +52,7 @@ The symbology table is used as a translator between the tsid symbol and other sy
 Not only does this translation ability allows you convert one source's symbol to another, but it allows you to query any source's symbols based on characteristics stored in other tables (exchange, sector, industry, etc.).
 
 By default, the symbology table links the tsid symbol to these data sources (Note 3):
+
 |        Source Name       |  Source Code  |
 |:------------------------:|:-------------:|
 |   CSI Data's CSI Number  |    csi_data   |
