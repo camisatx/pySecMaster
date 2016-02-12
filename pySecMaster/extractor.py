@@ -677,6 +677,7 @@ class QuandlDataExtraction(object):
         # The ticker has no prior price; add all the downloaded data
         if tsid not in self.latest_prices.index:
 
+            # ToDo: Use the start date from CSI within this function for stocks
             clean_data = quandl_download.download_quandl_data(q_code)
 
             # There is not new data, so do nothing to the database
