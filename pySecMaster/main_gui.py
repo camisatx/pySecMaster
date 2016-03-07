@@ -264,12 +264,9 @@ class MainWindow(QtGui.QMainWindow):
                 self.lineedit_quandlkey.text() == ''):
             raise ValueError('Blank Quandl API key provided')
 
-        # Handles db_dir's with and without the end backslash
-        if self.lineedit_dbdir.text()[-1] == '\\':
-            db_link = self.lineedit_dbdir.text() + self.lineedit_dbname.text()
-        else:
-            db_link = (self.lineedit_dbdir.text() + '\\' +
-                       self.lineedit_dbname.text())
+        # Combine the directory path with the database name
+        db_link = os.path.abspath(os.path.join(self.lineedit_dbdir.text(),
+                                               self.lineedit_dbname.text()))
 
         # Change the quandl database string to a list
         quandl_db_list = [self.cmb_tickers_quandl_db.currentText()]
@@ -279,17 +276,19 @@ class MainWindow(QtGui.QMainWindow):
                              'seeking_alpha', 'yahoo']
 
         # Build the dictionary with all the pySecMaster settings
-        settings_dict = {'db_link': db_link,
-                         'quandl_ticker_source': self.cmb_tickers_quandl.currentText(),
-                         'quandl_db_list': quandl_db_list,
-                         'download_source': self.cmb_data_source.currentText(),
-                         'quandl_selection': self.cmb_data_quandl.currentText(),
-                         'google_fin_selection': self.cmb_data_googfin.currentText(),
-                         'quandl_update_range': self.spinbx_settings_quandl_update.value(),
-                         'google_fin_update_range': self.spinbx_settings_csi_update.value(),
-                         'threads': self.spinbx_settings_threads.value(),
-                         'quandl_key': self.lineedit_quandlkey.text(),
-                         'symbology_sources': symbology_sources}
+        settings_dict = {
+            'db_link': db_link,
+            'quandl_ticker_source': self.cmb_tickers_quandl.currentText(),
+            'quandl_db_list': quandl_db_list,
+            'download_source': self.cmb_data_source.currentText(),
+            'quandl_selection': self.cmb_data_quandl.currentText(),
+            'google_fin_selection': self.cmb_data_googfin.currentText(),
+            'quandl_update_range': self.spinbx_settings_quandl_update.value(),
+            'google_fin_update_range': self.spinbx_settings_csi_update.value(),
+            'threads': self.spinbx_settings_threads.value(),
+            'quandl_key': self.lineedit_quandlkey.text(),
+            'symbology_sources': symbology_sources
+        }
 
         self.thread_worker = QtCore.QThread()
         self.worker = Worker()
@@ -486,10 +485,10 @@ class Worker(QtCore.QObject):
         """
 
         db_link = settings_dict['db_link']
-        self.dataReady.emit('Starting pySecMaster using the database %s '
-                            'located at %s\n'
-                            % (db_link[db_link.rfind('\\') + 1:],
-                               db_link[:db_link.rfind('\\') + 1]))
+        self.dataReady.emit('Building the pySecMaster using the %s database '
+                            'located at %s\n' %
+                            (os.path.basename(db_link),
+                             os.path.dirname(db_link)))
 
         maintenance(db_link,
                     settings_dict['quandl_ticker_source'],

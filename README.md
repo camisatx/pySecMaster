@@ -136,7 +136,6 @@ The default extractors handle daily and minute price data, along with basic exch
   - Pandas 0.16.2+
   - PyQt 4.11+
   - More than 10GB of storage space (daily Quandl WIKI data is about 3.4 GB, while Google Finance minute data can become 30+ GB)
-  - Windows (I'm sorry, I haven't tested this on 'Nix yet. The only possible issue would involve file links ('/' vs '\\'))
 
 # User Requirements
   - Quandl API Token (free at <https://www.quandl.com>)
