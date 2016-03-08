@@ -10,7 +10,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.0'
+__version__ = '1.3.1'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -55,9 +55,9 @@ if __name__ == '__main__':
 
     start_time = time.time()
 
-    db_local = 'C:/Users/Josh/Programming/Databases/pySecMaster/' \
+    db_local = 'C:/Users/joshs/Programming/Databases/pySecMaster/' \
                'pySecMaster_d.db'
-    csv_dir = 'C:/Users/Josh/Desktop/'
+    csv_dir = 'C:/Users/joshs/Desktop/'
     table = 'daily_prices'      # daily_prices, minute_prices, quandl_codes
 
     query_entire_table(db_local, csv_dir, table)

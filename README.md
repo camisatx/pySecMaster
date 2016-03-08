@@ -9,7 +9,7 @@ The goal of the system is to have a central repository of interrelated finance d
 All of the data tables utilize a custom symbol ID (called a **'tsid'**; 'trading system ID'). This allows for consistent data nomenclature across the system.
 
 #### TSID Structure
-The tsid structure is composed of the following [Note 1](#notes):
+The tsid structure is composed of the following ([Note 1](#notes)):
 ```
 <ticker>.<tsid exchange abbreviation>.<integer of duplicate>
 ```
@@ -47,11 +47,11 @@ Some common exchange abbreviation include:
 |     Toronto Stock Exchange     |             TSX            |
 
 ## Symbology
-The symbology table is used as a translator between the tsid symbol and other symbol structures (Quandl codes, Yahoo Finance codes, etc.) [Note 2](#notes). This structure enables future symbol structures to be seamlessly added to the table to allow for external database communication (RIC, Bloomberg, etc.).
+The symbology table is used as a translator between the tsid symbol and other symbol structures (Quandl codes, Yahoo Finance codes, etc.) ([Note 2](#notes)). This structure enables future symbol structures to be seamlessly added to the table to allow for external database communication (RIC, Bloomberg, etc.).
 
 Not only does this translation ability allows you convert one source's symbol to another, but it allows you to query any source's symbols based on characteristics stored in other tables (exchange, sector, industry, etc.).
 
-By default, the symbology table links the tsid symbol to these data sources [Note 3](#notes):
+By default, the symbology table links the tsid symbol to these data sources ([Note 3](#notes)):
 
 |        Source Name       |  Source Code  |
 |:------------------------:|:-------------:|
@@ -94,9 +94,9 @@ The default extractors handle daily and minute price data, along with basic exch
   5. In the *Data* tab, change *Download Source* combo-box to **quandl**
   
   6. In the *Data* tab, change *Quandl Data* combo-box to:
-    - **quandl_wiki** if you want all Quandl WIKI daily data [Note 4](#notes) (~3,000 symbols)
+    - **quandl_wiki** if you want all Quandl WIKI daily data ([Note 4](#notes)) (~3,000 symbols)
     - **quandl_goog** if you want all *US, Toronto and London* Quandl Google Finance daily data (~38,000 symbols)
-    - **quandl_goog_etf** if you want all Quandl Google Finance ETF daily data [Note 5](#notes)) (~3,700 symbols)
+    - **quandl_goog_etf** if you want all Quandl Google Finance ETF daily data ([Note 5](#notes))) (~3,700 symbols)
 
   7. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
 
@@ -115,7 +115,7 @@ The default extractors handle daily and minute price data, along with basic exch
   
   5. In the *Data* tab, change *Google Finance Data* combo-box to:
     - **all** if you want all *US, Toronto and London* Google Finance minute data (~38,000 symbols)
-    - **us_main** if you want main US exchange Google Finance minute data [Note 6](#notes) (~9,000 symbols)
+    - **us_main** if you want main US exchange Google Finance minute data ([Note 6](#notes)) (~9,000 symbols)
     - **us_canada_london** if you want all *US, Toronto and London* Google Finance minute data that's been active within the prior two years (~25,000 symbols)
   
   6. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
@@ -146,6 +146,7 @@ The default extractors handle daily and minute price data, along with basic exch
   - Add a cross-source data validator (check data validity between two or more sources; preferably three or more to get a consensus)
   - Add a direct Yahoo Finance data extractor (instead of relying completely on Quandl for Yahoo data)
   - Perform cross system checks (especially Linux)
+  - Add function to manually calculate the adjusted prices for all price tables (instead of relying on the source) 
 
 # Additional Info
 To view the SQLite3 database, you can download SQLite Database Browser for free (<http://sqlitebrowser.org>). This allows you to view and edit all characteristics of the database.

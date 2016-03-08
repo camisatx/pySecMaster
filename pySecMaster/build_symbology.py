@@ -15,7 +15,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.0'
+__version__ = '1.3.1'
 
 '''
     This program is free software: you can redistribute it and/or modify

@@ -11,7 +11,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.0'
+__version__ = '1.3.1'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -125,11 +125,11 @@ def pull_minute_prices(query_type, beg_date, end_date, *args):
                          'database in pull_daily_prices')
 
 
-database_location = 'C:/Users/Josh/Programming/Databases/pySecMaster/' \
+database_location = 'C:/Users/joshs/Programming/Databases/pySecMaster/' \
                     'pySecMaster_d.db'
 
 query_type = 'ticker'     # index, ticker
-tsid = 'TSLA.Q.0'
+tsid = 'AAPL.Q.0'
 beg_date = '1950-01-01 00:00:00'
 end_date = '2016-12-30 00:00:00'
 frequency = 'daily'    # daily, minute
