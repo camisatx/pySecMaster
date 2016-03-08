@@ -69,8 +69,8 @@ symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
 # Database data download options:
 
 # Specify the time in seconds before the data is allowed to be re-downloaded.
-redownload_time = 60 * 60 * 72      # 72 hours
-google_fin_redwnld_time = 60 * 60 * 48      # 48 hours
+redownload_time = 60 * 60 * 12      # 12 hours
+google_fin_redwnld_time = 60 * 60 * 12      # 12 hours
 
 # Should the latest data point be appended to the table, or should the new
 #   data replace the prior x days of data. If data_process is set to append,
@@ -79,7 +79,8 @@ google_fin_redwnld_time = 60 * 60 * 48      # 48 hours
 #   this function is run (I don't think the extra code is worth the space).
 # Examples: 'append', 'replace'
 data_process = 'replace'
-quandl_days_back = 30
+# ToDo: Make an efficient way for all historical adj_<price> values to update
+quandl_days_back = 30000    # Forces all quandl values to be replaced
 google_fin_days_back = 5
 
 # Don't change these unless you know what you are doing
