@@ -499,7 +499,7 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                           (tsid,))
 
     def google_data_processing(url_obj):
-        """ Takes the url object returned from Google, and format the text data
+        """ Takes the url object returned from Google, and formats the text data
         into a DataFrame that can be saved to the SQL Database. Saves each
         processed line to a list as a tuple, with each element a piece of data.
         The list is changed to a DataFrame before being returned.
@@ -508,47 +508,48 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
         :return: A DataFrame of the processed minute data.
         """
 
-        # Find the timezone of the exchange the ticker is traded on
-        if url_obj[6][:15].decode('utf-8') == 'TIMEZONE_OFFSET':
-            timezone = int(url_obj[6][16:].decode('utf-8'))
-        # Timezone on the 7th line if receiving extended hours quotations
-        elif url_obj[7][:15].decode('utf-8') == 'TIMEZONE_OFFSET':
-            timezone = int(url_obj[7][16:].decode('utf-8'))
-        else:
-            timezone = -240     # Assume default of the east coast
-
         # Find the interval in seconds that the data was downloaded to
         if url_obj[3][:8].decode('utf-8') == 'INTERVAL':
             interval = int(url_obj[3][9:].decode('utf-8'))
+            # Normal trading hours: data starts on line 7
+            data_start_line = 7
         # Interval on the 4th line if receiving extended hours quotations
         elif url_obj[4][:8].decode('utf-8') == 'INTERVAL':
             interval = int(url_obj[4][9:].decode('utf-8'))
+            # Extended trading hours: data starts on line 8
+            data_start_line = 8
         else:
-            interval = 60       # Assume default of 60 seconds
+            interval = 60           # Assume default of 60 seconds
+            data_start_line = 7     # Assume data starts on line 7
 
         data = []
         # From the text file downloaded, adding each line to a list as a tuple
-        for line_num in range(7, len(url_obj)):
+        for line_num in range(data_start_line, len(url_obj)):
             line = url_obj[line_num].decode('utf-8')
             if line.count(',') == 5:
                 date, close, high, low, open_, volume = line.split(',')
                 if str(date[0]) == 'a':
-                    date_obj = datetime.utcfromtimestamp(int(date[1:]) +
-                                                         timezone)
+                    # The whole unix time
+                    date_obj = datetime.utcfromtimestamp(int(date[1:]))
                 else:
-                    # Get the number of seconds from the prior data line (unix)
+                    # Get the prior line's unix time/period
                     prior_line = url_obj[line_num - 1].decode('utf-8')
                     if prior_line[0] == 'a':
-                        prior_unix_sec = (prior_line[prior_line.find(',') - 2:
-                                          prior_line.find(',')])
+                        # The prior line had the entire unix time
+                        prior_unix_time = prior_line[1:prior_line.find(',')]
+                        # Add the product of the current date period and the
+                        #   interval to the prior line's unix time
+                        next_date = int(prior_unix_time) + (int(date)*interval)
+                        date_obj = datetime.utcfromtimestamp(next_date)
                     else:
+                        # The prior line is a date period, so find the delta
                         prior_unix_sec = prior_line[:prior_line.find(',')]
-                    # The difference between the current and the prior unix sec
-                    unix_sec_diff = int(date) - int(prior_unix_sec)
-                    # New date object, taking the prior date and adding the
-                    #   second difference times the data interval used
-                    date_obj = data[-1][0] + timedelta(seconds=unix_sec_diff *
-                                                       interval)
+                        # Difference between the current and the prior unix sec
+                        unix_sec_diff = int(date) - int(prior_unix_sec)
+                        # Add the product of the time delta and the interval to
+                        #   the prior bar's datetime
+                        date_obj = (data[-1][0] +
+                                    timedelta(seconds=unix_sec_diff*interval))
                 data.append(tuple((date_obj, float(close), float(high),
                                    float(low), float(open_), float(volume))))
 
