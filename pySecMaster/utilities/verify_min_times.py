@@ -212,20 +212,25 @@ def verify_minute_time(price_df, tsid):
         prior_date = price_df.iloc[(index - 1), price_df.columns.get_loc('day')]
         if prior_date != row['day']:
             # This is the first time for this day
-            next_time = price_df.iloc[(index + 1),
-                                      price_df.columns.get_loc('date_obj')]
-            # -60 indicates the next period is 1 min away (normal).
-            # +3480, +3300 indicates the the next period is behind this time
-            #   by roughly an hour.
-            next_time_delta = row['date_obj'] - next_time
+            try:
+                next_time = price_df.iloc[(index + 1),
+                                          price_df.columns.get_loc('date_obj')]
+            except IndexError:
+                pass
+            finally:
+                # -60 indicates the next period is 1 min away (normal).
+                # +3480, +3300 indicates the the next period is behind this time
+                #   by roughly an hour.
+                next_time_delta = row['date_obj'] - next_time
 
-            if int(next_time_delta.total_seconds()) >= (10*60):
-                # This time period was not effected by the unix bug, but needs
-                #   to be moved back by the next time period delta (plus 1 min)
-                #   so it will be aligned with the other times so that when the
-                #   adjustment occurs below, all times will be aligned.
-                price_df.loc[index, 'date_obj'] -= \
-                    timedelta(seconds=next_time_delta.total_seconds() + 60)
+                if int(next_time_delta.total_seconds()) >= (10*60):
+                    # This time period was not effected by the unix bug, but
+                    #   needs to be moved back by the next time period delta
+                    #   (plus 1 min) so it will be aligned with the other times
+                    #   so that when the adjustment occurs below, all times
+                    #   will be aligned.
+                    price_df.loc[index, 'date_obj'] -= \
+                        timedelta(seconds=next_time_delta.total_seconds() + 60)
 
         day_time_delta = day_adjustments[row['day']]
         cur_time = {}
