@@ -71,9 +71,23 @@ def dt_from_iso(row, column):
         return 'NaN'
 
 
-def df_to_sql(df, db_location, sql_table, exists, item):
+def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
+    """ Save a DataFrame to a specified SQL database table.
 
-    # print('Entering the data for %s into the SQL database.' % (item,))
+    :param df: Pandas DataFrame with values to insert into the SQL database.
+    :param db_location: String of the directory location for the SQL database.
+    :param sql_table: String indicating which table the DataFrame should be
+        put into.
+    :param exists: String indicating how the DataFrame values should interact
+        with the existing values in the table. Valid parameters include
+        'append' [new rows] and 'replace' [all existing table rows].
+    :param item: String representing the item being inserted (i.e. the tsid)
+    :param verbose: Boolean indicating whether debugging statements should print
+    """
+
+    if verbose:
+        print('Entering the data for %s into the SQL database.' % (item,))
+
     conn = sqlite3.connect(db_location)
 
     # Try and except block writes the new data to the SQL Database.
@@ -82,10 +96,11 @@ def df_to_sql(df, db_location, sql_table, exists, item):
         df.to_sql(sql_table, conn, if_exists=exists, index=False)
         conn.execute("PRAGMA journal_mode = MEMORY")
         conn.execute("PRAGMA busy_timeout = 60000")
-        # print('Successfully entered the Quandl Codes into the SQL Database')
+        if verbose:
+            print('Successfully entered the values into the SQL Database')
     except conn.Error:
         conn.rollback()
-        print("Failed to insert the DataFrame into the Database for %s" %
+        print("Failed to insert the DataFrame into the database for %s" %
               (item,))
     except conn.OperationalError:
         raise ValueError('Unable to connect to the SQL Database in df_to_sql. '
@@ -95,9 +110,24 @@ def df_to_sql(df, db_location, sql_table, exists, item):
         print(e)
 
 
-def delete_sql_table_rows(db_location, query, table, tsid):
+def delete_sql_table_rows(db_location, query, table, tsid, verbose=False):
+    """ Execute the provided query in the specified table in the database.
+    Normally, this will delete the existing prices over dates where the new
+    prices would overlap. Returns a string value indicating whether the query
+    was successfully executed.
 
-    # print('Deleting all rows in %s that fit the provided criteria' % (table,))
+    :param db_location: String of the directory location for the SQL database.
+    :param query: String representing the SQL query to perform on the database.
+    :param table: String indicating which table should be worked on.
+    :param tsid: String of the tsid being worked on.
+    :param verbose: Boolean indicating whether debugging prints should occur.
+    :return: String of either 'success' or 'failure', which the function that
+        called this function uses determine whether it should add new values.
+    """
+
+    if verbose:
+        print('Deleting all rows in %s that fit the provided criteria' % table)
+
     conn = sqlite3.connect(db_location)
     try:
         with conn:
@@ -795,8 +825,26 @@ class QuandlDataExtraction(object):
 
 class GoogleFinanceDataExtraction(object):
 
-    def __init__(self, db_location, db_url, dwnld_selection,
-                 redownload_time, data_process, days_back, threads):
+    def __init__(self, db_location, db_url, dwnld_selection, redownload_time,
+                 data_process, days_back, threads, table, verbose=True):
+        """
+        :param db_location: String of the database directory location
+        :param db_url: Dictionary of Google Finance url components
+        :param dwnld_selection: String indicating what selection of codes
+            should be downloaded from Google
+        :param redownload_time: Integer of the time in seconds before the
+            data can be downloaded again. Allows the extractor to be restarted
+            without downloading the same data again.
+        :param data_process:
+        :param days_back: Integer of the number of days where any existing
+            data should be replaced with newer prices
+        :param threads: Integer of the number of threads the current process
+            is using; used for rate limiter
+        :param table: String indicating which table the DataFrame should be
+            put into.
+        :param verbose: Boolean of whether debugging prints should occur.
+        """
+
         self.db_location = db_location
         self.db_url = db_url
         self.dwnld_selection = dwnld_selection
@@ -804,9 +852,11 @@ class GoogleFinanceDataExtraction(object):
         self.data_process = data_process
         self.days_back = days_back
         self.threads = threads
+        self.table = table
+        self.verbose = verbose
 
         # Rate limiter parameters based on guessed Google Finance limitations
-        # Received captch after about 2000 queries
+        # Received captcha after about 2000 queries
         rate = 70
         period_sec = 60
         self.min_interval = float((period_sec/rate)*threads)
@@ -841,7 +891,7 @@ class GoogleFinanceDataExtraction(object):
                                  na_position='first', inplace=True)
         except:
             print('extractor.py is using the depreciated DataFrame sort '
-                  'function. Something is wrong (line 950)')
+                  'function. You should update Pandas. (line 860)')
             # df.sort() was depreciated in 0.17.0
             codes_df.sort('updated_date', ascending=True, na_position='first',
                           inplace=True)
@@ -854,9 +904,9 @@ class GoogleFinanceDataExtraction(object):
             beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
                                                 beg_date_ob_wo_data.isoformat()]
-            # Change DF to a list of only the q_codes
+            # Change DF to a list of only the codes
             list_to_exclude = exclude_codes_df['tsid'].values.flatten()
-            # Create a temp DF from q_codes_df with only the codes to exclude
+            # Create a temp DF from codes_df with only the codes to exclude
             codes_to_exclude = codes_df['tsid'].isin(list_to_exclude)
             # From the main DF, remove any of the codes that are in the temp DF
             # NOTE: Might be able to just use exclude_codes_df instead
@@ -871,7 +921,7 @@ class GoogleFinanceDataExtraction(object):
         # The cut-off time for when code data can be re-downloaded
         beg_date_obj = (datetime.utcnow() -
                         timedelta(seconds=self.redownload_time))
-        # For the final download list, include both new and non-recent codes
+        # Final download list should include both new/null and non-recent codes
         codes_final = codes_df[(codes_df['updated_date'] < beg_date_obj) |
                                (codes_df['updated_date'].isnull())]
 
@@ -887,12 +937,12 @@ class GoogleFinanceDataExtraction(object):
                  '{:,}'.format(total_codes - dl_codes),
                  '{:,}'.format(self.redownload_time)))
 
-        """ This runs the program with no multiprocessing or threading.
-        To run, make sure to comment out all pool processes.
-        Takes about 55 seconds for 10 tickers; 5.5 seconds per ticker. """
+        """This runs the program with no multiprocessing or threading.
+        To run, make sure to comment out all pool processes below.
+        Takes about 55 seconds for 10 tickers; 5.5 seconds per ticker."""
         # [self.extractor(tsid) for tsid in code_list]
 
-        """ This runs the program with multiprocessing or threading.
+        """This runs the program with multiprocessing or threading.
         Comment and uncomment the type of multiprocessing in the
         multi-thread function above to change the type. Change the number
         of threads below to alter the speed of the downloads. If the
@@ -949,6 +999,23 @@ class GoogleFinanceDataExtraction(object):
                                    AND type='stock'
                                    GROUP BY source_id""",
                                 (beg_date.isoformat(),))
+                elif download_selection == 'us_main_no_end_date':
+                    # Retrieve tsid tickers that trade only on main US exchanges
+                    cur.execute("""SELECT source_id
+                                   FROM symbology
+                                   WHERE source='tsid'
+                                   AND symbol_id IN (
+                                       SELECT CsiNumber
+                                       FROM csidata_stock_factsheet
+                                       WHERE (Exchange IN ('AMEX', 'NYSE')
+                                       OR ChildExchange IN ('AMEX',
+                                           'BATS Global Markets',
+                                           'Nasdaq Capital Market',
+                                           'Nasdaq Global Market',
+                                           'Nasdaq Global Select',
+                                           'NYSE', 'NYSE ARCA')))
+                                   AND type='stock'
+                                   GROUP BY source_id""")
                 elif download_selection == 'us_canada_london':
                     # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
                     #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
@@ -986,7 +1053,6 @@ class GoogleFinanceDataExtraction(object):
                     df = pd.DataFrame(data, columns=['tsid'])
                     df.drop_duplicates(inplace=True)
 
-                    # ticker_list = df.values.flatten()
                     # df.to_csv('query_tsid.csv')
                     return df
                 else:
@@ -1008,14 +1074,16 @@ class GoogleFinanceDataExtraction(object):
         try:
             conn = sqlite3.connect(self.db_location)
             with conn:
-                df = pd.read_sql("SELECT tsid, MAX(date) as date, updated_date "
-                                 "FROM  minute_prices "
-                                 "GROUP BY tsid", conn, index_col='tsid')
+                query = """SELECT tsid, MAX(date) as date, updated_date
+                        FROM %s
+                        GROUP BY tsid""" % self.table
+                df = pd.read_sql(query, conn, index_col='tsid')
                 if len(df.index) == 0:
                     return df
-                df['date'] = df.apply(dt_from_iso, axis=1, args=('date',))
-                df['updated_date'] = df.apply(dt_from_iso, axis=1,
-                                              args=('updated_date',))
+
+                # Convert the ISO dates to datetime objects
+                df['date'] = pd.to_datetime(df['date'])
+                df['updated_date'] = pd.to_datetime(df['updated_date'])
                 # df.to_csv('query_last_min_price.csv')
                 return df
         except sqlite3.Error as e:
@@ -1072,8 +1140,9 @@ class GoogleFinanceDataExtraction(object):
 
         # The ticker has no prior price; add all the downloaded data
         if tsid not in self.latest_prices.index:
-            clean_data = download_google_data(self.db_url, tsid,
-                                              self.exchanges_df, self.threads)
+            clean_data = download_google_data(
+                db_location=self.db_url, tsid=tsid,
+                exchange_df=self.exchanges_df, threads=self.threads)
 
             # There is no new data, so do nothing to the database
             if len(clean_data.index) == 0:
@@ -1085,17 +1154,20 @@ class GoogleFinanceDataExtraction(object):
                 data_vendor = self.retrieve_data_vendor_id('Google_Finance')
                 clean_data.insert(0, 'data_vendor_id', data_vendor)
 
-                df_to_sql(clean_data, self.db_location, 'minute_prices',
-                          'append', tsid)
-                print('Updated %s | %0.1f seconds' %
-                      (tsid, time.time() - main_time_start))
+                df_to_sql(df=clean_data, db_location=self.db_location,
+                          sql_table=self.table, exists='append', item=tsid)
+
+                if self.verbose:
+                    print('Updated %s | %0.1f seconds' %
+                          (tsid, time.time() - main_time_start))
 
         # The pricing database has prior values; append/replace new data points
         else:
             try:
                 last_date = self.latest_prices.loc[tsid, 'date']
-                raw_data = download_google_data(self.db_url, tsid,
-                                                self.exchanges_df, self.threads)
+                raw_data = download_google_data(
+                    db_location=self.db_url, tsidd=tsid,
+                    exchange_df=self.exchanges_df, threads=self.threads)
 
                 # Only keep data that is after the days_back period
                 if self.data_process == 'replace' and self.days_back:
@@ -1113,11 +1185,12 @@ class GoogleFinanceDataExtraction(object):
 
             # There is not new data, so do nothing to the database
             if len(clean_data.index) == 0:
-                print('No update for %s | %0.1f seconds' %
-                      (tsid, time.time() - main_time_start))
+                if self.verbose:
+                    print('No update for %s | %0.1f seconds' %
+                          (tsid, time.time() - main_time_start))
             # There is new data to add to the database
             else:
-                # Find the data vendor of the q_code; add it to the DataFrame
+                # Find the data vendor of the tsid and add it to the DataFrame
                 data_vendor = self.retrieve_data_vendor_id('Google_Finance')
                 clean_data.insert(0, 'data_vendor_id', data_vendor)
 
@@ -1128,21 +1201,24 @@ class GoogleFinanceDataExtraction(object):
                     #   deleted before the new data can be added.
                     first_date_iso = clean_data['date'].min()
 
-                    query = ("""DELETE FROM minute_prices
+                    query = ("""DELETE FROM %s
                                 WHERE tsid='%s'
-                                AND date>='%s'""" % (tsid, first_date_iso))
-                    del_success = delete_sql_table_rows(self.db_location,
-                                                        query, 'minute_prices',
-                                                        tsid)
+                                AND date>='%s'""" %
+                             (self.table, tsid, first_date_iso))
+                    del_success = delete_sql_table_rows(
+                        db_location=self.db_location, query=query,
+                        table=self.table, tsid=tsid)
                     # If unable to delete existing data, skip ticker
                     if del_success == 'failure':
                         return
 
                 # Append the new data to the end, regardless of replacement
-                df_to_sql(clean_data, self.db_location, 'minute_prices',
-                          'append', tsid)
-                print('Updated %s | %0.1f seconds' %
-                      (tsid, time.time() - main_time_start))
+                df_to_sql(df=clean_data, db_location=self.db_location,
+                          sql_table=self.table, exists='append', item=tsid)
+
+                if self.verbose:
+                    print('Updated %s | %0.1f seconds' %
+                          (tsid, time.time() - main_time_start))
 
     def retrieve_data_vendor_id(self, name):
         """ Takes the name provided and tries to find data vendor from the

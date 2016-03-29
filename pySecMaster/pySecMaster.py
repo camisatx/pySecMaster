@@ -81,7 +81,7 @@ google_fin_redwnld_time = 60 * 60 * 12      # 12 hours
 data_process = 'replace'
 # ToDo: Make an efficient way for all historical adj_<price> values to update
 quandl_days_back = 30000    # Forces all quandl values to be replaced
-google_fin_days_back = 5
+google_fin_days_back = 10
 
 # Don't change these unless you know what you are doing
 quandl_data_url = ['https://www.quandl.com/api/v1/datasets/', '.csv']
@@ -136,12 +136,17 @@ def data_download(database_link, download_source, quandl_selection,
     if download_source in ['all', 'google_fin']:
         # Download minute data for selected Google Finance codes
         print('\nDownloading all Google Finance fields for: %s \nNew data will '
-              '%s the prior %s day''s data'
-              % (google_fin_selection, data_process, google_fin_days_back))
-        GoogleFinanceDataExtraction(database_link, google_fin_url,
-                                    google_fin_selection,
-                                    google_fin_redwnld_time, data_process,
-                                    google_fin_days_back, threads)
+              '%s the prior %s day''s data' %
+              (google_fin_selection, data_process, google_fin_days_back))
+        GoogleFinanceDataExtraction(
+            db_location=database_link,
+            db_url=google_fin_url,
+            dwnld_selection=google_fin_selection,
+            redownload_time=google_fin_redwnld_time,
+            data_process=data_process,
+            days_back=google_fin_days_back,
+            threads=threads,
+            table='minute_prices')
 
 if __name__ == '__main__':
 

@@ -370,7 +370,7 @@ class QuandlDownload(object):
 
 def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                          csv_out='load_tables/goog_min_codes_wo_data.csv'):
-    """ Receives a Quandl Code as a string, splits the code into ticker and
+    """ Receives a tsid as a string, splits the code into ticker and
     exchange, then passes it to the url to download the data. Once downloaded,
     this adds titles to the column headers.
 
@@ -378,10 +378,10 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
     :param tsid: A string of the tsid
     :param exchanges_df: DataFrame with all exchanges and their symbols
     :param threads: Integer of the number of threads process is using
-    :param verbose: Boolean
+    :param verbose: Boolean of whether to print debugging statements
     :param csv_out: String with the file directory for the CSV file that has
         all the codes that don't have any data
-    :return: A DataFrame with the data points for the Quandl Code.
+    :return: A DataFrame with the data points for the tsid.
     """
 
     ticker = tsid[:tsid.find('.')]
@@ -450,7 +450,7 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                                   'for now.' % (e.reason,))
             elif str(e) == 'HTTP Error 503: Service Unavailable':
                 # Received this HTTP Error after 2000 queries. Browser showed
-                #   captch message upon loading url.
+                #   captcha message upon loading url.
                 if download_try <= 10:
                     print('HTTPError %s: Server is currently unavailable. '
                           'Maybe the network is down or the server is blocking '
@@ -554,8 +554,8 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                                    float(low), float(open_), float(volume))))
 
         column_names = ['date', 'close', 'high', 'low', 'open', 'volume']
-        min_df = pd.DataFrame(data, columns=column_names)
-        return min_df
+        processed_df = pd.DataFrame(data, columns=column_names)
+        return processed_df
 
     url_obj = download_data(url_string)
 
@@ -577,7 +577,7 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                       'was available for download.' % (tsid,))
     except IndexError:
         try:
-            # There is no minute data for this code; add to CSV file via DF
+            # There is no price data for this code; add to CSV file via DF
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
             cur_date = datetime.utcnow().isoformat()
             if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
