@@ -68,10 +68,6 @@ symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
 ###############################################################################
 # Database data download options:
 
-# Specify the time in seconds before the data is allowed to be re-downloaded.
-redownload_time = 60 * 60 * 12      # 12 hours
-google_fin_redwnld_time = 60 * 60 * 12      # 12 hours
-
 # Should the latest data point be appended to the table, or should the new
 #   data replace the prior x days of data. If data_process is set to append,
 #   then the days_back variable will be ignored.
@@ -121,32 +117,62 @@ def maintenance(database_link, quandl_ticker_source, database_list, threads,
     create_symbology(db_location=database_link, source_list=symbology_sources)
 
 
-def data_download(database_link, download_source, quandl_selection,
-                  google_fin_selection, threads, quandl_key):
+def data_download(database_link, download_list, threads=4, quandl_key=None):
+    """ Loops through all provided data sources in download_list, and runs
+    the associated data extractor using the provided source variables.
 
-    if download_source in ['all', 'quandl']:
-        # Download data for selected Quandl Codes
-        print('\nDownloading all Quandl fields for: %s \nNew data will %s the '
-              'prior %s days data'
-              % (quandl_selection, data_process, quandl_days_back))
-        QuandlDataExtraction(database_link, quandl_key, quandl_data_url,
-                             quandl_selection, redownload_time, data_process,
-                             quandl_days_back, threads)
+    :param database_link: String of the file directory to the SQL database
+    :param download_list: List of dictionaries, with each dictionary containing
+        all of the relevant variables for the specific source
+    :param threads: Integer indicating how many threads should be used to
+        concurrently download data
+    :param quandl_key: String of the optional Quandl API key
+    """
 
-    if download_source in ['all', 'google_fin']:
-        # Download minute data for selected Google Finance codes
-        print('\nDownloading all Google Finance fields for: %s \nNew data will '
-              '%s the prior %s day''s data' %
-              (google_fin_selection, data_process, google_fin_days_back))
-        GoogleFinanceDataExtraction(
-            db_location=database_link,
-            db_url=google_fin_url,
-            dwnld_selection=google_fin_selection,
-            redownload_time=google_fin_redwnld_time,
-            data_process=data_process,
-            days_back=google_fin_days_back,
-            threads=threads,
-            table='minute_prices')
+    for source in download_list:
+        if source['interval'] == 'daily':
+            table = 'daily_prices'
+        elif source['interval'] == 'minute':
+            table = 'minute_prices'
+        else:
+            raise SystemError('No interval was provided for %s in '
+                              'data_download in pySecMaster.py' %
+                              source['interval'])
+
+        if source['source'] == 'quandl':
+            # Download data for selected Quandl codes
+            print('\nDownloading all Quandl fields for: %s'
+                  '\nNew data will %s the prior %s day\'s data' %
+                  (source['selection'], source['data_process'],
+                   source['replace_days_back']))
+            QuandlDataExtraction(
+                db_location=database_link,
+                quandl_token=quandl_key,
+                db_url=quandl_data_url,
+                download_selection=source['selection'],
+                redownload_time=source['redownload_time'],
+                data_process=source['data_process'],
+                days_back=source['replace_days_back'],
+                threads=threads,
+                table=table,
+                verbose=False)
+
+        elif source['source'] == 'google':
+            # Download data for selected Google Finance codes
+            print('\nDownloading all Google Finance fields for: %s'
+                  '\nNew data will %s the prior %s day\'s data' %
+                  (source['selection'], source['data_process'],
+                   source['replace_days_back']))
+            GoogleFinanceDataExtraction(
+                db_location=database_link,
+                db_url=google_fin_url,
+                dwnld_selection=source['selection'],
+                redownload_time=source['redownload_time'],
+                data_process=source['data_process'],
+                days_back=source['replace_days_back'],
+                threads=threads,
+                table=table,
+                verbose=False)
 
 if __name__ == '__main__':
 
@@ -186,30 +212,47 @@ if __name__ == '__main__':
     ############################################################################
     # Database data download options:
 
-    # What source should the data be downloaded from? Quandl and/or Google Fin?
-    # Examples: 'all', 'quandl', 'google_fin'
-    download_source = 'google_fin'
-
     # When the Quandl data is downloaded, where should the extractor get the
     #   ticker codes from? Either use the official list of codes from Quandl
     #   (quandl), or make implied codes from the CSI Data stock factsheet
-    #   (csidata), which is more accurate but tries more non-existent companies.
+    #   (csidata) which is more accurate but tries more non-existent companies.
     quandl_ticker_source = 'csidata'        # quandl, csidata
 
-    # Specify the items that will have their data downloaded. To add a field or
-    #   to understand what is actually being downloaded, go to the query_q_codes
+    # Example download list: should be a list of dictionaries, with the
+    #   dictionaries containing all relevant variables for the specific source
+    download_list = [{'source': 'quandl', 'selection': 'wiki',
+                      'interval': 'daily', 'redownload_time': 60 * 60 * 12,
+                      'data_process': 'replace', 'replace_days_back': 50000},
+                     {'source': 'quandl', 'selection': 'goog_etf',
+                      'interval': 'daily', 'redownload_time': 60 * 60 * 12,
+                      'data_process': 'replace', 'replace_days_back': 50000},
+                     {'source': 'google', 'selection': 'us_main_no_end_date',
+                      'interval': 'daily', 'redownload_time': 60 * 60 * 12,
+                      'data_process': 'replace', 'replace_days_back': 10},
+                     {'source': 'yahoo', 'selection': 'us_main',
+                      'interval': 'daily', 'redownload_time': 60 * 60 * 12,
+                      'data_process': 'replace', 'replace_days_back': 10}]
+    # download_list = [{'source': 'google_fin', 'interval': 'minute'}]
+
+    # source: String of which data provider should have their data downloaded
+    # selection: String of which data from the source should be downloaded. To
+    #   understand what is actually being downloaded, go to the query_q_codes
     #   method in either the QuandlDataExtraction class or the
     #   GoogleFinanceDataExtraction class in extractor.py, and look at the
-    #   SQLite queries.
-    # Options: 'quandl_wiki', 'quandl_goog', 'quandl_goog_etf'
-    quandl_selection = 'quandl_wiki'
-    # Google Fin options: 'all', 'us_main', 'us_canada_london'
-    google_fin_selection = 'us_main'
+    #   SQLite queries. (Quandl: 'wiki', 'goog', 'goog_etf'; Google: 'all',
+    #   'us_main', 'us_main_no_end_date', 'us_canada_london')
+    # interval: String of what interval the data should be in (daily or minute)
+    # redownload_time: Integer representing time in seconds before the data is
+    #   allowed to be re-downloaded.
+    # data_process: String of how the new data will interact with the existing
+    #   data ('replace': replace all existing table data; '
+    # replace_days_back: Integer of the number of days whose existing data
+    #   should be replaced by new data (50000 replaces all existing data)
     ############################################################################
 
     maintenance(database_link, quandl_ticker_source, database_list, 8,
                 quandl_token, update_range, csidata_update_range,
                 symbology_sources)
 
-    data_download(database_link, download_source, quandl_selection,
-                  google_fin_selection, 8, quandl_token)
+    data_download(database_link=database_link, download_list=download_list,
+                  threads=8, quandl_key=quandl_token)

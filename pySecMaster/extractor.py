@@ -483,7 +483,29 @@ class QuandlCodeExtract(object):
 class QuandlDataExtraction(object):
 
     def __init__(self, db_location, quandl_token, db_url, download_selection,
-                 redownload_time, data_process, days_back, threads):
+                 redownload_time, data_process, days_back, threads, table,
+                 verbose=False):
+        """
+        :param db_location: String of the database directory location
+        :param quandl_token: String of the Quandl API token
+        :param db_url: List of Quandl API url components
+        :param download_selection: String indicating what selection of codes
+            should be downloaded from Quandl
+        :param redownload_time: Integer of the time in seconds before the
+            data can be downloaded again. Allows the extractor to be restarted
+            without downloading the same data again.
+        :param data_process: String of how the new values will interact with
+            the existing database table values. Options include either
+            'append' or 'replace'.
+        :param days_back: Integer of the number of days where any existing
+            data should be replaced with newer prices
+        :param threads: Integer of the number of threads the current process
+            is using; used for rate limiter
+        :param table: String indicating which table the DataFrame should be
+            put into.
+        :param verbose: Boolean of whether debugging prints should occur.
+        """
+
         self.database_location = db_location
         self.quandl_token = quandl_token
         self.db_url = db_url
@@ -492,6 +514,8 @@ class QuandlDataExtraction(object):
         self.data_process = data_process
         self.days_back = days_back
         self.threads = threads
+        self.table = table
+        self.verbose = verbose
 
         # Rate limiter parameters based on Quandl API limitations
         rate = 2000
@@ -607,7 +631,7 @@ class QuandlDataExtraction(object):
 
                 # ToDo: MED: Will need to create queries for additional items
 
-                if download_selection == 'quandl_wiki':
+                if download_selection == 'wiki':
                     cur.execute("""SELECT tsid.source_id, wiki.source_id
                                    FROM symbology tsid
                                    INNER JOIN symbology wiki
@@ -615,7 +639,7 @@ class QuandlDataExtraction(object):
                                    WHERE tsid.source='tsid'
                                    AND wiki.source='quandl_wiki'
                                    GROUP BY wiki.source_id""")
-                elif download_selection == 'quandl_goog':
+                elif download_selection == 'goog':
                     cur.execute("""SELECT tsid.source_id, wiki.source_id
                                    FROM symbology tsid
                                    INNER JOIN symbology wiki
@@ -623,7 +647,7 @@ class QuandlDataExtraction(object):
                                    WHERE tsid.source='tsid'
                                    AND wiki.source='quandl_goog'
                                    GROUP BY wiki.source_id""")
-                elif download_selection == 'quandl_goog_etf':
+                elif download_selection == 'goog_etf':
                     cur.execute("""SELECT tsid.source_id, wiki.source_id
                                    FROM symbology tsid
                                    INNER JOIN symbology wiki
@@ -835,7 +859,9 @@ class GoogleFinanceDataExtraction(object):
         :param redownload_time: Integer of the time in seconds before the
             data can be downloaded again. Allows the extractor to be restarted
             without downloading the same data again.
-        :param data_process:
+        :param data_process: String of how the new values will interact with
+            the existing database table values. Options include either
+            'append' or 'replace'.
         :param days_back: Integer of the number of days where any existing
             data should be replaced with newer prices
         :param threads: Integer of the number of threads the current process
@@ -1141,8 +1167,8 @@ class GoogleFinanceDataExtraction(object):
         # The ticker has no prior price; add all the downloaded data
         if tsid not in self.latest_prices.index:
             clean_data = download_google_data(
-                db_location=self.db_url, tsid=tsid,
-                exchange_df=self.exchanges_df, threads=self.threads)
+                db_url=self.db_url, tsid=tsid,
+                exchanges_df=self.exchanges_df, threads=self.threads)
 
             # There is no new data, so do nothing to the database
             if len(clean_data.index) == 0:
@@ -1166,8 +1192,8 @@ class GoogleFinanceDataExtraction(object):
             try:
                 last_date = self.latest_prices.loc[tsid, 'date']
                 raw_data = download_google_data(
-                    db_location=self.db_url, tsidd=tsid,
-                    exchange_df=self.exchanges_df, threads=self.threads)
+                    db_url=self.db_url, tsid=tsid,
+                    exchanges_df=self.exchanges_df, threads=self.threads)
 
                 # Only keep data that is after the days_back period
                 if self.data_process == 'replace' and self.days_back:
