@@ -1,6 +1,8 @@
+from datetime import datetime
+
 from create_tables import main_tables, data_tables, events_tables
 from extractor import QuandlCodeExtract, QuandlDataExtraction,\
-    GoogleFinanceDataExtraction, CSIDataExtractor
+    GoogleFinanceDataExtraction, YahooFinanceDataExtraction, CSIDataExtractor
 from load_aux_tables import LoadTables
 from build_symbology import create_symbology
 
@@ -68,10 +70,11 @@ symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
 ###############################################################################
 # Database data download options:
 
-# ToDo: Make an efficient way for all historical adj_<price> values to update
+today = datetime.today()
 
-# Don't change these unless you know what you are doing
+# Don't change these variables unless you know what you are doing!
 quandl_data_url = ['https://www.quandl.com/api/v1/datasets/', '.csv']
+
 google_fin_url = {'root': 'http://www.google.com/finance/getprices?',
                   'ticker': 'q=',
                   'exchange': 'x=',
@@ -79,6 +82,15 @@ google_fin_url = {'root': 'http://www.google.com/finance/getprices?',
                   # 'sessions': 'sessions=ext_hours',
                   'period': 'p=',    # 20d; 15d is the longest period for min
                   'fields': 'f=d,c,v,o,h,l'}    # order doesn't change anything
+
+yahoo_end_date = ('d=%s&e=%s&f=%s' %
+                  (str(int(today.month - 1)).zfill(2), today.day, today.year))
+yahoo_fin_url = {'root': 'http://real-chart.finance.yahoo.com/table.csv?',
+                 'ticker': 's=',    # Exchange is added after ticker and '.'
+                 'interval': 'g=',  # d, w, m, v: (daily, wkly, mth, dividends)
+                 'start_date': 'a=00&b=1&c=1900',   # The entire price history
+                 'end_date': yahoo_end_date,    # Today's date (MM; D; YYYY)
+                 'csv': 'ignore=.csv'}      # Returns a CSV file
 ###############################################################################
 
 
@@ -130,10 +142,14 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
             table = 'daily_prices'
             if source['source'] == 'google':
                 google_fin_url['interval'] = 'i=' + str(60*60*24)
+            elif source['source'] == 'yahoo':
+                yahoo_fin_url['interval'] = 'g=d'
         elif source['interval'] == 'minute':
             table = 'minute_prices'
             if source['source'] == 'google':
                 google_fin_url['interval'] = 'i=' + str(60)
+            elif source['source'] == 'yahoo':
+                raise SystemError('Yahoo Finance does not provide minute data.')
         else:
             raise SystemError('No interval was provided for %s in '
                               'data_download in pySecMaster.py' %
@@ -173,13 +189,36 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
             GoogleFinanceDataExtraction(
                 db_location=database_link,
                 db_url=google_fin_url,
-                dwnld_selection=source['selection'],
+                download_selection=source['selection'],
                 redownload_time=source['redownload_time'],
                 data_process=source['data_process'],
                 days_back=source['replace_days_back'],
                 threads=threads,
                 table=table,
                 verbose=False)
+
+        elif source['source'] == 'yahoo':
+            # Download data for selected Google Finance codes
+            print('\nDownloading all Yahoo Finance fields for: %s'
+                  '\nNew data will %s the prior %s day\'s data' %
+                  (source['selection'], source['data_process'],
+                   source['replace_days_back']))
+
+            google_fin_url['period'] = 'p=' + str(source['period']) + 'd'
+            YahooFinanceDataExtraction(
+                db_location=database_link,
+                db_url=yahoo_fin_url,
+                download_selection=source['selection'],
+                redownload_time=source['redownload_time'],
+                data_process=source['data_process'],
+                days_back=source['replace_days_back'],
+                threads=threads,
+                table=table,
+                verbose=False)
+
+        else:
+            print('The %s source is currently not implemented. Skipping it.' %
+                  source['source'])
 
 if __name__ == '__main__':
 

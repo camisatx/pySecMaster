@@ -7,7 +7,7 @@ import sqlite3
 import time
 
 from download import QuandlDownload, download_google_data, \
-    download_csidata_factsheet
+    download_yahoo_data, download_csidata_factsheet
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -93,6 +93,8 @@ def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
     # Try and except block writes the new data to the SQL Database.
     try:
         # if_exists options: append new df rows, replace all table values
+        # ToDo: Determine how this handles adding data for the same tsid but
+        #   from different vendors
         df.to_sql(sql_table, conn, if_exists=exists, index=False)
         conn.execute("PRAGMA journal_mode = MEMORY")
         conn.execute("PRAGMA busy_timeout = 60000")
@@ -149,6 +151,186 @@ def delete_sql_table_rows(db_location, query, table, tsid, verbose=False):
               '%s in the %s table.' % (tsid, table))
         print(e)
         return 'failure'
+
+
+def retrieve_data_vendor_id(db_location, name):
+    """ Takes the name provided and tries to find data vendor from the
+    data_vendor table in the database. If nothing is returned in the
+    query, then 'Unknown' is used.
+
+    :param db_location: String of the database directory location
+    :param name: String that has the database name
+    :return: A string with the data vendor's id number, or 'Unknown'
+    """
+
+    try:
+        conn = sqlite3.connect(db_location)
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT data_vendor_id
+                           FROM data_vendor
+                           WHERE name=?
+                           LIMIT 1""",
+                        (name,))
+            data = cur.fetchone()
+            if data:  # A vendor was found
+                data = data[0]
+            else:
+                data = 'Unknown'
+                print('Not able to determine the data_vendor_id for %s'
+                      % name)
+            return data
+    except sqlite3.Error as e:
+        print('Error when trying to retrieve data from database in '
+              'retrieve_data_vendor_id')
+        print(e)
+
+
+def query_last_price(db_location, table, vendor_id):
+    """ Queries the pricing database to find the latest dates for each item
+        in the database, regardless of whether it is in the tsid list.
+
+        :param db_location: String of the database directory location
+        :param table: String of the table whose prices should be worked on
+        :param vendor_id: Integer representing the vendor id whose prices
+            should be considered
+        :return: Returns a DataFrame with the tsid and the date of the latest
+        data point for all tickers in the database.
+        """
+
+    try:
+        conn = sqlite3.connect(db_location)
+        with conn:
+            query = """SELECT tsid, MAX(date) as date, updated_date
+                        FROM %s
+                        WHERE data_vendor_id='%s'
+                        GROUP BY tsid""" % (table, vendor_id)
+            df = pd.read_sql(query, conn, index_col='tsid')
+            if len(df.index) == 0:
+                return df
+
+            # Convert the ISO dates to datetime objects
+            df['date'] = pd.to_datetime(df['date'])
+            df['updated_date'] = pd.to_datetime(df['updated_date'])
+            # df.to_csv('query_last_min_price.csv')
+            return df
+    except sqlite3.Error as e:
+        print(e)
+        raise TypeError('Error when trying to connect to the database '
+                        'in query_last_price')
+
+
+def query_codes(db_location, download_selection):
+    """
+    Builds a DataFrame of tsid codes from a SQL query. These codes are the
+    items that will have their data downloaded.
+
+    With more databases, it may be necessary to have the user
+    write custom queries if they only want certain items downloaded.
+    Perhaps the best way will be to have some predefined queries, and if
+    those don't work for the user, they write a custom query.
+
+    :param db_location: String of the database directory
+    :param download_selection: String that specifies which data is required
+    :return: DataFrame with the the specified tsid values
+    """
+
+    try:
+        conn = sqlite3.connect(db_location)
+        with conn:
+            cur = conn.cursor()
+
+            # ToDo: Will need to create queries for additional items
+
+            if download_selection == 'all':
+                # Retrieve all tsid stock tickers
+                cur.execute("""SELECT source_id
+                               FROM symbology
+                               WHERE source='tsid' AND type='stock'""")
+            elif download_selection == 'us_main':
+                # Retrieve tsid tickers that trade only on main US exchanges
+                #   and that have been active within the prior two years.
+                beg_date = (datetime.utcnow() - timedelta(days=730))
+                cur.execute("""SELECT source_id
+                               FROM symbology
+                               WHERE source='tsid'
+                               AND symbol_id IN (
+                                   SELECT CsiNumber
+                                   FROM csidata_stock_factsheet
+                                   WHERE EndDate > ?
+                                   AND (Exchange IN ('AMEX', 'NYSE')
+                                   OR ChildExchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA')))
+                               AND type='stock'
+                               GROUP BY source_id""",
+                            (beg_date.isoformat(),))
+            elif download_selection == 'us_main_no_end_date':
+                # Retrieve tsid tickers that trade only on main US exchanges
+                cur.execute("""SELECT source_id
+                               FROM symbology
+                               WHERE source='tsid'
+                               AND symbol_id IN (
+                                   SELECT CsiNumber
+                                   FROM csidata_stock_factsheet
+                                   WHERE (Exchange IN ('AMEX', 'NYSE')
+                                   OR ChildExchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA')))
+                               AND type='stock'
+                               GROUP BY source_id""")
+            elif download_selection == 'us_canada_london':
+                # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
+                #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
+                #   active within the prior two years.
+                beg_date = (datetime.utcnow() - timedelta(days=730))
+                cur.execute("""SELECT source_id
+                               FROM symbology
+                               WHERE source='tsid'
+                               AND symbol_id IN (
+                                   SELECT CsiNumber
+                                   FROM csidata_stock_factsheet
+                                   WHERE EndDate > ?
+                                   AND (Exchange IN ('AMEX', 'LSE', 'NYSE',
+                                   'TSX', 'VSE')
+                                   OR ChildExchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA',
+                                       'OTC Markets Pink Sheets')))
+                               AND type='stock'
+                               GROUP BY source_id""",
+                            (beg_date.isoformat(),))
+            else:
+                raise TypeError('Improper download_selection was '
+                                'provided in query_codes. If this is '
+                                'a new query, ensure the SQL is '
+                                'correct. Valid symbology download '
+                                'selections include all, us_main,'
+                                'us_main_no_end_date and us_canada_london.')
+
+            data = cur.fetchall()
+            if data:
+                df = pd.DataFrame(data, columns=['tsid'])
+                df.drop_duplicates(inplace=True)
+
+                # df.to_csv('query_tsid.csv')
+                return df
+            else:
+                raise TypeError('Not able to determine the tsid from '
+                                'the SQL query in query_codes.')
+    except sqlite3.Error as e:
+        print(e)
+        raise TypeError('Error when trying to connect to the database '
+                        'in query_codes')
 
 
 class QuandlCodeExtract(object):
@@ -522,6 +704,8 @@ class QuandlDataExtraction(object):
         period_sec = 600
         self.min_interval = float((period_sec/rate)*threads)
 
+        self.csv_wo_data = 'load_tables/quandl_' + self.table + '_wo_data.csv'
+
         print('Retrieving dates of the last price per ticker...')
         # Creates a DataFrame with the last price for each security
         self.latest_prices = self.query_last_price()
@@ -554,8 +738,7 @@ class QuandlDataExtraction(object):
 
         try:
             # Load the codes that did not have data from the last extractor run
-            codes_wo_data_df = pd.read_csv('load_tables/quandl_codes_wo_data'
-                                           '.csv', index_col=False)
+            codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
             # Exclude these codes that are within the 15 day re-download period
             beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
@@ -569,8 +752,7 @@ class QuandlDataExtraction(object):
             q_codes_df = q_codes_df[~q_codes_to_exclude]
         except IOError:
             # The CSV file doesn't exist; create a file that will be appended to
-            with open('load_tables/quandl_codes_wo_data.csv', 'a',
-                      newline='') as f:
+            with open(self.csv_wo_data, 'a', newline='') as f:
                 writer = csv.writer(f, delimiter=',')
                 writer.writerow(('q_code', 'date_tried'))
 
@@ -732,7 +914,8 @@ class QuandlDataExtraction(object):
         if tsid not in self.latest_prices.index:
 
             # ToDo: Use the start date from CSI within this function for stocks
-            clean_data = quandl_download.download_quandl_data(q_code)
+            clean_data = quandl_download.download_quandl_data(
+                q_code=q_code, csv_out=self.csv_wo_data)
 
             # There is not new data, so do nothing to the database
             if len(clean_data.index) == 0:
@@ -763,13 +946,15 @@ class QuandlDataExtraction(object):
                     beg_date_obj = (last_date - timedelta(days=self.days_back))
                     # YYYY-MM-DD format needed for Quandl API download
                     beg_date = beg_date_obj.strftime('%Y-%m-%d')
-                    clean_data = quandl_download.download_quandl_data(q_code,
-                                                                      beg_date)
+                    clean_data = quandl_download.download_quandl_data(
+                        q_code=q_code, csv_out=self.csv_wo_data,
+                        beg_date=beg_date)
 
                 # This will download the entire data set, but only keep new
                 #   data after the latest existing data point.
                 else:
-                    raw_data = quandl_download.download_quandl_data(q_code)
+                    raw_data = quandl_download.download_quandl_data(
+                        q_code=q_code, csv_out=self.csv_wo_data)
                     # DataFrame of only the new data
                     clean_data = raw_data[raw_data.date > last_date.isoformat()]
 
@@ -849,12 +1034,12 @@ class QuandlDataExtraction(object):
 
 class GoogleFinanceDataExtraction(object):
 
-    def __init__(self, db_location, db_url, dwnld_selection, redownload_time,
+    def __init__(self, db_location, db_url, download_selection, redownload_time,
                  data_process, days_back, threads, table, verbose=True):
         """
         :param db_location: String of the database directory location
         :param db_url: Dictionary of Google Finance url components
-        :param dwnld_selection: String indicating what selection of codes
+        :param download_selection: String indicating what selection of codes
             should be downloaded from Google
         :param redownload_time: Integer of the time in seconds before the
             data can be downloaded again. Allows the extractor to be restarted
@@ -873,7 +1058,7 @@ class GoogleFinanceDataExtraction(object):
 
         self.db_location = db_location
         self.db_url = db_url
-        self.dwnld_selection = dwnld_selection
+        self.download_selection = download_selection
         self.redownload_time = redownload_time
         self.data_process = data_process
         self.days_back = days_back
@@ -887,9 +1072,15 @@ class GoogleFinanceDataExtraction(object):
         period_sec = 60
         self.min_interval = float((period_sec/rate)*threads)
 
-        print('Retrieving dates of the last price per ticker...')
+        self.vendor_id = retrieve_data_vendor_id(db_location=self.db_location,
+                                                 name='Google_Finance')
+        self.csv_wo_data = 'load_tables/goog_' + self.table + '_wo_data.csv'
+
+        print('Retrieving dates for the last Google prices per ticker...')
         # Creates a DataFrame with the last price for each security
-        self.latest_prices = self.query_last_price()
+        self.latest_prices = query_last_price(db_location=self.db_location,
+                                              table=self.table,
+                                              vendor_id=self.vendor_id)
 
         # Build a DataFrame with all the exchange symbols
         self.exchanges_df = self.query_exchanges()
@@ -906,7 +1097,8 @@ class GoogleFinanceDataExtraction(object):
 
         print('Analyzing the tsid codes that will be downloaded...')
         # Create a list of securities to download
-        code_df = self.query_codes(self.dwnld_selection)
+        code_df = query_codes(db_location=self.db_location,
+                              download_selection=self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         codes_df = pd.merge(code_df, self.latest_prices, left_on='tsid',
                             right_index=True, how='left')
@@ -924,9 +1116,9 @@ class GoogleFinanceDataExtraction(object):
 
         try:
             # Load the codes that did not have data from the last extractor run
-            codes_wo_data_df = pd.read_csv('load_tables/goog_min_codes_wo_data'
-                                           '.csv', index_col=False)
-            # Exclude these codes that are within the 15 day re-download period
+            # for this interval
+            codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
+            # Exclude these codes that are within a 15 day period
             beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
                                                 beg_date_ob_wo_data.isoformat()]
@@ -939,8 +1131,7 @@ class GoogleFinanceDataExtraction(object):
             codes_df = codes_df[~codes_to_exclude]
         except IOError:
             # The CSV file doesn't exist; create a file that will be appended to
-            with open('load_tables/goog_min_codes_wo_data.csv', 'a',
-                      newline='') as f:
+            with open(self.csv_wo_data, 'a', newline='') as f:
                 writer = csv.writer(f, delimiter=',')
                 writer.writerow(('tsid', 'date_tried'))
 
@@ -957,10 +1148,11 @@ class GoogleFinanceDataExtraction(object):
         # Inform the user how many codes will be updated
         dl_codes = len(codes_final.index)
         total_codes = len(codes_df.index)
-        print('%s tsid codes out of %s requested codes will be downloaded.\n'
-              '%s codes were last updated within the %s second limit.'
+        print('%s tsid codes out of %s requested codes will have Google '
+              'finance %s data downloaded.\n%s codes were last updated within '
+              'the %s second limit.'
               % ('{:,}'.format(dl_codes), '{:,}'.format(total_codes),
-                 '{:,}'.format(total_codes - dl_codes),
+                 self.table, '{:,}'.format(total_codes - dl_codes),
                  '{:,}'.format(self.redownload_time)))
 
         """This runs the program with no multiprocessing or threading.
@@ -977,145 +1169,6 @@ class GoogleFinanceDataExtraction(object):
 
         print('The price extraction took %0.2f seconds to complete' %
               (time.time() - start_time))
-
-    def query_codes(self, download_selection):
-        """
-        Builds a DataFrame of tsid codes from a SQL query. These codes are the
-        items that will have their data downloaded.
-
-        With more databases, it may be necessary to have the user
-        write custom queries if they only want certain items downloaded.
-        Perhaps the best way will be to have some predefined queries, and if
-        those don't work for the user, they write a custom query.
-
-        :param download_selection: String that specifies which data is required
-        :return: DataFrame with the the specified tsid values
-        """
-
-        try:
-            conn = sqlite3.connect(self.db_location)
-            with conn:
-                cur = conn.cursor()
-
-                # ToDo: MED: Will need to create queries for additional items
-
-                if download_selection == 'all':
-                    # Retrieve all tsid stock tickers
-                    cur.execute("""SELECT source_id
-                                   FROM symbology
-                                   WHERE source='tsid' AND type='stock'""")
-                elif download_selection == 'us_main':
-                    # Retrieve tsid tickers that trade only on main US exchanges
-                    #   and that have been active within the prior two years.
-                    beg_date = (datetime.utcnow() - timedelta(days=730))
-                    cur.execute("""SELECT source_id
-                                   FROM symbology
-                                   WHERE source='tsid'
-                                   AND symbol_id IN (
-                                       SELECT CsiNumber
-                                       FROM csidata_stock_factsheet
-                                       WHERE EndDate > ?
-                                       AND (Exchange IN ('AMEX', 'NYSE')
-                                       OR ChildExchange IN ('AMEX',
-                                           'BATS Global Markets',
-                                           'Nasdaq Capital Market',
-                                           'Nasdaq Global Market',
-                                           'Nasdaq Global Select',
-                                           'NYSE', 'NYSE ARCA')))
-                                   AND type='stock'
-                                   GROUP BY source_id""",
-                                (beg_date.isoformat(),))
-                elif download_selection == 'us_main_no_end_date':
-                    # Retrieve tsid tickers that trade only on main US exchanges
-                    cur.execute("""SELECT source_id
-                                   FROM symbology
-                                   WHERE source='tsid'
-                                   AND symbol_id IN (
-                                       SELECT CsiNumber
-                                       FROM csidata_stock_factsheet
-                                       WHERE (Exchange IN ('AMEX', 'NYSE')
-                                       OR ChildExchange IN ('AMEX',
-                                           'BATS Global Markets',
-                                           'Nasdaq Capital Market',
-                                           'Nasdaq Global Market',
-                                           'Nasdaq Global Select',
-                                           'NYSE', 'NYSE ARCA')))
-                                   AND type='stock'
-                                   GROUP BY source_id""")
-                elif download_selection == 'us_canada_london':
-                    # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
-                    #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
-                    #   active within the prior two years.
-                    beg_date = (datetime.utcnow() - timedelta(days=730))
-                    cur.execute("""SELECT source_id
-                                   FROM symbology
-                                   WHERE source='tsid'
-                                   AND symbol_id IN (
-                                       SELECT CsiNumber
-                                       FROM csidata_stock_factsheet
-                                       WHERE EndDate > ?
-                                       AND (Exchange IN ('AMEX', 'LSE', 'NYSE',
-                                       'TSX', 'VSE')
-                                       OR ChildExchange IN ('AMEX',
-                                           'BATS Global Markets',
-                                           'Nasdaq Capital Market',
-                                           'Nasdaq Global Market',
-                                           'Nasdaq Global Select',
-                                           'NYSE', 'NYSE ARCA',
-                                           'OTC Markets Pink Sheets')))
-                                   AND type='stock'
-                                   GROUP BY source_id""",
-                                (beg_date.isoformat(),))
-                else:
-                    raise TypeError('Improper download_selection was '
-                                    'provided in query_codes. If this is '
-                                    'a new query, ensure the SQL is '
-                                    'correct. Valid symbology download '
-                                    'selections include all, us_main and'
-                                    'us_canada_london.')
-
-                data = cur.fetchall()
-                if data:
-                    df = pd.DataFrame(data, columns=['tsid'])
-                    df.drop_duplicates(inplace=True)
-
-                    # df.to_csv('query_tsid.csv')
-                    return df
-                else:
-                    raise TypeError('Not able to determine the tsid from '
-                                    'the SQL query in query_codes.')
-        except sqlite3.Error as e:
-            print(e)
-            raise TypeError('Error when trying to connect to the database '
-                            'in query_codes')
-
-    def query_last_price(self):
-        """ Queries the pricing database to find the latest dates for each item
-        in the database, regardless of whether it is in the tsid list.
-
-        :return: Returns a DataFrame with the tsid and the date of the latest
-        data point for all tickers in the database.
-        """
-
-        try:
-            conn = sqlite3.connect(self.db_location)
-            with conn:
-                query = """SELECT tsid, MAX(date) as date, updated_date
-                        FROM %s
-                        GROUP BY tsid""" % self.table
-                df = pd.read_sql(query, conn, index_col='tsid')
-                if len(df.index) == 0:
-                    return df
-
-                # Convert the ISO dates to datetime objects
-                df['date'] = pd.to_datetime(df['date'])
-                df['updated_date'] = pd.to_datetime(df['updated_date'])
-                # df.to_csv('query_last_min_price.csv')
-                return df
-        except sqlite3.Error as e:
-            print(e)
-            raise TypeError('Error when trying to connect to the database '
-                            'in query_last_price')
 
     def query_exchanges(self):
         """ Retrieve the exchange symbols for goog and tsid, which will be used
@@ -1166,9 +1219,9 @@ class GoogleFinanceDataExtraction(object):
 
         # The ticker has no prior price; add all the downloaded data
         if tsid not in self.latest_prices.index:
-            clean_data = download_google_data(
-                db_url=self.db_url, tsid=tsid,
-                exchanges_df=self.exchanges_df, threads=self.threads)
+            clean_data = download_google_data(db_url=self.db_url, tsid=tsid,
+                                              exchanges_df=self.exchanges_df,
+                                              csv_out=self.csv_wo_data)
 
             # There is no new data, so do nothing to the database
             if len(clean_data.index) == 0:
@@ -1176,9 +1229,7 @@ class GoogleFinanceDataExtraction(object):
                       (tsid, time.time() - main_time_start))
             # There is new data to add to the database
             else:
-                # Find the data vendor and add it to the DataFrame
-                data_vendor = self.retrieve_data_vendor_id('Google_Finance')
-                clean_data.insert(0, 'data_vendor_id', data_vendor)
+                clean_data.insert(0, 'data_vendor_id', self.vendor_id)
 
                 df_to_sql(df=clean_data, db_location=self.db_location,
                           sql_table=self.table, exists='append', item=tsid)
@@ -1191,9 +1242,9 @@ class GoogleFinanceDataExtraction(object):
         else:
             try:
                 last_date = self.latest_prices.loc[tsid, 'date']
-                raw_data = download_google_data(
-                    db_url=self.db_url, tsid=tsid,
-                    exchanges_df=self.exchanges_df, threads=self.threads)
+                raw_data = download_google_data(db_url=self.db_url, tsid=tsid,
+                                                exchanges_df=self.exchanges_df,
+                                                csv_out=self.csv_wo_data)
 
                 # Only keep data that is after the days_back period
                 if self.data_process == 'replace' and self.days_back:
@@ -1216,9 +1267,7 @@ class GoogleFinanceDataExtraction(object):
                           (tsid, time.time() - main_time_start))
             # There is new data to add to the database
             else:
-                # Find the data vendor of the tsid and add it to the DataFrame
-                data_vendor = self.retrieve_data_vendor_id('Google_Finance')
-                clean_data.insert(0, 'data_vendor_id', data_vendor)
+                clean_data.insert(0, 'data_vendor_id', self.vendor_id)
 
                 # If replacing existing data, delete the overlapping data points
                 if self.data_process == 'replace' and self.days_back:
@@ -1229,8 +1278,9 @@ class GoogleFinanceDataExtraction(object):
 
                     query = ("""DELETE FROM %s
                                 WHERE tsid='%s'
-                                AND date>='%s'""" %
-                             (self.table, tsid, first_date_iso))
+                                AND date>='%s'
+                                AND data_vendor_id='%s'""" %
+                             (self.table, tsid, first_date_iso, self.vendor_id))
                     del_success = delete_sql_table_rows(
                         db_location=self.db_location, query=query,
                         table=self.table, tsid=tsid)
@@ -1246,36 +1296,270 @@ class GoogleFinanceDataExtraction(object):
                     print('Updated %s | %0.1f seconds' %
                           (tsid, time.time() - main_time_start))
 
-    def retrieve_data_vendor_id(self, name):
-        """ Takes the name provided and tries to find data vendor from the
-        data_vendor table in the database. If nothing is returned in the
-        query, then 'Unknown' is used.
 
-        :param name: A string that has the database name
-        :return: A string with the data vendor's id number, or 'Unknown'
+class YahooFinanceDataExtraction(object):
+
+    def __init__(self, db_location, db_url, download_selection, redownload_time,
+                 data_process, days_back, threads, table, verbose=True):
+        """
+        :param db_location: String of the database directory location
+        :param db_url: Dictionary of Yahoo Finance url components
+        :param download_selection: String indicating what selection of codes
+            should be downloaded from Yahoo
+        :param redownload_time: Integer of the time in seconds before the
+            data can be downloaded again. Allows the extractor to be restarted
+            without downloading the same data again.
+        :param data_process: String of how the new values will interact with
+            the existing database table values. Options include either
+            'append' or 'replace'.
+        :param days_back: Integer of the number of days where any existing
+            data should be replaced with newer prices
+        :param threads: Integer of the number of threads the current process
+            is using; used for rate limiter
+        :param table: String indicating which table the DataFrame should be
+            put into.
+        :param verbose: Boolean of whether debugging prints should occur.
         """
 
+        self.db_location = db_location
+        self.db_url = db_url
+        self.download_selection = download_selection
+        self.redownload_time = redownload_time
+        self.data_process = data_process
+        self.days_back = days_back
+        self.threads = threads
+        self.table = table
+        self.verbose = verbose
+
+        # Rate limiter parameters based on guessed Google Finance limitations
+        # Received captcha after about 2000 queries
+        rate = 70
+        period_sec = 60
+        self.min_interval = float((period_sec / rate) * threads)
+
+        self.vendor_id = retrieve_data_vendor_id(db_location=self.db_location,
+                                                 name='Yahoo_Finance')
+        self.csv_wo_data = 'load_tables/yahoo_' + self.table + '_wo_data.csv'
+
+        print('Retrieving dates for the last Yahoo prices per ticker...')
+        # Creates a DataFrame with the last price for each security
+        self.latest_prices = query_last_price(db_location=self.db_location,
+                                              table=self.table,
+                                              vendor_id=self.vendor_id)
+
+        # Build a DataFrame with all the exchange symbols
+        self.exchanges_df = self.query_exchanges()
+
+        self.main()
+
+    def main(self):
+        """
+        The main YahooFinanceDataExtraction method is used to execute
+        subsequent methods in the correct order.
+        """
+
+        start_time = time.time()
+
+        print('Analyzing the tsid codes that will be downloaded...')
+        # Create a list of tsids to download
+        code_df = query_codes(db_location=self.db_location,
+                              download_selection=self.download_selection)
+        # Get DF of selected codes plus when (if ever) they were last updated
+        codes_df = pd.merge(code_df, self.latest_prices, left_on='tsid',
+                            right_index=True, how='left')
+        # Sort the DF with un-downloaded items first, then based on last update
         try:
-            conn = sqlite3.connect(self.db_location)
+            # df.sort_values introduced in 0.17.0
+            codes_df.sort_values('updated_date', axis=0, ascending=True,
+                                 na_position='first', inplace=True)
+        except:
+            print('The YahooFinanceDataExtraction.main is using the '
+                  'depreciated DataFrame sort function. Update Pandas.')
+            # df.sort() was depreciated in 0.17.0
+            codes_df.sort('updated_date', ascending=True, na_position='first',
+                          inplace=True)
+
+        try:
+            # Load the codes that did not have data from the last extractor run
+            #   for this interval
+            codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
+            # Exclude these codes that are within a 15 day period
+            beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
+            exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
+                                                beg_date_ob_wo_data.isoformat()]
+            # Change DF to a list of only the codes
+            list_to_exclude = exclude_codes_df['tsid'].values.flatten()
+            # Create a temp DF from codes_df with only the codes to exclude
+            codes_to_exclude = codes_df['tsid'].isin(list_to_exclude)
+            # From the main DF, remove any of the codes that are in the temp DF
+            # NOTE: Might be able to just use exclude_codes_df instead
+            codes_df = codes_df[~codes_to_exclude]
+        except IOError:
+            # The CSV file doesn't exist; create a file that will be appended to
+            with open(self.csv_wo_data, 'a', newline='') as f:
+                writer = csv.writer(f, delimiter=',')
+                writer.writerow(('tsid', 'date_tried'))
+
+        # The cut-off time for when code data can be re-downloaded
+        beg_date_obj = (datetime.utcnow() -
+                        timedelta(seconds=self.redownload_time))
+        # Final download list should include both new/null and non-recent codes
+        codes_final = codes_df[(codes_df['updated_date'] < beg_date_obj) |
+                               (codes_df['updated_date'].isnull())]
+
+        # Change the DF to a list
+        code_list = codes_final['tsid'].values.flatten()
+
+        # Inform the user how many codes will be updated
+        dl_codes = len(codes_final.index)
+        total_codes = len(codes_df.index)
+        print('%s tsid codes out of %s requested codes will have Yahoo '
+              'finance %s data downloaded.\n%s codes were last updated within '
+              'the %s second limit.'
+              % ('{:,}'.format(dl_codes), '{:,}'.format(total_codes),
+                 self.table, '{:,}'.format(total_codes - dl_codes),
+                 '{:,}'.format(self.redownload_time)))
+
+        """This runs the program with no multiprocessing or threading.
+        To run, make sure to comment out all pool processes below.
+        Takes about 55 seconds for 10 tickers; 5.5 seconds per ticker."""
+        # [self.extractor(tsid) for tsid in code_list]
+
+        """This runs the program with multiprocessing or threading.
+        Comment and uncomment the type of multiprocessing in the
+        multi-thread function above to change the type. Change the number
+        of threads below to alter the speed of the downloads. If the
+        query runs out of items, try lowering the number of threads."""
+        multithread(self.extractor, code_list, threads=self.threads)
+
+        print('The price extraction took %0.2f seconds to complete' %
+              (time.time() - start_time))
+
+    def query_exchanges(self):
+        """ Retrieve the exchange symbols for yahoo and tsid, which will be used
+        to translate the tsid symbols to yahoo symbols. Remove the symbols for
+        which there are no yahoo symbols.
+
+        :return: DataFrame with exchange symbols
+        """
+
+        conn = sqlite3.connect(self.db_location)
+        try:
             with conn:
                 cur = conn.cursor()
-                cur.execute("""SELECT data_vendor_id
-                               FROM data_vendor
-                               WHERE name=?
-                               LIMIT 1""",
-                            (name,))
-                data = cur.fetchone()
-                if data:    # A q_code was found
-                    data = data[0]
-                else:
-                    data = 'Unknown'
-                    print('Not able to determine the data_vendor_id for %s'
-                          % name)
-                return data
+                cur.execute("""SELECT symbol, yahoo_symbol, tsid_symbol
+                            FROM exchange
+                            WHERE yahoo_symbol NOT NULL
+                            GROUP BY tsid_symbol""")
+                rows = cur.fetchall()
+                df = pd.DataFrame(rows, columns=['symbol', 'yahoo_symbol',
+                                                 'tsid_symbol'])
+                return df
         except sqlite3.Error as e:
-            print('Error when trying to retrieve data from database in '
-                  'retrieve_data_vendor_id')
             print(e)
+            raise SystemError('Failed to query the data from the exchange '
+                              'table within query_exchanges in '
+                              'YahooFinanceDataExtraction')
+        except conn.OperationalError:
+            raise SystemError('Unable to connect to the SQL Database in '
+                              'query_exchanges in YahooFinanceDataExtraction. '
+                              'Make sure the database address is correct.')
+        except Exception as e:
+            print(e)
+            raise SystemError('Error: Unknown issue occurred in '
+                              'query_exchanges in YahooFinanceDataExtraction.')
+
+    def extractor(self, tsid):
+        """ Takes the tsid symbol, downloads the historical data, and then
+        saves the data into the SQLite database.
+
+        :param tsid: String of the tsid
+        :return: Nothing. It saves the price data in the SQLite Database.
+        """
+
+        main_time_start = time.time()
+
+        # Rate limit this function with non-reactive timer
+        time.sleep(self.min_interval)
+
+        # The ticker has no prior price; add all the downloaded data
+        if tsid not in self.latest_prices.index:
+            clean_data = download_yahoo_data(db_url=self.db_url, tsid=tsid,
+                                             exchanges_df=self.exchanges_df,
+                                             csv_out=self.csv_wo_data)
+
+            # There is no new data, so do nothing to the database
+            if len(clean_data.index) == 0:
+                print('No data for %s | %0.1f seconds' %
+                      (tsid, time.time() - main_time_start))
+            # There is new data to add to the database
+            else:
+                clean_data.insert(0, 'data_vendor_id', self.vendor_id)
+
+                df_to_sql(df=clean_data, db_location=self.db_location,
+                          sql_table=self.table, exists='append', item=tsid)
+
+                if self.verbose:
+                    print('Updated %s | %0.1f seconds' %
+                          (tsid, time.time() - main_time_start))
+
+        # The pricing database has prior values; append/replace new data points
+        else:
+            try:
+                last_date = self.latest_prices.loc[tsid, 'date']
+                raw_data = download_yahoo_data(db_url=self.db_url, tsid=tsid,
+                                               exchanges_df=self.exchanges_df,
+                                               csv_out=self.csv_wo_data)
+
+                # Only keep data that is after the days_back period
+                if self.data_process == 'replace' and self.days_back:
+                    beg_date = (last_date - timedelta(days=self.days_back))
+                    clean_data = raw_data[raw_data.date > beg_date.isoformat()]
+
+                # Only keep data that is after the latest existing data point
+                else:
+                    clean_data = raw_data[raw_data.date > last_date.isoformat()]
+            except Exception as e:
+                print('Failed to determine what data is new for %s in extractor'
+                      % tsid)
+                print(e)
+                return
+
+            # There is not new data, so do nothing to the database
+            if len(clean_data.index) == 0:
+                if self.verbose:
+                    print('No update for %s | %0.1f seconds' %
+                          (tsid, time.time() - main_time_start))
+            # There is new data to add to the database
+            else:
+                clean_data.insert(0, 'data_vendor_id', self.vendor_id)
+
+                # If replacing existing data, delete the overlapping data points
+                if self.data_process == 'replace' and self.days_back:
+                    # Data should be oldest to newest; gets the oldest date, as
+                    #   any date between that and the latest date need to be
+                    #   deleted before the new data can be added.
+                    first_date_iso = clean_data['date'].min()
+
+                    query = ("""DELETE FROM %s
+                                WHERE tsid='%s'
+                                AND date>='%s'
+                                AND data_vendor_id='%s'""" %
+                             (self.table, tsid, first_date_iso, self.vendor_id))
+                    del_success = delete_sql_table_rows(
+                        db_location=self.db_location, query=query,
+                        table=self.table, tsid=tsid)
+                    # If unable to delete existing data, skip ticker
+                    if del_success == 'failure':
+                        return
+
+                # Append the new data to the end, regardless of replacement
+                df_to_sql(df=clean_data, db_location=self.db_location,
+                          sql_table=self.table, exists='append', item=tsid)
+
+                if self.verbose:
+                    print('Updated %s | %0.1f seconds' %
+                          (tsid, time.time() - main_time_start))
 
 
 class CSIDataExtractor(object):
