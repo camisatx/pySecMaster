@@ -93,8 +93,6 @@ def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
     # Try and except block writes the new data to the SQL Database.
     try:
         # if_exists options: append new df rows, replace all table values
-        # ToDo: Determine how this handles adding data for the same tsid but
-        #   from different vendors
         df.to_sql(sql_table, conn, if_exists=exists, index=False)
         conn.execute("PRAGMA journal_mode = MEMORY")
         conn.execute("PRAGMA busy_timeout = 60000")
@@ -811,7 +809,7 @@ class QuandlDataExtraction(object):
             with conn:
                 cur = conn.cursor()
 
-                # ToDo: MED: Will need to create queries for additional items
+                # ToDo: Will need to create queries for additional items
 
                 if download_selection == 'wiki':
                     cur.execute("""SELECT tsid.source_id, wiki.source_id

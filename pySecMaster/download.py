@@ -67,10 +67,11 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
     return rate_decorator
 
 
-def dt_to_iso(row, column):
+def date_to_iso(row, column):
     """
     Change the default date format of "YYYY-MM-DD" to an ISO 8601 format
     """
+
     raw_date = row[column]
     try:
         raw_date_obj = datetime.strptime(raw_date, '%Y-%m-%d')
@@ -137,9 +138,9 @@ class QuandlDownload(object):
                               '%s database. Quitting after 10 failed attempts.'
                               % (page_num, db_name))
 
-        df['start_date'] = df.apply(dt_to_iso, axis=1, args=('start_date',))
-        df['end_date'] = df.apply(dt_to_iso, axis=1, args=('end_date',))
-        df['last_updated'] = df.apply(dt_to_iso, axis=1, args=('last_updated',))
+        df['start_date'] = df.apply(date_to_iso, axis=1, args=('start_date',))
+        df['end_date'] = df.apply(date_to_iso, axis=1, args=('end_date',))
+        df['last_updated'] = df.apply(date_to_iso, axis=1, args=('last_updated',))
 
         df.insert(len(df.columns), 'page_num', page_num)
         df.insert(len(df.columns), 'created_date', datetime.utcnow().isoformat())
@@ -179,8 +180,9 @@ class QuandlDownload(object):
             column_names = ['date', 'open', 'high', 'low', 'close',
                             'volume', 'adjusted_close']
         else:
-            print('The chosen data source is not setup in the price extractor. '
-                  'Please define the columns in download_quandl_data.')
+            print('The data source for %s is not implemented in the price '
+                  'extractor. Please define the columns in '
+                  'QuandlDownload.download_quandl_data.' % q_code)
             return pd.DataFrame()
 
         if file:
@@ -235,8 +237,7 @@ class QuandlDownload(object):
             return raw_df
 
         raw_df = raw_df[1:]     # Removes the column headers from data download
-        # ToDo: Check dt_to_iso is doing the correct date conversion
-        raw_df['date'] = raw_df.apply(dt_to_iso, axis=1, args=('date',))
+        raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
         raw_df.insert(0, 'q_code', q_code)
         raw_df.insert(len(raw_df.columns), 'updated_date',
                       datetime.utcnow().isoformat())
@@ -619,6 +620,7 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     def datetime_to_iso(row, column):
         return row[column].isoformat()
 
+    # google_data_processing method converts the string dates to datetimes
     raw_df['date'] = raw_df.apply(datetime_to_iso, axis=1, args=('date',))
     raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
@@ -644,9 +646,12 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     ticker = tsid[:tsid.find('.')]
     exchange_symbol = tsid[tsid.find('.')+1:tsid.find('.', tsid.find('.')+1)]
 
-    # Use the tsid exchange symbol to get the Google exchange symbol
-    exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] == exchange_symbol,
-                                 'yahoo_symbol'].values)
+    try:
+        # Use the tsid exchange symbol to get the Yahoo exchange symbol
+        exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] == exchange_symbol,
+                                     'yahoo_symbol'].values)
+    except KeyError:
+        exchange = None
 
     # Make the url string; aside from the root, the items can be in any order
     url_string = db_url['root']      # Establish the url root
@@ -654,8 +659,13 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         if key == 'root':
             continue    # Already used above
         elif key == 'ticker':
-            # ToDo: Test if this works for major ticker/exchange pairs
-            url_string += '&' + item + ticker + '.' + exchange
+            if exchange:
+                # If an exchange was found, Yahoo requires both ticker and
+                #   exchange
+                url_string += '&' + item + ticker + '.' + exchange
+            else:
+                # Ticker is in a major exchange and doesn't need exchange info
+                url_string += '&' + item + ticker
         else:
             url_string += '&' + item
 
@@ -807,11 +817,8 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     if len(raw_df.index) == 0:
         return raw_df
 
-    def datetime_to_iso(row, column):
-        return row[column].isoformat()
-
     raw_df = raw_df[1:]  # Removes the column headers from data download
-    raw_df['date'] = raw_df.apply(datetime_to_iso, axis=1, args=('date',))
+    raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
     raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
                   datetime.utcnow().isoformat())
