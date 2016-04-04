@@ -8,6 +8,9 @@ import time
 
 from download import QuandlDownload, download_google_data, \
     download_yahoo_data, download_csidata_factsheet
+from utilities.database_queries import df_to_sql, delete_sql_table_rows, \
+    retrieve_data_vendor_id, query_codes, query_last_price, query_q_codes
+from utilities.date_conversions import dt_from_iso
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -56,279 +59,6 @@ def multithread(function, items, threads=4):
     pool.join()
 
     return results
-
-
-def dt_from_iso(row, column):
-    """
-    Changes the UTC ISO 8601 date string to a datetime object
-    """
-    iso = row[column]
-    try:
-        return datetime.strptime(iso, '%Y-%m-%dT%H:%M:%S.%f')
-    except ValueError:
-        return datetime.strptime(iso, '%Y-%m-%dT%H:%M:%S')
-    except TypeError:
-        return 'NaN'
-
-
-def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
-    """ Save a DataFrame to a specified SQL database table.
-
-    :param df: Pandas DataFrame with values to insert into the SQL database.
-    :param db_location: String of the directory location for the SQL database.
-    :param sql_table: String indicating which table the DataFrame should be
-        put into.
-    :param exists: String indicating how the DataFrame values should interact
-        with the existing values in the table. Valid parameters include
-        'append' [new rows] and 'replace' [all existing table rows].
-    :param item: String representing the item being inserted (i.e. the tsid)
-    :param verbose: Boolean indicating whether debugging statements should print
-    """
-
-    if verbose:
-        print('Entering the data for %s into the SQL database.' % (item,))
-
-    conn = sqlite3.connect(db_location)
-
-    # Try and except block writes the new data to the SQL Database.
-    try:
-        # if_exists options: append new df rows, replace all table values
-        df.to_sql(sql_table, conn, if_exists=exists, index=False)
-        conn.execute("PRAGMA journal_mode = MEMORY")
-        conn.execute("PRAGMA busy_timeout = 60000")
-        if verbose:
-            print('Successfully entered the values into the SQL Database')
-    except conn.Error:
-        conn.rollback()
-        print("Failed to insert the DataFrame into the database for %s" %
-              (item,))
-    except conn.OperationalError:
-        raise ValueError('Unable to connect to the SQL Database in df_to_sql. '
-                         'Make sure the database address/name are correct.')
-    except Exception as e:
-        print('Error: Unknown issue when adding DF to SQL for %s' % (item,))
-        print(e)
-
-
-def delete_sql_table_rows(db_location, query, table, tsid, verbose=False):
-    """ Execute the provided query in the specified table in the database.
-    Normally, this will delete the existing prices over dates where the new
-    prices would overlap. Returns a string value indicating whether the query
-    was successfully executed.
-
-    :param db_location: String of the directory location for the SQL database.
-    :param query: String representing the SQL query to perform on the database.
-    :param table: String indicating which table should be worked on.
-    :param tsid: String of the tsid being worked on.
-    :param verbose: Boolean indicating whether debugging prints should occur.
-    :return: String of either 'success' or 'failure', which the function that
-        called this function uses determine whether it should add new values.
-    """
-
-    if verbose:
-        print('Deleting all rows in %s that fit the provided criteria' % table)
-
-    conn = sqlite3.connect(db_location)
-    try:
-        with conn:
-            cur = conn.cursor()
-            cur.execute(query)
-        return 'success'
-    except sqlite3.Error as e:
-        conn.rollback()
-        print(e)
-        print('Error: Not able to delete the overlapping rows for %s in '
-              'the %s table.' % (tsid, table))
-        return 'failure'
-    except conn.OperationalError:
-        print('Unable to connect to the SQL Database in delete_sql_table_rows. '
-              'Make sure the database address/name are correct.')
-        return 'failure'
-    except Exception as e:
-        print('Error: Unknown issue when trying to delete overlapping rows for'
-              '%s in the %s table.' % (tsid, table))
-        print(e)
-        return 'failure'
-
-
-def retrieve_data_vendor_id(db_location, name):
-    """ Takes the name provided and tries to find data vendor from the
-    data_vendor table in the database. If nothing is returned in the
-    query, then 'Unknown' is used.
-
-    :param db_location: String of the database directory location
-    :param name: String that has the database name
-    :return: A string with the data vendor's id number, or 'Unknown'
-    """
-
-    try:
-        conn = sqlite3.connect(db_location)
-        with conn:
-            cur = conn.cursor()
-            cur.execute("""SELECT data_vendor_id
-                           FROM data_vendor
-                           WHERE name=?
-                           LIMIT 1""",
-                        (name,))
-            data = cur.fetchone()
-            if data:  # A vendor was found
-                data = data[0]
-            else:
-                data = 'Unknown'
-                print('Not able to determine the data_vendor_id for %s'
-                      % name)
-            return data
-    except sqlite3.Error as e:
-        print('Error when trying to retrieve data from database in '
-              'retrieve_data_vendor_id')
-        print(e)
-
-
-def query_last_price(db_location, table, vendor_id):
-    """ Queries the pricing database to find the latest dates for each item
-        in the database, regardless of whether it is in the tsid list.
-
-        :param db_location: String of the database directory location
-        :param table: String of the table whose prices should be worked on
-        :param vendor_id: Integer representing the vendor id whose prices
-            should be considered
-        :return: Returns a DataFrame with the tsid and the date of the latest
-        data point for all tickers in the database.
-        """
-
-    try:
-        conn = sqlite3.connect(db_location)
-        with conn:
-            query = """SELECT tsid, MAX(date) as date, updated_date
-                        FROM %s
-                        WHERE data_vendor_id='%s'
-                        GROUP BY tsid""" % (table, vendor_id)
-            df = pd.read_sql(query, conn, index_col='tsid')
-            if len(df.index) == 0:
-                return df
-
-            # Convert the ISO dates to datetime objects
-            df['date'] = pd.to_datetime(df['date'])
-            df['updated_date'] = pd.to_datetime(df['updated_date'])
-            # df.to_csv('query_last_min_price.csv')
-            return df
-    except sqlite3.Error as e:
-        print(e)
-        raise TypeError('Error when trying to connect to the database '
-                        'in query_last_price')
-
-
-def query_codes(db_location, download_selection):
-    """
-    Builds a DataFrame of tsid codes from a SQL query. These codes are the
-    items that will have their data downloaded.
-
-    With more databases, it may be necessary to have the user
-    write custom queries if they only want certain items downloaded.
-    Perhaps the best way will be to have some predefined queries, and if
-    those don't work for the user, they write a custom query.
-
-    :param db_location: String of the database directory
-    :param download_selection: String that specifies which data is required
-    :return: DataFrame with the the specified tsid values
-    """
-
-    try:
-        conn = sqlite3.connect(db_location)
-        with conn:
-            cur = conn.cursor()
-
-            # ToDo: Will need to create queries for additional items
-
-            if download_selection == 'all':
-                # Retrieve all tsid stock tickers
-                cur.execute("""SELECT source_id
-                               FROM symbology
-                               WHERE source='tsid' AND type='stock'""")
-            elif download_selection == 'us_main':
-                # Retrieve tsid tickers that trade only on main US exchanges
-                #   and that have been active within the prior two years.
-                beg_date = (datetime.utcnow() - timedelta(days=730))
-                cur.execute("""SELECT source_id
-                               FROM symbology
-                               WHERE source='tsid'
-                               AND symbol_id IN (
-                                   SELECT CsiNumber
-                                   FROM csidata_stock_factsheet
-                                   WHERE EndDate > ?
-                                   AND (Exchange IN ('AMEX', 'NYSE')
-                                   OR ChildExchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA')))
-                               AND type='stock'
-                               GROUP BY source_id""",
-                            (beg_date.isoformat(),))
-            elif download_selection == 'us_main_no_end_date':
-                # Retrieve tsid tickers that trade only on main US exchanges
-                cur.execute("""SELECT source_id
-                               FROM symbology
-                               WHERE source='tsid'
-                               AND symbol_id IN (
-                                   SELECT CsiNumber
-                                   FROM csidata_stock_factsheet
-                                   WHERE (Exchange IN ('AMEX', 'NYSE')
-                                   OR ChildExchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA')))
-                               AND type='stock'
-                               GROUP BY source_id""")
-            elif download_selection == 'us_canada_london':
-                # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
-                #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
-                #   active within the prior two years.
-                beg_date = (datetime.utcnow() - timedelta(days=730))
-                cur.execute("""SELECT source_id
-                               FROM symbology
-                               WHERE source='tsid'
-                               AND symbol_id IN (
-                                   SELECT CsiNumber
-                                   FROM csidata_stock_factsheet
-                                   WHERE EndDate > ?
-                                   AND (Exchange IN ('AMEX', 'LSE', 'NYSE',
-                                   'TSX', 'VSE')
-                                   OR ChildExchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA',
-                                       'OTC Markets Pink Sheets')))
-                               AND type='stock'
-                               GROUP BY source_id""",
-                            (beg_date.isoformat(),))
-            else:
-                raise TypeError('Improper download_selection was '
-                                'provided in query_codes. If this is '
-                                'a new query, ensure the SQL is '
-                                'correct. Valid symbology download '
-                                'selections include all, us_main,'
-                                'us_main_no_end_date and us_canada_london.')
-
-            data = cur.fetchall()
-            if data:
-                df = pd.DataFrame(data, columns=['tsid'])
-                df.drop_duplicates(inplace=True)
-
-                # df.to_csv('query_tsid.csv')
-                return df
-            else:
-                raise TypeError('Not able to determine the tsid from '
-                                'the SQL query in query_codes.')
-    except sqlite3.Error as e:
-        print(e)
-        raise TypeError('Error when trying to connect to the database '
-                        'in query_codes')
 
 
 class QuandlCodeExtract(object):
@@ -704,9 +434,16 @@ class QuandlDataExtraction(object):
 
         self.csv_wo_data = 'load_tables/quandl_' + self.table + '_wo_data.csv'
 
-        print('Retrieving dates of the last price per ticker...')
-        # Creates a DataFrame with the last price for each security
-        self.latest_prices = self.query_last_price()
+        # Retrieve all of the Quandl data vendor IDs
+        quandl_vendor_ids = retrieve_data_vendor_id(db_location=self.db_url,
+                                                    name='Quandl_%')
+
+        print('Retrieving dates of the last price per ticker for all Quandl '
+              'values.')
+        # Creates a DataFrame with the last price for each Quandl code
+        self.latest_prices = query_last_price(db_location=self.db_url,
+                                              table=self.table,
+                                              vendor_id=quandl_vendor_ids)
 
         self.main()
 
@@ -720,7 +457,8 @@ class QuandlDataExtraction(object):
 
         print('Analyzing the Quandl Codes that will be downloaded...')
         # Create a list of securities to download
-        q_code_df = self.query_q_codes(self.download_selection)
+        q_code_df = query_q_codes(db_location=self.db_url,
+                                  download_selection=self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
                               left_on='tsid', right_index=True, how='left')
@@ -790,106 +528,6 @@ class QuandlDataExtraction(object):
         print('The price extraction took %0.2f seconds to complete' %
               (time.time() - start_time))
 
-    def query_q_codes(self, download_selection):
-        """
-        Builds a list of Quandl Codes from a SQL query. These codes are the
-        items that will have their data downloaded. 
-
-        With more databases, it may be necessary to have the user
-        write custom queries if they only want certain items downloaded.
-        Perhaps the best way will be to have some predefined queries, and if
-        those don't work for the user, they write a custom query.
-
-        :param download_selection: String that specifies which data is required
-        :return: DataFrame with two columns (tsid, q_code)
-        """
-
-        try:
-            conn = sqlite3.connect(self.database_location)
-            with conn:
-                cur = conn.cursor()
-
-                # ToDo: Will need to create queries for additional items
-
-                if download_selection == 'wiki':
-                    cur.execute("""SELECT tsid.source_id, wiki.source_id
-                                   FROM symbology tsid
-                                   INNER JOIN symbology wiki
-                                   ON tsid.symbol_id = wiki.symbol_id
-                                   WHERE tsid.source='tsid'
-                                   AND wiki.source='quandl_wiki'
-                                   GROUP BY wiki.source_id""")
-                elif download_selection == 'goog':
-                    cur.execute("""SELECT tsid.source_id, wiki.source_id
-                                   FROM symbology tsid
-                                   INNER JOIN symbology wiki
-                                   ON tsid.symbol_id = wiki.symbol_id
-                                   WHERE tsid.source='tsid'
-                                   AND wiki.source='quandl_goog'
-                                   GROUP BY wiki.source_id""")
-                elif download_selection == 'goog_etf':
-                    cur.execute("""SELECT tsid.source_id, wiki.source_id
-                                   FROM symbology tsid
-                                   INNER JOIN symbology wiki
-                                   ON tsid.symbol_id = wiki.symbol_id
-                                   WHERE tsid.source='tsid'
-                                   AND wiki.source='quandl_goog'
-                                   AND wiki.symbol_id IN (
-                                       SELECT CsiNumber
-                                       FROM csidata_stock_factsheet
-                                       WHERE Type='Exchange-Traded Fund')
-                                   GROUP BY wiki.source_id
-                                   """)
-                else:
-                    raise SystemError('Improper download_selection was '
-                                      'provided in query_codes. If this is '
-                                      'a new query, ensure the SQL is '
-                                      'correct. Valid symbology download '
-                                      'selections include quandl_wiki,'
-                                      'quandl_goog, and quandl_goog_etf.')
-
-                data = cur.fetchall()
-                if data:
-                    df = pd.DataFrame(data, columns=['tsid', 'q_code'])
-                    # df.drop_duplicates(inplace=True)
-
-                    # ticker_list = df.values.flatten()
-                    # df.to_csv('query_q_code.csv')
-                    return df
-                else:
-                    raise SystemError('Not able to determine the q_codes '
-                                      'from the SQL query in query_q_codes')
-        except sqlite3.Error as e:
-            print(e)
-            raise SystemError('Error when trying to connect to the database '
-                              'in query_q_codes')
-
-    def query_last_price(self):
-        """ Queries the pricing database to find the latest dates for each item
-        in the database, regardless of whether it is in the q_code_list.
-        
-        :return: Returns a DataFrame with the tsid and the date of the
-        latest data point for all tickers in the database.
-        """
-
-        try:
-            conn = sqlite3.connect(self.database_location)
-            with conn:
-                df = pd.read_sql("SELECT tsid, MAX(date) as date, updated_date "
-                                 "FROM daily_prices "
-                                 "GROUP BY tsid", conn, index_col='tsid')
-                if len(df.index) == 0:
-                    return df
-                df['date'] = df.apply(dt_from_iso, axis=1, args=('date',))
-                df['updated_date'] = df.apply(dt_from_iso, axis=1,
-                                              args=('updated_date',))
-                # df.to_csv('query_last_price.csv')
-                return df
-        except sqlite3.Error as e:
-            print(e)
-            raise TypeError('Error when trying to connect to the database '
-                            'in query_last_price')
-
     def extractor(self, codes):
         """ Takes the Quandl ticker quote, downloads the historical data,
         and then saves the data into the SQLite database.
@@ -922,7 +560,9 @@ class QuandlDataExtraction(object):
             # There is new data to add to the database
             else:
                 # Find the data vendor of the q_code; add it to the DataFrame
-                data_vendor = self.retrieve_data_vendor_id(q_code)
+                vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
+                data_vendor = retrieve_data_vendor_id(db_location=self.db_url,
+                                                      name=vendor_name)
                 clean_data.insert(0, 'data_vendor_id', data_vendor)
 
                 # Add the tsid into the DataFrame, and then remove the q_code
@@ -969,7 +609,9 @@ class QuandlDataExtraction(object):
             # There is new data to add to the database
             else:
                 # Find the data vendor of the q_code; add it to the DataFrame
-                data_vendor = self.retrieve_data_vendor_id(q_code)
+                vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
+                data_vendor = retrieve_data_vendor_id(db_location=self.db_url,
+                                                      name=vendor_name)
                 clean_data.insert(0, 'data_vendor_id', data_vendor)
 
                 # Add the tsid into the DataFrame, and then remove the q_code
@@ -997,37 +639,6 @@ class QuandlDataExtraction(object):
                           'append', tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
-
-    def retrieve_data_vendor_id(self, q_code):
-        """ Takes the Quandl Code and tries to find data vendor from the
-        data_vendor table in the database. If nothing is returned in the
-        query, then 'Unknown' is used.
-
-        :param q_code: A string that has the Quandl Code
-        :return: A string with the data vendor's id number, or 'Unknown'
-        """
-
-        try:
-            conn = sqlite3.connect(self.database_location)
-            with conn:
-                cur = conn.cursor()
-                cur.execute("""SELECT data_vendor_id
-                               FROM data_vendor
-                               WHERE name=?
-                               LIMIT 1""", 
-                            ('Quandl_' + q_code[:q_code.find('/')],))
-                data = cur.fetchone()
-                if data:    # A q_code was found
-                    data = data[0]
-                else:
-                    data = 'Unknown'
-                    print('Not able to determine the data_vendor_id for %s'
-                          % q_code)
-                return data
-        except sqlite3.Error as e:
-            print('Error when trying to retrieve data from database in '
-                  'retrieve_data_vendor_id')
-            print(e)
 
 
 class GoogleFinanceDataExtraction(object):

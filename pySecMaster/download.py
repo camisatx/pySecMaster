@@ -5,6 +5,8 @@ import time
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
 
+from utilities.date_conversions import date_to_iso
+
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -65,19 +67,6 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
             return ret
         return rate_limit_func
     return rate_decorator
-
-
-def date_to_iso(row, column):
-    """
-    Change the default date format of "YYYY-MM-DD" to an ISO 8601 format
-    """
-
-    raw_date = row[column]
-    try:
-        raw_date_obj = datetime.strptime(raw_date, '%Y-%m-%d')
-    except TypeError:   # Occurs if there is no date provided ("nan")
-        raw_date_obj = datetime.today()
-    return raw_date_obj.isoformat()
 
 
 class QuandlDownload(object):
