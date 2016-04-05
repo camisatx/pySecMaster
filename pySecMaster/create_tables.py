@@ -77,6 +77,7 @@ def main_tables(db_location):
         url                 TEXT,
         support_email       TEXT,
         api                 TEXT,
+        consensus_weight    FLOAT,
         created_date        FLOAT,
         updated_date        FLOAT)''')
 

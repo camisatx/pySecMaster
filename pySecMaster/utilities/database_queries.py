@@ -2,45 +2,6 @@ import pandas as pd
 import sqlite3
 
 
-def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
-    """ Save a DataFrame to a specified SQL database table.
-
-    :param df: Pandas DataFrame with values to insert into the SQL database.
-    :param db_location: String of the directory location for the SQL database.
-    :param sql_table: String indicating which table the DataFrame should be
-        put into.
-    :param exists: String indicating how the DataFrame values should interact
-        with the existing values in the table. Valid parameters include
-        'append' [new rows] and 'replace' [all existing table rows].
-    :param item: String representing the item being inserted (i.e. the tsid)
-    :param verbose: Boolean indicating whether debugging statements should print
-    """
-
-    if verbose:
-        print('Entering the data for %s into the SQL database.' % (item,))
-
-    conn = sqlite3.connect(db_location)
-
-    # Try and except block writes the new data to the SQL Database.
-    try:
-        # if_exists options: append new df rows, replace all table values
-        df.to_sql(sql_table, conn, if_exists=exists, index=False)
-        conn.execute("PRAGMA journal_mode = MEMORY")
-        conn.execute("PRAGMA busy_timeout = 60000")
-        if verbose:
-            print('Successfully entered the values into the SQL Database')
-    except conn.Error:
-        conn.rollback()
-        print("Failed to insert the DataFrame into the database for %s" %
-              (item,))
-    except conn.OperationalError:
-        raise ValueError('Unable to connect to the SQL Database in df_to_sql. '
-                         'Make sure the database address/name are correct.')
-    except Exception as e:
-        print('Error: Unknown issue when adding DF to SQL for %s' % (item,))
-        print(e)
-
-
 def delete_sql_table_rows(db_location, query, table, tsid, verbose=False):
     """ Execute the provided query in the specified table in the database.
     Normally, this will delete the existing prices over dates where the new
@@ -80,6 +41,45 @@ def delete_sql_table_rows(db_location, query, table, tsid, verbose=False):
               '%s in the %s table.' % (tsid, table))
         print(e)
         return 'failure'
+
+
+def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
+    """ Save a DataFrame to a specified SQL database table.
+
+    :param df: Pandas DataFrame with values to insert into the SQL database.
+    :param db_location: String of the directory location for the SQL database.
+    :param sql_table: String indicating which table the DataFrame should be
+        put into.
+    :param exists: String indicating how the DataFrame values should interact
+        with the existing values in the table. Valid parameters include
+        'append' [new rows] and 'replace' [all existing table rows].
+    :param item: String representing the item being inserted (i.e. the tsid)
+    :param verbose: Boolean indicating whether debugging statements should print
+    """
+
+    if verbose:
+        print('Entering the data for %s into the SQL database.' % (item,))
+
+    conn = sqlite3.connect(db_location)
+
+    # Try and except block writes the new data to the SQL Database.
+    try:
+        # if_exists options: append new df rows, replace all table values
+        df.to_sql(sql_table, conn, if_exists=exists, index=False)
+        conn.execute("PRAGMA journal_mode = MEMORY")
+        conn.execute("PRAGMA busy_timeout = 60000")
+        if verbose:
+            print('Successfully entered the values into the SQL Database')
+    except conn.Error:
+        conn.rollback()
+        print("Failed to insert the DataFrame into the database for %s" %
+              (item,))
+    except conn.OperationalError:
+        raise ValueError('Unable to connect to the SQL Database in df_to_sql. '
+                         'Make sure the database address/name are correct.')
+    except Exception as e:
+        print('Error: Unknown issue when adding DF to SQL for %s' % (item,))
+        print(e)
 
 
 def query_all_active_tsids(db_location, table):

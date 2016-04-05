@@ -5,6 +5,7 @@ from extractor import QuandlCodeExtract, QuandlDataExtraction,\
     GoogleFinanceDataExtraction, YahooFinanceDataExtraction, CSIDataExtractor
 from load_aux_tables import LoadTables
 from build_symbology import create_symbology
+from cross_validator import cross_validate
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -219,6 +220,14 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
         else:
             print('The %s source is currently not implemented. Skipping it.' %
                   source['source'])
+
+
+def post_download_maintenance(database_link, table, tsid_list, weights_df):
+
+    # ToDo: Finalize this function to work with the cross validator
+
+    pass
+
 
 if __name__ == '__main__':
 

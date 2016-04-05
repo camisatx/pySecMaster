@@ -206,9 +206,9 @@ class LoadTables(object):
 # NOTE: make sure the table name (dict key) matches the csv load file name
 tables = {
     'data_vendor': '''INSERT INTO data_vendor(
-            data_vendor_id, name, url, support_email, api, created_date,
-            updated_date)
-            VALUES(NULL,?,?,?,?,?,?)''',
+            data_vendor_id, name, url, support_email, api, consensus_weight,
+            created_date, updated_date)
+            VALUES(NULL,?,?,?,?,?,?,?)''',
     'exchanges': '''INSERT INTO exchange(
             exchange_id, symbol, goog_symbol, yahoo_symbol, csi_symbol,
             tsid_symbol, name, country, city, currency, time_zone,
