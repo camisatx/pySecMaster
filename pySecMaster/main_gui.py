@@ -208,14 +208,26 @@ class MainWindow(QtGui.QMainWindow):
         """
 
         # The default options for Google Finance Data (Data tab)
-        google_fin_possible_selections = ['all', 'us_main', 'us_canada_london']
+        google_fin_possible_selections = ['all', 'us_main',
+                                          'us_main_no_end_date',
+                                          'us_canada_london']
         default_selection = 1
 
         self.cmb_data_googfin.clear()
         self.cmb_data_googfin.addItems(google_fin_possible_selections)
         self.cmb_data_googfin.setCurrentIndex(default_selection)
 
-        # The default options for Google Finance Data (Data tab)
+        # The default options for Yahoo Finance Data (Data tab)
+        # yahoo_fin_possible_selections = ['all', 'us_main',
+        #                                   'us_main_no_end_date',
+        #                                   'us_canada_london']
+        # default_selection = 1
+        #
+        # self.cmb_data_yahoofin.clear()
+        # self.cmb_data_yahoofin.addItems(yahoo_fin_possible_selections)
+        # self.cmb_data_yahoofin.setCurrentIndex(default_selection)
+
+        # The default options for Quandl Data (Data tab)
         quandl_possible_selections = ['quandl_wiki', 'quandl_goog',
                                       'quandl_goog_etf']
         default_selection = 0

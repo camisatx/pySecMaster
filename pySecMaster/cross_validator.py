@@ -31,18 +31,24 @@ __version__ = '1.3.1'
 '''
 
 
-def cross_validate(db_location, table, tsid_list, weights_df, verbose=False):
+def cross_validate(db_location, table, tsid_list, verbose=False):
     """ Compares the prices from multiple sources, storing the price with the
     highest consensus weight.
 
     :param db_location: String of the database file directory
     :param table: String of the database table that should be worked on
     :param tsid_list: List of strings, with each string being a tsid
-    :param weights_df: DataFrame of the source weights
     :param verbose: Boolean of whether to print debugging statements or not
     """
 
     validator_start = time.time()
+
+    # ToDo: Enable the query_source_weights function once the pySecMaster has
+    #   been updated with the consensus information
+    # source_weights_df = query_source_weights(db_location=db_location)
+    source_weights_df = pd.DataFrame([
+        {'data_vendor_id': 1, 'consensus_weight': 20},
+        {'data_vendor_id': 2, 'consensus_weight': 50}])
 
     # List of data vendor names to ignore when cross validating the data. Only
     #   matters when the data source might have data that would be considered.
@@ -116,9 +122,9 @@ def cross_validate(db_location, table, tsid_list, weights_df, verbose=False):
                         if source_data[0] not in source_id_exclude_list:
 
                             # Retrieve the weighted consensus for this source
-                            source_weight = weights_df.loc[
-                                weights_df['data_vendor_id'] == source_data[0],
-                                'consensus_weight']
+                            source_weight = source_weights_df.loc[
+                                source_weights_df['data_vendor_id'] ==
+                                source_data[0], 'consensus_weight']
 
                             if field_consensus:
                                 # There is already a value for this field
@@ -198,17 +204,7 @@ if __name__ == '__main__':
 
     test_tsids_df = query_all_active_tsids(db_location=test_database_location,
                                            table=test_table)
-
-    # ToDo: Enable the query_source_weights function once the pySecMaster has
-    #   been updated with the consensus information
-    # test_source_weights_df = \
-    #     query_source_weights(db_location=test_database_location)
-    test_source_weights_df = pd.DataFrame([
-        {'data_vendor_id': 1, 'consensus_weight': 20},
-        {'data_vendor_id': 2, 'consensus_weight': 50}])
-
     test_tsid_list = test_tsids_df['tsid'].values
 
     cross_validate(db_location=test_database_location, table=test_table,
-                   tsid_list=test_tsid_list,
-                   weights_df=test_source_weights_df, verbose=True)
+                   tsid_list=test_tsid_list, verbose=True)

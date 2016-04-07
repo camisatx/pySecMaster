@@ -6,6 +6,7 @@ from extractor import QuandlCodeExtract, QuandlDataExtraction,\
 from load_aux_tables import LoadTables
 from build_symbology import create_symbology
 from cross_validator import cross_validate
+from utilities.database_queries import query_all_active_tsids
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -221,12 +222,34 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
             print('The %s source is currently not implemented. Skipping it.' %
                   source['source'])
 
+    print('All available data values have been downloaded for: %s' %
+          download_list)
 
-def post_download_maintenance(database_link, table, tsid_list, weights_df):
 
-    # ToDo: Finalize this function to work with the cross validator
+def post_download_maintenance(database_link, download_list):
+    """ Perform tasks that require all data to be downloaded first, such as the
+    source cross validator function.
 
-    pass
+    :param db_location: String of the database file director
+    :param download_list: List of dictionaries, with each dictionary containing
+        all of the relevant variables for the specific source
+    """
+
+    table = None
+    for source in download_list:
+        if source['interval'] == 'daily':
+            table = 'daily_prices'
+        elif source['interval'] == 'minute':
+            table = 'minute_prices'
+        else:
+            raise SystemError('No interval was provided for %s in '
+                              'data_download in pySecMaster.py' %
+                              source['interval'])
+
+    tsids_df = query_all_active_tsids(db_location=database_link, table=table)
+    tsid_list = tsids_df['tsid'].values
+
+    cross_validate(db_location=database_link, table=table, tsid_list=tsid_list)
 
 
 if __name__ == '__main__':
@@ -245,6 +268,7 @@ if __name__ == '__main__':
     # Change the location for where the database will be created
     # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/' for Windows
     test_database_location = 'C:/Users/###/Programming/Databases/pySecMaster/'
+    # test_database_location = '/home/####/Programming/Databases/pySecMaster/'
 
     test_database_link = test_database_location + test_database_name
 
@@ -333,3 +357,6 @@ if __name__ == '__main__':
                   download_list=test_download_list,
                   threads=8,
                   quandl_key=test_quandl_token)
+
+    post_download_maintenance(database_link=test_database_link,
+                              download_list=test_download_list)
