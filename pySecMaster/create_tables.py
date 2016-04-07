@@ -312,6 +312,24 @@ def events_tables(db_location):
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_conf_tsid
                             ON conference_calls(tsid)""")
 
+            def dividends(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS dividends
+                (dividend_id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                tsid                        TEXT,
+                symbol                      TEXT,
+                company                     TEXT,
+                dividend                    FLOAT,
+                indicated_annual_dividend   FLOAT,
+                ex_dividend_date            FLOAT,
+                record_date                 FLOAT,
+                announcement_date           FLOAT,
+                payment_date                FLOAT,
+                created_date                FLOAT,
+                updated_date                FLOAT,
+                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_div_tsid
+                            ON dividends(tsid)""")
+
             def earnings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS earnings
                 (earnings_id    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -379,6 +397,7 @@ def events_tables(db_location):
                             ON splits(tsid)""")
 
             conference_calls(cur)
+            dividends(cur)
             earnings(cur)
             economic_events(cur)
             ipo_pricings(cur)
