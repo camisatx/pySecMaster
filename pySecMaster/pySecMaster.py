@@ -127,7 +127,8 @@ def maintenance(database_link, quandl_ticker_source, database_list, threads,
     create_symbology(db_location=database_link, source_list=symbology_sources)
 
 
-def data_download(database_link, download_list, threads=4, quandl_key=None):
+def data_download(database_link, download_list, threads=4, quandl_key=None,
+                  verbose=False):
     """ Loops through all provided data sources in download_list, and runs
     the associated data extractor using the provided source variables.
 
@@ -137,6 +138,7 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
     :param threads: Integer indicating how many threads should be used to
         concurrently download data
     :param quandl_key: String of the optional Quandl API key
+    :param verbose: Boolean of whether debugging prints should occur.
     """
 
     for source in download_list:
@@ -174,7 +176,7 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
                     days_back=source['replace_days_back'],
                     threads=threads,
                     table=table,
-                    verbose=False)
+                    verbose=verbose)
             else:
                 print('\nNot able to download Quandl data for %s because '
                       'there was no Quandl API key provided.' %
@@ -197,7 +199,7 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
                 days_back=source['replace_days_back'],
                 threads=threads,
                 table=table,
-                verbose=False)
+                verbose=verbose)
 
         elif source['source'] == 'yahoo':
             # Download data for selected Google Finance codes
@@ -206,7 +208,6 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
                   (source['selection'], source['data_process'],
                    source['replace_days_back']))
 
-            google_fin_url['period'] = 'p=' + str(source['period']) + 'd'
             YahooFinanceDataExtraction(
                 db_location=database_link,
                 db_url=yahoo_fin_url,
@@ -216,7 +217,7 @@ def data_download(database_link, download_list, threads=4, quandl_key=None):
                 days_back=source['replace_days_back'],
                 threads=threads,
                 table=table,
-                verbose=False)
+                verbose=verbose)
 
         else:
             print('The %s source is currently not implemented. Skipping it.' %
@@ -230,7 +231,7 @@ def post_download_maintenance(database_link, download_list):
     """ Perform tasks that require all data to be downloaded first, such as the
     source cross validator function.
 
-    :param db_location: String of the database file director
+    :param database_link: String of the database file director
     :param download_list: List of dictionaries, with each dictionary containing
         all of the relevant variables for the specific source
     """
@@ -263,11 +264,11 @@ if __name__ == '__main__':
 
     # Specify the name of the Security Master database
     # Name must have underscores instead of spaces and must have '.db' on end
-    test_database_name = 'pySecMaster.db'
+    test_database_name = 'pySecMaster_test.db'
 
     # Change the location for where the database will be created
     # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/' for Windows
-    test_database_location = 'C:/Users/###/Programming/Databases/pySecMaster/'
+    test_database_location = 'C:/Users/joshs/Programming/Databases/pySecMaster/'
     # test_database_location = '/home/####/Programming/Databases/pySecMaster/'
 
     test_database_link = test_database_location + test_database_name
@@ -284,8 +285,8 @@ if __name__ == '__main__':
     # Integer that represents the number of days before the ticker tables will
     #   be refreshed. In addition, if a database wasn't completely downloaded
     #   within this data range, the remainder of the codes will attempt to
-    #   download.
-    update_range = 30
+    #   download (relevant for Quandl codes).
+    quandl_update_range = 30
     csidata_update_range = 5
 
     ############################################################################
@@ -299,38 +300,41 @@ if __name__ == '__main__':
 
     # Example download list: should be a list of dictionaries, with the
     #   dictionaries containing all relevant variables for the specific source
-    test_download_list = [{'source': 'quandl', 'selection': 'wiki',
-                           'interval': 'daily', 'redownload_time': 60 * 60 * 12,
-                           'data_process': 'replace',
-                           'replace_days_back': 50000},
-                          {'source': 'quandl', 'selection': 'goog_etf',
-                           'interval': 'daily', 'redownload_time': 60 * 60 * 12,
-                           'data_process': 'replace',
-                           'replace_days_back': 50000},
-                          {'source': 'google',
-                           'selection': 'us_main_no_end_date',
-                           'interval': 'daily', 'period': 50000,
-                           'redownload_time': 60 * 60 * 12,
-                           'data_process': 'replace', 'replace_days_back': 60},
-                          {'source': 'yahoo', 'selection': 'us_main',
-                           'interval': 'daily', 'redownload_time': 60 * 60 * 12,
-                           'data_process': 'replace', 'replace_days_back': 60}]
-    # test_download_list = [{'source': 'google_fin', 'selection': 'us_main',
-    #                        'interval': 'minute', 'period': 20,
-    #                        'redownload_time': 60 * 60 * 12,
-    #                        'data_process': 'replace',
-    #                        'replace_days_back': 10}]
+    test_download_list = [
+        {'source': 'quandl', 'selection': 'wiki', 'interval': 'daily',
+         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
+         'replace_days_back': 50000},
+        {'source': 'quandl', 'selection': 'goog_us_main_no_end_date',
+         'interval': 'daily', 'redownload_time': 60 * 60 * 12,
+         'data_process': 'replace', 'replace_days_back': 60},
+        {'source': 'quandl', 'selection': 'goog_etf', 'interval': 'daily',
+         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
+         'replace_days_back': 60},
+        # {'source': 'google', 'selection': 'us_main_no_end_date',
+        #  'interval': 'daily', 'period': 60, 'redownload_time': 60 * 60 * 12,
+        #  'data_process': 'replace', 'replace_days_back': 60},
+        {'source': 'yahoo', 'selection': 'us_main', 'interval': 'daily',
+         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
+         'replace_days_back': 60}
+    ]
+    # test_download_list = [
+    #     {'source': 'google_fin', 'selection': 'us_main', 'interval': 'minute',
+    #      'period': 20, 'redownload_time': 60 * 60 * 12,
+    #      'data_process': 'replace', 'replace_days_back': 10}
+    # ]
 
     # source: String of which data provider should have their data downloaded
     # selection: String of which data from the source should be downloaded. To
     #   understand what is actually being downloaded, go to the query_q_codes
     #   method in either the QuandlDataExtraction class or the
     #   GoogleFinanceDataExtraction class in extractor.py, and look at the
-    #   SQLite queries. (Quandl: 'wiki', 'goog', 'goog_etf'; Google: 'all',
-    #   'us_main', 'us_main_no_end_date', 'us_canada_london')
+    #   SQLite queries. (Quandl: 'wiki', 'goog', 'goog_us_main',
+    #   'goog_us_main_no_end_date', 'goog_us_canada_london', 'goog_etf';
+    #   Google: 'all', 'us_main', 'us_main_no_end_date', 'us_canada_london')
     # interval: String of what interval the data should be in (daily or minute).
     # period: Integer of how many day's data should be downloaded (Google
-    #   finance only). Minute data only has data back 15 days.
+    #   finance only). Minute data only has data back 15 days, and daily data
+    #   only has data back 50 days.
     # redownload_time: Integer representing time in seconds before the data is
     #   allowed to be re-downloaded. Allows the system to be restarted without
     #   downloading the same data again.
@@ -349,14 +353,15 @@ if __name__ == '__main__':
                 database_list=database_list,
                 threads=8,
                 quandl_key=test_quandl_token,
-                quandl_update_range=update_range,
+                quandl_update_range=quandl_update_range,
                 csidata_update_range=csidata_update_range,
                 symbology_sources=symbology_sources)
 
     data_download(database_link=test_database_link,
                   download_list=test_download_list,
                   threads=8,
-                  quandl_key=test_quandl_token)
+                  quandl_key=test_quandl_token,
+                  verbose=True)
 
-    post_download_maintenance(database_link=test_database_link,
-                              download_list=test_download_list)
+    # post_download_maintenance(database_link=test_database_link,
+    #                           download_list=test_download_list)

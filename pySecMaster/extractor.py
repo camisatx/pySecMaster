@@ -416,7 +416,7 @@ class QuandlDataExtraction(object):
         :param verbose: Boolean of whether debugging prints should occur.
         """
 
-        self.database_location = db_location
+        self.db_location = db_location
         self.quandl_token = quandl_token
         self.db_url = db_url
         self.download_selection = download_selection
@@ -435,13 +435,13 @@ class QuandlDataExtraction(object):
         self.csv_wo_data = 'load_tables/quandl_' + self.table + '_wo_data.csv'
 
         # Retrieve all of the Quandl data vendor IDs
-        quandl_vendor_ids = retrieve_data_vendor_id(db_location=self.db_url,
-                                                    name='Quandl_%')
+        quandl_vendor_ids = retrieve_data_vendor_id(
+            db_location=self.db_location, name='Quandl_%')
 
         print('Retrieving dates of the last price per ticker for all Quandl '
               'values.')
         # Creates a DataFrame with the last price for each Quandl code
-        self.latest_prices = query_last_price(db_location=self.db_url,
+        self.latest_prices = query_last_price(db_location=self.db_location,
                                               table=self.table,
                                               vendor_id=quandl_vendor_ids)
 
@@ -457,7 +457,7 @@ class QuandlDataExtraction(object):
 
         print('Analyzing the Quandl Codes that will be downloaded...')
         # Create a list of securities to download
-        q_code_df = query_q_codes(db_location=self.db_url,
+        q_code_df = query_q_codes(db_location=self.db_location,
                                   download_selection=self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
@@ -561,15 +561,15 @@ class QuandlDataExtraction(object):
             else:
                 # Find the data vendor of the q_code; add it to the DataFrame
                 vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
-                data_vendor = retrieve_data_vendor_id(db_location=self.db_url,
-                                                      name=vendor_name)
+                data_vendor = retrieve_data_vendor_id(
+                    db_location=self.db_location, name=vendor_name)
                 clean_data.insert(0, 'data_vendor_id', data_vendor)
 
                 # Add the tsid into the DataFrame, and then remove the q_code
                 clean_data.insert(1, 'tsid', tsid)
                 clean_data.drop('q_code', axis=1, inplace=True)
 
-                df_to_sql(clean_data, self.database_location, 'daily_prices',
+                df_to_sql(clean_data, self.db_location, 'daily_prices',
                           'append', tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
@@ -610,8 +610,8 @@ class QuandlDataExtraction(object):
             else:
                 # Find the data vendor of the q_code; add it to the DataFrame
                 vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
-                data_vendor = retrieve_data_vendor_id(db_location=self.db_url,
-                                                      name=vendor_name)
+                data_vendor = retrieve_data_vendor_id(
+                    db_location=self.db_location, name=vendor_name)
                 clean_data.insert(0, 'data_vendor_id', data_vendor)
 
                 # Add the tsid into the DataFrame, and then remove the q_code
@@ -627,7 +627,7 @@ class QuandlDataExtraction(object):
                     query = ("""DELETE FROM daily_prices
                                 WHERE tsid='%s'
                                 AND date>='%s'""" % (tsid, first_date_iso))
-                    del_success = delete_sql_table_rows(self.database_location,
+                    del_success = delete_sql_table_rows(self.db_location,
                                                         query, 'daily_prices',
                                                         tsid)
                     # Not able to delete existing data, so skip ticker for now
@@ -635,7 +635,7 @@ class QuandlDataExtraction(object):
                         return
 
                 # Append the new data to the end, regardless of replacement
-                df_to_sql(clean_data, self.database_location, 'daily_prices',
+                df_to_sql(clean_data, self.db_location, 'daily_prices',
                           'append', tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
@@ -834,8 +834,9 @@ class GoogleFinanceDataExtraction(object):
 
             # There is no new data, so do nothing to the database
             if len(clean_data.index) == 0:
-                print('No data for %s | %0.1f seconds' %
-                      (tsid, time.time() - main_time_start))
+                if self.verbose:
+                    print('No data for %s | %0.1f seconds' %
+                          (tsid, time.time() - main_time_start))
             # There is new data to add to the database
             else:
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
@@ -1099,8 +1100,9 @@ class YahooFinanceDataExtraction(object):
 
             # There is no new data, so do nothing to the database
             if len(clean_data.index) == 0:
-                print('No data for %s | %0.1f seconds' %
-                      (tsid, time.time() - main_time_start))
+                if self.verbose:
+                    print('No data for %s | %0.1f seconds' %
+                          (tsid, time.time() - main_time_start))
             # There is new data to add to the database
             else:
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)

@@ -376,9 +376,12 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     ticker = tsid[:tsid.find('.')]
     exchange_symbol = tsid[tsid.find('.')+1:tsid.find('.', tsid.find('.')+1)]
 
-    # Use the tsid exchange symbol to get the Google exchange symbol
-    exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] == exchange_symbol,
-                                 'goog_symbol'].values)
+    try:
+        # Use the tsid exchange symbol to get the Google exchange symbol
+        exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] ==
+                                     exchange_symbol, 'goog_symbol'].values)
+    except KeyError:
+        exchange = None
 
     # Make the url string; aside from the root, the items can be in any order
     url_string = db_url['root']      # Establish the url root
@@ -550,7 +553,10 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     try:
         raw_df = google_data_processing(url_obj)
+    except IndexError:
+        raw_df = pd.DataFrame()
 
+    if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list
         codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
         if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
@@ -564,9 +570,9 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
             if verbose:
                 print('%s was removed from the wo_data CSV file since data '
                       'was available for download.' % (tsid,))
-    except IndexError:
+    else:
+        # There is no price data for this code; add to CSV file via DataFrame
         try:
-            # There is no price data for this code; add to CSV file via DF
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
             cur_date = datetime.utcnow().isoformat()
             if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
@@ -590,21 +596,13 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                 if verbose:
                     print('%s did not have data, thus it was added to the '
                           'wo_data CSV file.' % (tsid,))
-
-            # Return an empty DF; DataExtraction class will be able to handle it
-            return pd.DataFrame()
         except Exception as e:
-            print('Flag: Error occurred when trying to update '
-                  'goog_min_codes_wo_data CSV data for %s' % (tsid,))
+            print('Error occurred when trying to update %s CSV data for %s' %
+                  (csv_out, tsid))
             print(e)
-            return pd.DataFrame()
-    except Exception as e:
-        print('Flag: Error occurred when processing data for %s' % (tsid,))
-        print(e)
-        return pd.DataFrame()
 
-    if len(raw_df.index) == 0:
-        return raw_df
+        # Return an empty DF; DataExtraction class will be able to handle it
+        return pd.DataFrame()
 
     def datetime_to_iso(row, column):
         return row[column].isoformat()
@@ -637,8 +635,8 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     try:
         # Use the tsid exchange symbol to get the Yahoo exchange symbol
-        exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] == exchange_symbol,
-                                     'yahoo_symbol'].values)
+        exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] ==
+                                     exchange_symbol, 'yahoo_symbol'].values)
     except KeyError:
         exchange = None
 
@@ -676,7 +674,9 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                 raise OSError('HTTPError %s: Reached API call limit. Make the '
                               'RateLimit more restrictive.' % (e.reason,))
             elif str(e) == 'HTTP Error 404: Not Found':
-                raise OSError('HTTPError %s: %s not found' % (e.reason, tsid))
+                # if verbose:
+                #     print('HTTPError %s: %s not found' % (e.reason, tsid))
+                return None
             elif str(e) == 'HTTP Error 429: Too Many Requests':
                 if download_try <= 5:
                     print('HTTPError %s: Exceeded API limit. Make the '
@@ -755,12 +755,18 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     url_obj = download_data(url_string)
 
     column_names = ['date', 'open', 'high', 'low', 'close', 'volume',
-                    'adj_volume']
+                    'adj_close']
 
-    if url_obj:
+    try:
         raw_df = pd.read_csv(url_obj, index_col=False, names=column_names,
                              encoding='utf-8')
+    except IndexError:
+        raw_df = pd.DataFrame()
+    except OSError:
+        # Occurs when the url_obj is None, meaning the url returned a 404 error
+        raw_df = pd.DataFrame()
 
+    if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list
         codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
         if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
@@ -775,42 +781,49 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                 print('%s was removed from the wo_data CSV file since data '
                       'was available for download.' % (tsid,))
     else:
-        # There is no price data for this code; add to CSV file via DF
-        codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-        cur_date = datetime.utcnow().isoformat()
-        if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
-            # The code already exists within the CSV, so update the date
-            codes_wo_data_df.set_value(codes_wo_data_df['tsid'] == tsid,
-                                       'date_tried', cur_date)
-            # Remove any duplicates (keeping the latest) and save to a CSV
-            clean_wo_data_df = \
-                codes_wo_data_df.drop_duplicates(subset='tsid', keep='last')
-            clean_wo_data_df.to_csv(csv_out, index=False)
-            if verbose:
-                print('%s still did not have data. Date tried was updated '
-                      'in the wo_data CSV file.' % (tsid,))
-        else:
-            # The code does not exists within the CSV, so create and append
-            #   it to the CSV file. Do this via a DataFrame to CSV append
-            no_data_df = pd.DataFrame(data=[(tsid, cur_date)],
-                                      columns=['tsid', 'date_tried'])
-            with open(csv_out, 'a') as f:
-                no_data_df.to_csv(f, mode='a', header=False, index=False)
-            if verbose:
-                print('%s did not have data, thus it was added to the '
-                      'wo_data CSV file.' % (tsid,))
+        # There is no price data for this code; add to CSV file via DataFrame
+        try:
+            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+            cur_date = datetime.utcnow().isoformat()
+            if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
+                # The code already exists within the CSV, so update the date
+                codes_wo_data_df.set_value(codes_wo_data_df['tsid'] == tsid,
+                                           'date_tried', cur_date)
+                # Remove any duplicates (keeping the latest) and save to a CSV
+                clean_wo_data_df = \
+                    codes_wo_data_df.drop_duplicates(subset='tsid', keep='last')
+                clean_wo_data_df.to_csv(csv_out, index=False)
+                if verbose:
+                    print('%s still did not have data. Date tried was updated '
+                          'in the wo_data CSV file.' % (tsid,))
+            else:
+                # The code does not exists within the CSV, so create and append
+                #   it to the CSV file. Do this via a DataFrame to CSV append
+                no_data_df = pd.DataFrame(data=[(tsid, cur_date)],
+                                          columns=['tsid', 'date_tried'])
+                with open(csv_out, 'a') as f:
+                    no_data_df.to_csv(f, mode='a', header=False, index=False)
+                if verbose:
+                    print('%s did not have data, thus it was added to the '
+                          'wo_data CSV file.' % (tsid,))
+        except Exception as e:
+            print('Error occurred when trying to update %s CSV data for %s' %
+                  (csv_out, tsid))
+            print(e)
 
         # Return an empty DF; DataExtraction class will be able to handle it
         return pd.DataFrame()
 
-    if len(raw_df.index) == 0:
-        return raw_df
+    # Removes the column headers from data download
+    raw_df = raw_df[1:]
 
-    raw_df = raw_df[1:]  # Removes the column headers from data download
     raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
     raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
                   datetime.utcnow().isoformat())
+
+    # Remove the adjusted close column since this is calculated manually
+    raw_df.drop('adj_close', axis=1, inplace=True)
 
     return raw_df
 

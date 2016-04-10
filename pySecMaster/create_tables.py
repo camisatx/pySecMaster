@@ -319,7 +319,6 @@ def events_tables(db_location):
                 symbol                      TEXT,
                 company                     TEXT,
                 dividend                    FLOAT,
-                indicated_annual_dividend   FLOAT,
                 ex_dividend_date            FLOAT,
                 record_date                 FLOAT,
                 announcement_date           FLOAT,

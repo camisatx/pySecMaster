@@ -177,8 +177,7 @@ def query_all_tsid_prices(db_location, table, tsid):
 
 
 def query_codes(db_location, download_selection):
-    """
-    Builds a DataFrame of tsid codes from a SQL query. These codes are the
+    """ Builds a DataFrame of tsid codes from a SQL query. These codes are the
     items that will have their data downloaded.
 
     With more databases, it may be necessary to have the user
@@ -333,8 +332,7 @@ def query_last_price(db_location, table, vendor_id):
 
 
 def query_q_codes(db_location, download_selection):
-    """
-    Builds a list of Quandl Codes from a SQL query. These codes are the
+    """ Builds a list of Quandl Codes from a SQL query. These codes are the
     items that will have their data downloaded.
 
     With more databases, it may be necessary to have the user
@@ -370,6 +368,74 @@ def query_q_codes(db_location, download_selection):
                                WHERE tsid.source='tsid'
                                AND wiki.source='quandl_goog'
                                GROUP BY wiki.source_id""")
+            elif download_selection == 'goog_us_main':
+                # Retrieve tsid tickers that trade only on main US exchanges
+                #   and that have been active within the prior two years.
+                beg_date = (datetime.utcnow() - timedelta(days=730))
+                cur.execute("""SELECT tsid.source_id, wiki.source_id
+                               FROM symbology tsid
+                               INNER JOIN symbology wiki
+                               ON tsid.symbol_id = wiki.symbol_id
+                               WHERE tsid.source='tsid'
+                               AND wiki.source='quandl_goog'
+                               AND wiki.symbol_id IN (
+                                   SELECT CsiNumber
+                                   FROM csidata_stock_factsheet
+                                   WHERE EndDate > ?
+                                   AND (Exchange IN ('AMEX', 'NYSE')
+                                   OR ChildExchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA')))
+                               GROUP BY wiki.source_id""",
+                            (beg_date.isoformat(),))
+            elif download_selection == 'goog_us_main_no_end_date':
+                # Retrieve tsid tickers that trade only on main US exchanges
+                cur.execute("""SELECT tsid.source_id, wiki.source_id
+                               FROM symbology tsid
+                               INNER JOIN symbology wiki
+                               ON tsid.symbol_id = wiki.symbol_id
+                               WHERE tsid.source='tsid'
+                               AND wiki.source='quandl_goog'
+                               AND wiki.symbol_id IN (
+                                   SELECT CsiNumber
+                                   FROM csidata_stock_factsheet
+                                   WHERE (Exchange IN ('AMEX', 'NYSE')
+                                   OR ChildExchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA')))
+                               GROUP BY wiki.source_id""")
+            elif download_selection == 'goog_us_canada_london':
+                # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
+                #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
+                #   active within the prior two years.
+                beg_date = (datetime.utcnow() - timedelta(days=730))
+                cur.execute("""SELECT tsid.source_id, wiki.source_id
+                                   FROM symbology tsid
+                                   INNER JOIN symbology wiki
+                                   ON tsid.symbol_id = wiki.symbol_id
+                                   WHERE tsid.source='tsid'
+                                   AND wiki.source='quandl_goog'
+                                   AND wiki.symbol_id IN (
+                                       SELECT CsiNumber
+                                       FROM csidata_stock_factsheet
+                                       WHERE EndDate > ?
+                                       AND (Exchange IN ('AMEX', 'LSE', 'NYSE',
+                                       'TSX', 'VSE')
+                                       OR ChildExchange IN ('AMEX',
+                                           'BATS Global Markets',
+                                           'Nasdaq Capital Market',
+                                           'Nasdaq Global Market',
+                                           'Nasdaq Global Select',
+                                           'NYSE', 'NYSE ARCA',
+                                           'OTC Markets Pink Sheets')))
+                                   GROUP BY wiki.source_id""",
+                            (beg_date.isoformat(),))
             elif download_selection == 'goog_etf':
                 cur.execute("""SELECT tsid.source_id, wiki.source_id
                                FROM symbology tsid
@@ -384,12 +450,12 @@ def query_q_codes(db_location, download_selection):
                                GROUP BY wiki.source_id
                                """)
             else:
-                raise SystemError('Improper download_selection was '
-                                  'provided in query_codes. If this is '
-                                  'a new query, ensure the SQL is '
-                                  'correct. Valid symbology download '
-                                  'selections include quandl_wiki,'
-                                  'quandl_goog, and quandl_goog_etf.')
+                raise SystemError('Improper download_selection was provided '
+                                  'in query_codes. If this is a new query, '
+                                  'ensure the SQL is correct. Valid symbology '
+                                  'download selections include wiki, goog, '
+                                  'goog_us_main, goog_us_main_no_end_date,'
+                                  'goog_us_canada_london, and goog_etf.')
 
             data = cur.fetchall()
             if data:
