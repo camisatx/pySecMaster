@@ -748,9 +748,8 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
         except Exception as e:
             print(e)
-            raise OSError('Warning: Encountered an unknown error when '
-                          'downloading %s in download_data in download.py' %
-                          (tsid,))
+            print('Warning: Encountered an unknown error when downloading %s '
+                  'in download_yahoo_data.download_data' % (tsid,))
 
     url_obj = download_data(url_string)
 
