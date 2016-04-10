@@ -168,8 +168,8 @@ def query_all_tsid_prices(db_location, table, tsid):
                 df.sortlevel(inplace=True)
                 return df
             else:
-                raise TypeError('Not able to query any tsid codes in '
-                                'query_all_tsid_prices')
+                raise TypeError('Not able to query any prices for %s in '
+                                'query_all_tsid_prices' % tsid)
     except sqlite3.Error as e:
         print(e)
         raise TypeError('Error when trying to connect to the database '

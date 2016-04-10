@@ -1,3 +1,4 @@
+from datetime import datetime
 import pandas as pd
 import time
 
@@ -41,14 +42,11 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
     :param verbose: Boolean of whether to print debugging statements or not
     """
 
+    # ToDo: Multi-thread this based on tsids
+
     validator_start = time.time()
 
-    # ToDo: Enable the query_source_weights function once the pySecMaster has
-    #   been updated with the consensus information
-    # source_weights_df = query_source_weights(db_location=db_location)
-    source_weights_df = pd.DataFrame([
-        {'data_vendor_id': 1, 'consensus_weight': 20},
-        {'data_vendor_id': 2, 'consensus_weight': 50}])
+    source_weights_df = query_source_weights(db_location=db_location)
 
     # List of data vendor names to ignore when cross validating the data. Only
     #   matters when the data source might have data that would be considered.
@@ -133,35 +131,51 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
                                     #   current consensus. Increase the weight
                                     #   for this price.
                                     field_consensus[source_data[1]] += \
-                                        source_weight[0]
+                                        source_weight.iloc[0]
                                 else:
                                     # The data value from the source does not
                                     #   match this field's consensus
                                     field_consensus[source_data[1]] = \
-                                        source_weight[0]
+                                        source_weight.iloc[0]
 
-                                    if verbose:
-                                        print('The %s value for data vendor %i '
-                                              'does not match the consensus '
-                                              'value on %s.' %
-                                              (field_index, source_data[0],
-                                               date))
+                                    # if verbose:
+                                    #     print('%s %s value for data vendor '
+                                    #           '%i does not match the '
+                                    #           'consensus value on %s.' %
+                                    #           (tsid, field_index,
+                                    #            source_data[0], date))
                             else:
                                 # Add the first price to the field_consensus
                                 #   dictionary, using the price as the key and
                                 #   the source's weight as the item.
                                 field_consensus[source_data[1]] = \
-                                    source_weight[0]
+                                    source_weight.iloc[0]
 
                     # Insert the highest consensus value for this period into
                     #   the consensus_price_df
                     consensus_value = max(field_consensus.keys())
                     consensus_price_df.ix[date, field_index] = consensus_value
 
-        # Add the vendor id of the pySecMaster_Consensus for these values
+        def datetime_to_iso(row, column):
+            return row[column].isoformat()
+
+        # Make the date index into a normal column
+        consensus_price_df.reset_index(inplace=True)
+        consensus_price_df['date'] = consensus_price_df.apply(datetime_to_iso,
+                                                              axis=1,
+                                                              args=('date',))
+
+        # Add the tsid as a normal column
+        consensus_price_df.insert(0, 'tsid', tsid)
+
+        # Add the vendor id of the pySecMaster_Consensus as a normal column
         validator_id = retrieve_data_vendor_id(db_location=db_location,
                                                name='pySecMaster_Consensus')
         consensus_price_df.insert(0, 'data_vendor_id', validator_id)
+
+        # Add the current date to the last column
+        consensus_price_df.insert(len(consensus_price_df.columns),
+                                  'updated_date', datetime.utcnow().isoformat())
 
         if verbose:
             print('%s data cross validation took %0.2f seconds to complete.' %

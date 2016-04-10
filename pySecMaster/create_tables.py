@@ -208,6 +208,8 @@ def data_tables(db_location):
         FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_tsid
                     ON daily_prices(tsid)""")
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_data_vendor_id
+            ON daily_prices(data_vendor_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_date
                     ON daily_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_updated_date
