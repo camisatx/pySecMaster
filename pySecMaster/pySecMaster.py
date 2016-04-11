@@ -5,7 +5,7 @@ from extractor import QuandlCodeExtract, QuandlDataExtraction,\
     GoogleFinanceDataExtraction, YahooFinanceDataExtraction, CSIDataExtractor
 from load_aux_tables import LoadTables
 from build_symbology import create_symbology
-from cross_validator import cross_validate
+from cross_validator import CrossValidate
 from utilities.database_queries import query_all_active_tsids
 
 __author__ = 'Josh Schertz'
@@ -227,13 +227,14 @@ def data_download(database_link, download_list, threads=4, quandl_key=None,
           download_list)
 
 
-def post_download_maintenance(database_link, download_list):
+def post_download_maintenance(database_link, download_list, verbose=False):
     """ Perform tasks that require all data to be downloaded first, such as the
     source cross validator function.
 
     :param database_link: String of the database file director
     :param download_list: List of dictionaries, with each dictionary containing
         all of the relevant variables for the specific source
+    :param verbose: Boolean of whether debugging prints should occur.
     """
 
     table = None
@@ -250,7 +251,8 @@ def post_download_maintenance(database_link, download_list):
     tsids_df = query_all_active_tsids(db_location=database_link, table=table)
     tsid_list = tsids_df['tsid'].values
 
-    cross_validate(db_location=database_link, table=table, tsid_list=tsid_list)
+    CrossValidate(db_location=database_link, table=table, tsid_list=tsid_list,
+                  verbose=verbose)
 
 
 if __name__ == '__main__':
@@ -264,7 +266,7 @@ if __name__ == '__main__':
 
     # Specify the name of the Security Master database
     # Name must have underscores instead of spaces and must have '.db' on end
-    test_database_name = 'pySecMaster_test.db'
+    test_database_name = 'pySecMaster_d.db'
 
     # Change the location for where the database will be created
     # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/' for Windows
@@ -363,5 +365,6 @@ if __name__ == '__main__':
                   quandl_key=test_quandl_token,
                   verbose=True)
 
-    # post_download_maintenance(database_link=test_database_link,
-    #                           download_list=test_download_list)
+    post_download_maintenance(database_link=test_database_link,
+                              download_list=test_download_list,
+                              verbose=True)

@@ -1,6 +1,5 @@
 import csv
 from datetime import datetime, timedelta
-from multiprocessing import Pool
 import pandas as pd
 import re
 import sqlite3
@@ -11,6 +10,7 @@ from download import QuandlDownload, download_google_data, \
 from utilities.database_queries import df_to_sql, delete_sql_table_rows, \
     retrieve_data_vendor_id, query_codes, query_last_price, query_q_codes
 from utilities.date_conversions import dt_from_iso
+from utilities.multithread import multithread
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -36,29 +36,6 @@ __version__ = '1.3.1'
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
-
-
-def multithread(function, items, threads=4):
-    """ Takes the main function to run in parallel, inputs the variable(s)
-    and returns the results.
-
-    :param function: The main function to process in parallel.
-    :param items: A list of strings that are passed into the function for
-    each thread.
-    :param threads: The number of threads to use. The default is 4, but
-    the threads are not CPU core bound.
-    :return: The results of the function passed into this function.
-    """
-
-    """The async variant, which submits all processes at once and
-    retrieve the results as soon as they are done."""
-    pool = Pool(threads)
-    output = [pool.apply_async(function, args=(item,)) for item in items]
-    results = [p.get() for p in output]
-    pool.close()
-    pool.join()
-
-    return results
 
 
 class QuandlCodeExtract(object):

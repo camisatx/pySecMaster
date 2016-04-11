@@ -1,10 +1,12 @@
 from datetime import datetime
+import operator
 import pandas as pd
 import time
 
 from utilities.database_queries import delete_sql_table_rows, df_to_sql,\
     query_all_active_tsids, query_all_tsid_prices, query_source_weights,\
     retrieve_data_vendor_id
+from utilities.multithread import multithread
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -32,41 +34,66 @@ __version__ = '1.3.1'
 '''
 
 
-def cross_validate(db_location, table, tsid_list, verbose=False):
+class CrossValidate(object):
     """ Compares the prices from multiple sources, storing the price with the
     highest consensus weight.
-
-    :param db_location: String of the database file directory
-    :param table: String of the database table that should be worked on
-    :param tsid_list: List of strings, with each string being a tsid
-    :param verbose: Boolean of whether to print debugging statements or not
     """
 
-    # ToDo: Multi-thread this based on tsids
+    def __init__(self, db_location, table, tsid_list, verbose=False):
+        """
+        :param db_location: String of the database file directory
+        :param table: String of the database table that should be worked on
+        :param tsid_list: List of strings, with each string being a tsid
+        :param verbose: Boolean of whether to print debugging statements or not
+        """
 
-    validator_start = time.time()
+        self.db_location = db_location
+        self.table = table
+        self.tsid_list = tsid_list
+        self.verbose = verbose
 
-    source_weights_df = query_source_weights(db_location=db_location)
+        # Build a DataFrame with the source id and weight
+        self.source_weights_df = query_source_weights(db_location=
+                                                      self.db_location)
 
-    # List of data vendor names to ignore when cross validating the data. Only
-    #   matters when the data source might have data that would be considered.
-    source_exclude_list = ['pySecMaster_Consensus']
+        # List of data vendor names to ignore when cross validating the data.
+        #   Relevant when the data source has data that would be considered.
+        self.source_exclude_list = ['pySecMaster_Consensus']
 
-    source_id_exclude_list = []
-    for source in source_exclude_list:
-        source_id = retrieve_data_vendor_id(db_location=db_location,
-                                            name=source)
-        source_id_exclude_list.append(source_id)
+        self.source_id_exclude_list = []
+        for source in self.source_exclude_list:
+            source_id = retrieve_data_vendor_id(db_location=self.db_location,
+                                                name=source)
+            self.source_id_exclude_list.append(source_id)
 
-    # Cycle through each tsid, running the data cross validator on all sources
-    #   and fields available.
-    for tsid in tsid_list:
+        self.main()
+
+    def main(self):
+        """ Start the tsid cross validator process using either single or
+        multiprocessing. """
+
+        validator_start = time.time()
+
+        # Cycle through each tsid, running the data cross validator on all
+        #   sources and fields available.
+        """No multiprocessing"""
+        # [self.validator(tsid=tsid) for tsid in self.tsid_list]
+        """Multiprocessing using 4 threads"""
+        multithread(self.validator, self.tsid_list, threads=4)
+
+        if self.verbose:
+            print('%i tsids have had their sources cross validated taking '
+                  '%0.2f seconds.' %
+                  (len(self.tsid_list), time.time() - validator_start))
+
+    def validator(self, tsid):
 
         tsid_start = time.time()
 
-        # DataFrame of all stored prices for this ticker and interval
-        tsid_prices_df = query_all_tsid_prices(db_location=db_location,
-                                               table=table, tsid=tsid)
+        # DataFrame of all stored prices for this ticker and interval. This is
+        #   a multi-index DataFrame, with date and data_vendor_id in the index.
+        tsid_prices_df = query_all_tsid_prices(db_location=self.db_location,
+                                               table=self.table, tsid=tsid)
 
         unique_dates = tsid_prices_df.index.get_level_values('date').unique()
         unique_sources = tsid_prices_df.index.\
@@ -81,14 +108,14 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
         # Cycle through each period, comparing each data source's prices
         for date in unique_dates:
 
-            # ToDo: Either add each field's consensus price to a dictionary,
+            # Either add each field's consensus price to a dictionary,
             #   which is entered into the consensus_price_df upon all fields
             #   being processed, or enter each field's consensus price directly
             #   into the consensus_price_df. Right now, this is doing the later.
             # consensus_prices = {}
 
             try:
-                # Create a DF with for the current period, with the source_ids
+                # Create a DataFrame for the current period, with the source_ids
                 #   as the index and the data_columns as the column headers
                 period_df = tsid_prices_df.xs(date, level='date')
             except KeyError:
@@ -99,7 +126,6 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
                 # Transpose the period_df DataFrame so the source_ids are
                 #   columns and the price fields are the rows
                 period_df = period_df.transpose()
-                # print(period_df)
 
                 # Cycle through each price field for this period's values
                 for field_index, field_data in period_df.iterrows():
@@ -117,11 +143,11 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
 
                         # If the source_data's id is in the exclude list, don't
                         #   use its price when calculating the field consensus.
-                        if source_data[0] not in source_id_exclude_list:
+                        if source_data[0] not in self.source_id_exclude_list:
 
                             # Retrieve the weighted consensus for this source
-                            source_weight = source_weights_df.loc[
-                                source_weights_df['data_vendor_id'] ==
+                            source_weight = self.source_weights_df.loc[
+                                self.source_weights_df['data_vendor_id'] ==
                                 source_data[0], 'consensus_weight']
 
                             if field_consensus:
@@ -138,12 +164,6 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
                                     field_consensus[source_data[1]] = \
                                         source_weight.iloc[0]
 
-                                    # if verbose:
-                                    #     print('%s %s value for data vendor '
-                                    #           '%i does not match the '
-                                    #           'consensus value on %s.' %
-                                    #           (tsid, field_index,
-                                    #            source_data[0], date))
                             else:
                                 # Add the first price to the field_consensus
                                 #   dictionary, using the price as the key and
@@ -152,8 +172,10 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
                                     source_weight.iloc[0]
 
                     # Insert the highest consensus value for this period into
-                    #   the consensus_price_df
-                    consensus_value = max(field_consensus.keys())
+                    #   the consensus_price_df (the dictionary key (price) with
+                    #   the largest value (consensus sum).
+                    consensus_value = max(field_consensus.items(),
+                                          key=operator.itemgetter(1))[0]
                     consensus_price_df.ix[date, field_index] = consensus_value
 
         def datetime_to_iso(row, column):
@@ -161,6 +183,7 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
 
         # Make the date index into a normal column
         consensus_price_df.reset_index(inplace=True)
+        # Convert the datetime object to an ISO date
         consensus_price_df['date'] = consensus_price_df.apply(datetime_to_iso,
                                                               axis=1,
                                                               args=('date',))
@@ -169,17 +192,13 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
         consensus_price_df.insert(0, 'tsid', tsid)
 
         # Add the vendor id of the pySecMaster_Consensus as a normal column
-        validator_id = retrieve_data_vendor_id(db_location=db_location,
+        validator_id = retrieve_data_vendor_id(db_location=self.db_location,
                                                name='pySecMaster_Consensus')
         consensus_price_df.insert(0, 'data_vendor_id', validator_id)
 
         # Add the current date to the last column
         consensus_price_df.insert(len(consensus_price_df.columns),
                                   'updated_date', datetime.utcnow().isoformat())
-
-        if verbose:
-            print('%s data cross validation took %0.2f seconds to complete.' %
-                  (tsid, time.time() - tsid_start))
 
         if validator_id in unique_sources:
             # Data from the cross validation process has already been saved
@@ -189,36 +208,36 @@ def cross_validate(db_location, table, tsid_list, verbose=False):
             delete_query = ("""DELETE FROM %s
                                WHERE tsid='%s'
                                AND data_vendor_id='%s'""" %
-                            (table, tsid, validator_id))
+                            (self.table, tsid, validator_id))
 
-            delete_status = delete_sql_table_rows(db_location=db_location,
+            delete_status = delete_sql_table_rows(db_location=self.db_location,
                                                   query=delete_query,
-                                                  table=table, tsid=tsid)
+                                                  table=self.table, tsid=tsid)
             if delete_status == 'success':
                 # Add the validated values to the relevant price table AFTER
                 #   ensuring that the duplicates were deleted successfully
-                df_to_sql(df=consensus_price_df, db_location=db_location,
-                          sql_table=table, exists='append', item=tsid)
+                df_to_sql(df=consensus_price_df, db_location=self.db_location,
+                          sql_table=self.table, exists='append', item=tsid)
 
         else:
             # Add the validated values to the relevant price table
-            df_to_sql(df=consensus_price_df, db_location=db_location,
-                      sql_table=table, exists='append', item=tsid)
+            df_to_sql(df=consensus_price_df, db_location=self.db_location,
+                      sql_table=self.table, exists='append', item=tsid)
 
-    if verbose:
-        print('%i tsids have had their sources cross validated taking %0.2f '
-              'seconds.' % (len(tsid_list), time.time() - validator_start))
+        if self.verbose:
+            print('%s data cross-validation took %0.2f seconds to complete.' %
+                  (tsid, time.time() - tsid_start))
 
 
 if __name__ == '__main__':
 
     test_database_location = '/home/josh/Programming/Databases/pySecMaster/' \
-                             'pySecMaster_d.db'
+                             'pySecMaster.db'
     test_table = 'daily_prices'
 
     test_tsids_df = query_all_active_tsids(db_location=test_database_location,
                                            table=test_table)
     test_tsid_list = test_tsids_df['tsid'].values
 
-    cross_validate(db_location=test_database_location, table=test_table,
-                   tsid_list=test_tsid_list, verbose=True)
+    CrossValidate(db_location=test_database_location, table=test_table,
+                  tsid_list=test_tsid_list, verbose=True)
