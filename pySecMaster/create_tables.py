@@ -209,7 +209,7 @@ def data_tables(db_location):
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_tsid
                     ON daily_prices(tsid)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_data_vendor_id
-            ON daily_prices(data_vendor_id)""")
+                    ON daily_prices(data_vendor_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_date
                     ON daily_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_updated_date
@@ -257,6 +257,8 @@ def data_tables(db_location):
         FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_tsid
                     ON minute_prices(tsid)""")
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_data_vendor_id
+                    ON minute_prices(data_vendor_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_date
                     ON minute_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_updated_date
