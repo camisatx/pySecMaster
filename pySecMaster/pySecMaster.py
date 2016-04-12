@@ -227,13 +227,17 @@ def data_download(database_link, download_list, threads=4, quandl_key=None,
           download_list)
 
 
-def post_download_maintenance(database_link, download_list, verbose=False):
+def post_download_maintenance(database_link, download_list, period=None,
+                              verbose=False):
     """ Perform tasks that require all data to be downloaded first, such as the
     source cross validator function.
 
     :param database_link: String of the database file director
     :param download_list: List of dictionaries, with each dictionary containing
         all of the relevant variables for the specific source
+    :param period: Optional integer indicating the prior number of days whose
+            values should be cross validated. If None is provided, then the
+            entire set of values will be validated.
     :param verbose: Boolean of whether debugging prints should occur.
     """
 
@@ -248,11 +252,12 @@ def post_download_maintenance(database_link, download_list, verbose=False):
                               'data_download in pySecMaster.py' %
                               source['interval'])
 
-    tsids_df = query_all_active_tsids(db_location=database_link, table=table)
+    tsids_df = query_all_active_tsids(db_location=database_link, table=table,
+                                      period=period)
     tsid_list = tsids_df['tsid'].values
 
     CrossValidate(db_location=database_link, table=table, tsid_list=tsid_list,
-                  verbose=verbose)
+                  period=period, verbose=verbose)
 
 
 if __name__ == '__main__':
@@ -309,14 +314,11 @@ if __name__ == '__main__':
         {'source': 'quandl', 'selection': 'goog_us_main_no_end_date',
          'interval': 'daily', 'redownload_time': 60 * 60 * 12,
          'data_process': 'replace', 'replace_days_back': 60},
-        {'source': 'quandl', 'selection': 'goog_etf', 'interval': 'daily',
-         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
-         'replace_days_back': 60},
         # {'source': 'google', 'selection': 'us_main_no_end_date',
         #  'interval': 'daily', 'period': 60, 'redownload_time': 60 * 60 * 12,
         #  'data_process': 'replace', 'replace_days_back': 60},
         {'source': 'yahoo', 'selection': 'us_main', 'interval': 'daily',
-         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
+         'redownload_time': 60 * 60 * 12, 'data_process': 'append',
          'replace_days_back': 60}
     ]
     # test_download_list = [
@@ -343,7 +345,8 @@ if __name__ == '__main__':
     # data_process: String of how the new data will interact with the existing
     #   data ('replace': replace the prior x days of data (replace_days_back);
     #   'append': append the latest data to the existing data (will ignore
-    #   replace_days_back variable).
+    #   replace_days_back variable). 'append' requires less system resources
+    #   since it only adds new values, instead of deleting overlapping values.
     # replace_days_back: Integer of the number of days whose existing data
     #   should be replaced by new data (50000 replaces all existing data). Due
     #   to weekends, the days replaced may differ depending on what day this
@@ -367,4 +370,5 @@ if __name__ == '__main__':
 
     post_download_maintenance(database_link=test_database_link,
                               download_list=test_download_list,
+                              # period=60,
                               verbose=True)

@@ -83,11 +83,13 @@ def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
         print(e)
 
 
-def query_all_active_tsids(db_location, table):
+def query_all_active_tsids(db_location, table, period=None):
     """ Get a list of all tickers that have data.
 
     :param db_location: String of the database directory location
     :param table: String of the table that should be queried from
+    :param period: Optional integer indicating the prior number of days a
+        tsid must have had active data before it should be included.
     :return: DataFrame of all of the tsids for the specified table
     """
 
@@ -102,15 +104,22 @@ def query_all_active_tsids(db_location, table):
         with conn:
             cur = conn.cursor()
 
-            # Option 1:
-            # query = ("""SELECT source_id
-            #             FROM symbology
-            #             WHERE source='tsid' AND type='stock'""")
+            if period:
+                beg_date = datetime.today() - timedelta(days=period)
+                query = ("""SELECT tsid
+                            FROM %s
+                            WHERE date>'%s'
+                            GROUP BY tsid""" % (table, beg_date))
+            else:
+                # Option 1:
+                # query = ("""SELECT source_id
+                #             FROM symbology
+                #             WHERE source='tsid' AND type='stock'""")
 
-            # Option 2:
-            query = ("""SELECT tsid
-                        FROM %s
-                        GROUP BY tsid""" % (table,))
+                # Option 2:
+                query = ("""SELECT tsid
+                            FROM %s
+                            GROUP BY tsid""" % (table,))
 
             cur.execute(query)
             data = cur.fetchall()
@@ -290,15 +299,15 @@ def query_codes(db_location, download_selection):
 
 def query_last_price(db_location, table, vendor_id):
     """ Queries the pricing database to find the latest dates for each item
-        in the database, regardless of whether it is in the tsid list.
+    in the database, regardless of whether it is in the tsid list.
 
-        :param db_location: String of the database directory location
-        :param table: String of the table whose prices should be worked on
-        :param vendor_id: Integer or list of integers representing the vendor
-            id whose prices should be considered
-        :return: Returns a DataFrame with the tsid and the date of the latest
+    :param db_location: String of the database directory location
+    :param table: String of the table whose prices should be worked on
+    :param vendor_id: Integer or list of integers representing the vendor id
+        whose prices should be considered
+    :return: Returns a DataFrame with the tsid and the date of the latest
         data point for all tickers in the database.
-        """
+    """
 
     if type(vendor_id) == list:
         vendor_id = ', '.join(["'" + str(vendor) + "'" for vendor in vendor_id])

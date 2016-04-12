@@ -411,16 +411,28 @@ class QuandlDataExtraction(object):
 
         self.csv_wo_data = 'load_tables/quandl_' + self.table + '_wo_data.csv'
 
-        # Retrieve all of the Quandl data vendor IDs
-        quandl_vendor_ids = retrieve_data_vendor_id(
-            db_location=self.db_location, name='Quandl_%')
+        # Retrieve the Quandl data vendor IDs. Not able to use a list of all
+        #   Quandl data vendor IDs because that prevents data being downloaded
+        #   for the same tsid but from different Quandl sources (ie wiki % goog)
+        # vendor_id = retrieve_data_vendor_id(
+        #     db_location=self.db_location, name='Quandl_%')
+        if self.download_selection[:4] == 'wiki':
+            vendor_id = retrieve_data_vendor_id(db_location=self.db_location,
+                                                name='Quandl_WIKI')
+        elif self.download_selection[:4] == 'goog':
+            vendor_id = retrieve_data_vendor_id(db_location=self.db_location,
+                                                name='Quandl_GOOG')
+        else:
+            raise NotImplementedError('The %s Quandl source is not implemented '
+                                      'in the init within QuandlDataExtraction'
+                                      % self.download_selection)
 
         print('Retrieving dates of the last price per ticker for all Quandl '
               'values.')
         # Creates a DataFrame with the last price for each Quandl code
         self.latest_prices = query_last_price(db_location=self.db_location,
                                               table=self.table,
-                                              vendor_id=quandl_vendor_ids)
+                                              vendor_id=vendor_id)
 
         self.main()
 
@@ -604,9 +616,19 @@ class QuandlDataExtraction(object):
                     query = ("""DELETE FROM daily_prices
                                 WHERE tsid='%s'
                                 AND date>='%s'""" % (tsid, first_date_iso))
-                    del_success = delete_sql_table_rows(self.db_location,
-                                                        query, 'daily_prices',
-                                                        tsid)
+
+                    del_success = 'failure'
+                    retry_count = 5
+                    while retry_count > 0:
+                        del_success = delete_sql_table_rows(
+                            db_location=self.db_location, query=query,
+                            table='daily_prices', tsid=tsid)
+
+                        if del_success == 'failure':
+                            retry_count -= 1
+                        elif del_success == 'success':
+                            break
+
                     # Not able to delete existing data, so skip ticker for now
                     if del_success == 'failure':
                         return
@@ -868,11 +890,26 @@ class GoogleFinanceDataExtraction(object):
                                 AND date>='%s'
                                 AND data_vendor_id='%s'""" %
                              (self.table, tsid, first_date_iso, self.vendor_id))
-                    del_success = delete_sql_table_rows(
-                        db_location=self.db_location, query=query,
-                        table=self.table, tsid=tsid)
+
+                    del_success = 'failure'
+                    retry_count = 5
+                    while retry_count > 0:
+                        del_success = delete_sql_table_rows(
+                            db_location=self.db_location, query=query,
+                            table=self.table, tsid=tsid)
+
+                        if del_success == 'failure':
+                            retry_count -= 1
+                            time.sleep(5)
+                        elif del_success == 'success':
+                            break
+
                     # If unable to delete existing data, skip ticker
                     if del_success == 'failure':
+                        if self.verbose:
+                            print('Unable to delete existing data for %s '
+                                  'in the GoogleFinanceDataExtraction. '
+                                  'Skipping it for now.' % tsid)
                         return
 
                 # Append the new data to the end, regardless of replacement
@@ -1134,11 +1171,26 @@ class YahooFinanceDataExtraction(object):
                                 AND date>='%s'
                                 AND data_vendor_id='%s'""" %
                              (self.table, tsid, first_date_iso, self.vendor_id))
-                    del_success = delete_sql_table_rows(
-                        db_location=self.db_location, query=query,
-                        table=self.table, tsid=tsid)
+
+                    del_success = 'failure'
+                    retry_count = 5
+                    while retry_count > 0:
+                        del_success = delete_sql_table_rows(
+                            db_location=self.db_location, query=query,
+                            table=self.table, tsid=tsid)
+
+                        if del_success == 'failure':
+                            retry_count -= 1
+                            time.sleep(5)
+                        elif del_success == 'success':
+                            break
+
                     # If unable to delete existing data, skip ticker
                     if del_success == 'failure':
+                        if self.verbose:
+                            print('Unable to delete existing data for %s '
+                                  'in the YahooFinanceDataExtraction. Skipping '
+                                  'it for now.' % tsid)
                         return
 
                 # Append the new data to the end, regardless of replacement

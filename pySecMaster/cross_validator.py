@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import operator
 import pandas as pd
 import time
@@ -39,17 +39,22 @@ class CrossValidate(object):
     highest consensus weight.
     """
 
-    def __init__(self, db_location, table, tsid_list, verbose=False):
+    def __init__(self, db_location, table, tsid_list, period=None,
+                 verbose=False):
         """
         :param db_location: String of the database file directory
         :param table: String of the database table that should be worked on
         :param tsid_list: List of strings, with each string being a tsid
+        :param period: Optional integer indicating the number of days whose
+            values should be cross validated. If None is provided, then the
+            entire set of values will be validated.
         :param verbose: Boolean of whether to print debugging statements or not
         """
 
         self.db_location = db_location
         self.table = table
         self.tsid_list = tsid_list
+        self.period = period
         self.verbose = verbose
 
         # Build a DataFrame with the source id and weight
@@ -66,6 +71,14 @@ class CrossValidate(object):
                                                 name=source)
             self.source_id_exclude_list.append(source_id)
 
+        if self.verbose:
+            if self.period:
+                print('Running cross validator for %s tsids only for the prior '
+                      '%i day\'s history.' % (len(tsid_list), self.period))
+            else:
+                print('Running cross validator for %s tsids for the entire '
+                      'data history.' % (len(tsid_list),))
+
         self.main()
 
     def main(self):
@@ -79,7 +92,7 @@ class CrossValidate(object):
         """No multiprocessing"""
         # [self.validator(tsid=tsid) for tsid in self.tsid_list]
         """Multiprocessing using 4 threads"""
-        multithread(self.validator, self.tsid_list, threads=4)
+        multithread(self.validator, self.tsid_list, threads=2)
 
         if self.verbose:
             print('%i tsids have had their sources cross validated taking '
@@ -95,9 +108,15 @@ class CrossValidate(object):
         tsid_prices_df = query_all_tsid_prices(db_location=self.db_location,
                                                table=self.table, tsid=tsid)
 
-        unique_dates = tsid_prices_df.index.get_level_values('date').unique()
         unique_sources = tsid_prices_df.index.\
             get_level_values('data_vendor_id').unique()
+        unique_dates = tsid_prices_df.index.get_level_values('date').unique()
+
+        # If a period is provided, limit the unique_dates list to only those
+        #   within the past n period days.
+        if self.period:
+            beg_date = datetime.today() - timedelta(days=self.period)
+            unique_dates = unique_dates[unique_dates > beg_date]
 
         # The consensus_price_df contains the prices from weighted consensus
         consensus_price_df = pd.DataFrame(columns=['date', 'open', 'high',
@@ -201,23 +220,45 @@ class CrossValidate(object):
                                   'updated_date', datetime.utcnow().isoformat())
 
         if validator_id in unique_sources:
+            delete_start = time.time()
+
             # Data from the cross validation process has already been saved
             #   to the database before, thus it must be removed before adding
             #   the new calculated values.
 
-            delete_query = ("""DELETE FROM %s
-                               WHERE tsid='%s'
-                               AND data_vendor_id='%s'""" %
-                            (self.table, tsid, validator_id))
+            if self.period:
+                # Only delete prior consensus values for this tsid that are
+                #   newer than the beg_date (current date - replace period).
+                delete_query = ("""DELETE FROM %s
+                                   WHERE tsid='%s'
+                                   AND data_vendor_id='%s'
+                                   AND date>'%s'""" %
+                                (self.table, tsid, validator_id,
+                                 beg_date.isoformat()))
+            else:
+                # Delete all existing consensus values for this tsid.
+                delete_query = ("""DELETE FROM %s
+                                   WHERE tsid='%s'
+                                   AND data_vendor_id='%s'""" %
+                                (self.table, tsid, validator_id))
 
-            delete_status = delete_sql_table_rows(db_location=self.db_location,
-                                                  query=delete_query,
-                                                  table=self.table, tsid=tsid)
-            if delete_status == 'success':
-                # Add the validated values to the relevant price table AFTER
-                #   ensuring that the duplicates were deleted successfully
-                df_to_sql(df=consensus_price_df, db_location=self.db_location,
-                          sql_table=self.table, exists='append', item=tsid)
+            retry_count = 5
+            while retry_count > 0:
+                retry_count -= 1
+
+                delete_status = delete_sql_table_rows(
+                    db_location=self.db_location, query=delete_query,
+                    table=self.table, tsid=tsid)
+                if delete_status == 'success':
+                    # Add the validated values to the relevant price table AFTER
+                    #   ensuring that the duplicates were deleted successfully
+                    df_to_sql(df=consensus_price_df,
+                              db_location=self.db_location,
+                              sql_table=self.table, exists='append', item=tsid)
+                    break
+
+            # print('Data table replacement took %0.2f' %
+            #       (time.time() - delete_start))
 
         else:
             # Add the validated values to the relevant price table
