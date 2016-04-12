@@ -92,7 +92,7 @@ class CrossValidate(object):
         """No multiprocessing"""
         # [self.validator(tsid=tsid) for tsid in self.tsid_list]
         """Multiprocessing using 4 threads"""
-        multithread(self.validator, self.tsid_list, threads=2)
+        multithread(self.validator, self.tsid_list, threads=4)
 
         if self.verbose:
             print('%i tsids have had their sources cross validated taking '
@@ -169,26 +169,31 @@ class CrossValidate(object):
                                 self.source_weights_df['data_vendor_id'] ==
                                 source_data[0], 'consensus_weight']
 
-                            if field_consensus:
-                                # There is already a value for this field
-                                if source_data[1] in field_consensus:
-                                    # This source's value has a match in the
-                                    #   current consensus. Increase the weight
-                                    #   for this price.
-                                    field_consensus[source_data[1]] += \
-                                        source_weight.iloc[0]
+                            try:
+                                if field_consensus:
+                                    # There is already a value for this field
+                                    if source_data[1] in field_consensus:
+                                        # This source's value has a match in the
+                                        #   current consensus. Increase weight
+                                        #   for this price.
+                                        field_consensus[source_data[1]] += \
+                                            source_weight.iloc[0]
+                                    else:
+                                        # The data value from the source does
+                                        #   not match this field's consensus
+                                        field_consensus[source_data[1]] = \
+                                            source_weight.iloc[0]
+
                                 else:
-                                    # The data value from the source does not
-                                    #   match this field's consensus
+                                    # Add the first price to the field_consensus
+                                    #   dictionary, using the price as the key
+                                    #   and the source's weight as the item.
                                     field_consensus[source_data[1]] = \
                                         source_weight.iloc[0]
-
-                            else:
-                                # Add the first price to the field_consensus
-                                #   dictionary, using the price as the key and
-                                #   the source's weight as the item.
-                                field_consensus[source_data[1]] = \
-                                    source_weight.iloc[0]
+                            except IndexError:
+                                # No source_weight was found, probably because
+                                #   there was no data_vendor_id for this value
+                                pass
 
                     # Insert the highest consensus value for this period into
                     #   the consensus_price_df (the dictionary key (price) with

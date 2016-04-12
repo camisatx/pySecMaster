@@ -417,11 +417,11 @@ class QuandlDataExtraction(object):
         # vendor_id = retrieve_data_vendor_id(
         #     db_location=self.db_location, name='Quandl_%')
         if self.download_selection[:4] == 'wiki':
-            vendor_id = retrieve_data_vendor_id(db_location=self.db_location,
-                                                name='Quandl_WIKI')
+            self.vendor_id = retrieve_data_vendor_id(
+                db_location=self.db_location, name='Quandl_WIKI')
         elif self.download_selection[:4] == 'goog':
-            vendor_id = retrieve_data_vendor_id(db_location=self.db_location,
-                                                name='Quandl_GOOG')
+            self.vendor_id = retrieve_data_vendor_id(
+                db_location=self.db_location, name='Quandl_GOOG')
         else:
             raise NotImplementedError('The %s Quandl source is not implemented '
                                       'in the init within QuandlDataExtraction'
@@ -432,7 +432,7 @@ class QuandlDataExtraction(object):
         # Creates a DataFrame with the last price for each Quandl code
         self.latest_prices = query_last_price(db_location=self.db_location,
                                               table=self.table,
-                                              vendor_id=vendor_id)
+                                              vendor_id=self.vendor_id)
 
         self.main()
 
@@ -549,10 +549,10 @@ class QuandlDataExtraction(object):
             # There is new data to add to the database
             else:
                 # Find the data vendor of the q_code; add it to the DataFrame
-                vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
-                data_vendor = retrieve_data_vendor_id(
-                    db_location=self.db_location, name=vendor_name)
-                clean_data.insert(0, 'data_vendor_id', data_vendor)
+                # vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
+                # data_vendor = retrieve_data_vendor_id(
+                #     db_location=self.db_location, name=vendor_name)
+                clean_data.insert(0, 'data_vendor_id', self.vendor_id)
 
                 # Add the tsid into the DataFrame, and then remove the q_code
                 clean_data.insert(1, 'tsid', tsid)
@@ -598,10 +598,10 @@ class QuandlDataExtraction(object):
             # There is new data to add to the database
             else:
                 # Find the data vendor of the q_code; add it to the DataFrame
-                vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
-                data_vendor = retrieve_data_vendor_id(
-                    db_location=self.db_location, name=vendor_name)
-                clean_data.insert(0, 'data_vendor_id', data_vendor)
+                # vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
+                # data_vendor = retrieve_data_vendor_id(
+                #     db_location=self.db_location, name=vendor_name)
+                clean_data.insert(0, 'data_vendor_id', self.vendor_id)
 
                 # Add the tsid into the DataFrame, and then remove the q_code
                 clean_data.insert(1, 'tsid', tsid)
