@@ -308,6 +308,16 @@
         <string>&amp;Data</string>
        </attribute>
        <layout class="QFormLayout" name="formLayout">
+        <property name="fieldGrowthPolicy">
+         <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+        </property>
+        <item row="0" column="0">
+         <widget class="QLabel" name="lbl_data_source">
+          <property name="text">
+           <string>Download Source</string>
+          </property>
+         </widget>
+        </item>
         <item row="0" column="1">
          <widget class="QComboBox" name="cmb_data_source">
           <property name="toolTip">
@@ -320,54 +330,52 @@
           </item>
           <item>
            <property name="text">
-            <string>google_fin</string>
+            <string>google</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>all</string>
+            <string>yahoo</string>
            </property>
           </item>
          </widget>
         </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="lbl_data_source">
-          <property name="text">
-           <string>Download Source</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="lbl_data_googfin">
-          <property name="text">
-           <string>Google Finance Data</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QComboBox" name="cmb_data_googfin">
-          <property name="toolTip">
-           <string>Select which subset of available tickers should be downloaded from Google Finance (minute data)</string>
-          </property>
-          <property name="statusTip">
-           <string>Google Finance minute data</string>
-          </property>
-         </widget>
-        </item>
         <item row="1" column="0">
-         <widget class="QLabel" name="lbl_data_quandl">
+         <widget class="QLabel" name="lbl_data_selection">
           <property name="text">
-           <string>Quandl Data</string>
+           <string>Selection</string>
           </property>
          </widget>
         </item>
         <item row="1" column="1">
-         <widget class="QComboBox" name="cmb_data_quandl">
+         <widget class="QComboBox" name="cmb_data_selection">
           <property name="toolTip">
-           <string>Select the ticker subset whom should be downloaded from the Quandl databases</string>
+           <string>The list of tickers that will be downloaded</string>
           </property>
           <property name="statusTip">
-           <string>Downloadable Quandl databases</string>
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QComboBox" name="cmb_data_interval">
+          <property name="toolTip">
+           <string>Time interval of the data</string>
+          </property>
+          <property name="statusTip">
+           <string/>
+          </property>
+          <item>
+           <property name="text">
+            <string>daily</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="lbl_data_interval">
+          <property name="text">
+           <string>Interval</string>
           </property>
          </widget>
         </item>
@@ -711,8 +719,8 @@
   <tabstop>toolbtn_details</tabstop>
   <tabstop>btnbox_action</tabstop>
   <tabstop>cmb_data_source</tabstop>
-  <tabstop>cmb_data_quandl</tabstop>
-  <tabstop>cmb_data_googfin</tabstop>
+  <tabstop>cmb_data_selection</tabstop>
+  <tabstop>cmb_data_interval</tabstop>
   <tabstop>cmb_tickers_quandl</tabstop>
   <tabstop>spinbx_settings_threads</tabstop>
   <tabstop>txtbrwsr_details</tabstop>

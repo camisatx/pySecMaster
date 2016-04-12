@@ -8,7 +8,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.1'
+__version__ = '1.3.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -77,6 +77,7 @@ def main_tables(db_location):
         url                 TEXT,
         support_email       TEXT,
         api                 TEXT,
+        consensus_weight    FLOAT,
         created_date        FLOAT,
         updated_date        FLOAT)''')
 
@@ -207,6 +208,8 @@ def data_tables(db_location):
         FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_tsid
                     ON daily_prices(tsid)""")
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_data_vendor_id
+                    ON daily_prices(data_vendor_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_date
                     ON daily_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_updated_date
@@ -254,6 +257,8 @@ def data_tables(db_location):
         FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_tsid
                     ON minute_prices(tsid)""")
+        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_data_vendor_id
+                    ON minute_prices(data_vendor_id)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_date
                     ON minute_prices(date)""")
         c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_updated_date
@@ -310,6 +315,23 @@ def events_tables(db_location):
                 FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_conf_tsid
                             ON conference_calls(tsid)""")
+
+            def dividends(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS dividends
+                (dividend_id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                tsid                        TEXT,
+                symbol                      TEXT,
+                company                     TEXT,
+                dividend                    FLOAT,
+                ex_dividend_date            FLOAT,
+                record_date                 FLOAT,
+                announcement_date           FLOAT,
+                payment_date                FLOAT,
+                created_date                FLOAT,
+                updated_date                FLOAT,
+                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_div_tsid
+                            ON dividends(tsid)""")
 
             def earnings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS earnings
@@ -378,6 +400,7 @@ def events_tables(db_location):
                             ON splits(tsid)""")
 
             conference_calls(cur)
+            dividends(cur)
             earnings(cur)
             economic_events(cur)
             ipo_pricings(cur)

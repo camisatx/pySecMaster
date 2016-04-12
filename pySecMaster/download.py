@@ -5,6 +5,8 @@ import time
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
 
+from utilities.date_conversions import date_to_iso
+
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -14,7 +16,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.1'
+__version__ = '1.3.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -65,18 +67,6 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
             return ret
         return rate_limit_func
     return rate_decorator
-
-
-def dt_to_iso(row, column):
-    """
-    Change the default date format of "YYYY-MM-DD" to an ISO 8601 format
-    """
-    raw_date = row[column]
-    try:
-        raw_date_obj = datetime.strptime(raw_date, '%Y-%m-%d')
-    except TypeError:   # Occurs if there is no date provided ("nan")
-        raw_date_obj = datetime.today()
-    return raw_date_obj.isoformat()
 
 
 class QuandlDownload(object):
@@ -137,9 +127,9 @@ class QuandlDownload(object):
                               '%s database. Quitting after 10 failed attempts.'
                               % (page_num, db_name))
 
-        df['start_date'] = df.apply(dt_to_iso, axis=1, args=('start_date',))
-        df['end_date'] = df.apply(dt_to_iso, axis=1, args=('end_date',))
-        df['last_updated'] = df.apply(dt_to_iso, axis=1, args=('last_updated',))
+        df['start_date'] = df.apply(date_to_iso, axis=1, args=('start_date',))
+        df['end_date'] = df.apply(date_to_iso, axis=1, args=('end_date',))
+        df['last_updated'] = df.apply(date_to_iso, axis=1, args=('last_updated',))
 
         df.insert(len(df.columns), 'page_num', page_num)
         df.insert(len(df.columns), 'created_date', datetime.utcnow().isoformat())
@@ -147,19 +137,19 @@ class QuandlDownload(object):
 
         return df
 
-    def download_quandl_data(self, q_code, beg_date=None, verbose=True,
-                             csv_out='load_tables/quandl_codes_wo_data.csv'):
+    def download_quandl_data(self, q_code, csv_out, beg_date=None,
+                             verbose=True):
         """ Receives a Quandl Code as a string, and it calls the QuandlDownload
         class to actually download it. Once downloaded, this adds titles to the
         column headers, depending on what type of Quandl Code it is. Last, a
         column for the q_code is added to the DataFrame.
 
-        :param q_code: A string of the Quandl Code.
-        :param beg_date: String of the start date (YYYY-MM-DD) to download
-        :param verbose: Boolean
+        :param q_code: A string of the Quandl Code
         :param csv_out: String of directory and CSV file name; used to store
             the quandl codes that do not have any data
-        :return: A DataFrame with the data points for the Quandl Code.
+        :param beg_date: String of the start date (YYYY-MM-DD) to download
+        :param verbose: Boolean
+        :return: A DataFrame with the data points for the Quandl Code
         """
 
         # Download the data to a CSV file
@@ -179,8 +169,9 @@ class QuandlDownload(object):
             column_names = ['date', 'open', 'high', 'low', 'close',
                             'volume', 'adjusted_close']
         else:
-            print('The chosen data source is not setup in the price extractor. '
-                  'Please define the columns in download_quandl_data.')
+            print('The data source for %s is not implemented in the price '
+                  'extractor. Please define the columns in '
+                  'QuandlDownload.download_quandl_data.' % q_code)
             return pd.DataFrame()
 
         if file:
@@ -235,7 +226,7 @@ class QuandlDownload(object):
             return raw_df
 
         raw_df = raw_df[1:]     # Removes the column headers from data download
-        raw_df['date'] = raw_df.apply(dt_to_iso, axis=1, args=('date',))
+        raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
         raw_df.insert(0, 'q_code', q_code)
         raw_df.insert(len(raw_df.columns), 'updated_date',
                       datetime.utcnow().isoformat())
@@ -368,28 +359,29 @@ class QuandlDownload(object):
                           (name,))
 
 
-def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
-                         csv_out='load_tables/goog_min_codes_wo_data.csv'):
-    """ Receives a Quandl Code as a string, splits the code into ticker and
+def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
+    """ Receives a tsid as a string, splits the code into ticker and
     exchange, then passes it to the url to download the data. Once downloaded,
     this adds titles to the column headers.
 
     :param db_url: Dictionary of google finance url components
     :param tsid: A string of the tsid
     :param exchanges_df: DataFrame with all exchanges and their symbols
-    :param threads: Integer of the number of threads process is using
-    :param verbose: Boolean
     :param csv_out: String with the file directory for the CSV file that has
         all the codes that don't have any data
-    :return: A DataFrame with the data points for the Quandl Code.
+    :param verbose: Boolean of whether to print debugging statements
+    :return: A DataFrame with the data points for the tsid.
     """
 
     ticker = tsid[:tsid.find('.')]
     exchange_symbol = tsid[tsid.find('.')+1:tsid.find('.', tsid.find('.')+1)]
 
-    # Use the tsid exchange symbol to get the Google exchange symbol
-    exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] == exchange_symbol,
-                                 'goog_symbol'].values)
+    try:
+        # Use the tsid exchange symbol to get the Google exchange symbol
+        exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] ==
+                                     exchange_symbol, 'goog_symbol'].values)
+    except KeyError:
+        exchange = None
 
     # Make the url string; aside from the root, the items can be in any order
     url_string = db_url['root']      # Establish the url root
@@ -450,7 +442,7 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                                   'for now.' % (e.reason,))
             elif str(e) == 'HTTP Error 503: Service Unavailable':
                 # Received this HTTP Error after 2000 queries. Browser showed
-                #   captch message upon loading url.
+                #   captcha message upon loading url.
                 if download_try <= 10:
                     print('HTTPError %s: Server is currently unavailable. '
                           'Maybe the network is down or the server is blocking '
@@ -554,14 +546,17 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                                    float(low), float(open_), float(volume))))
 
         column_names = ['date', 'close', 'high', 'low', 'open', 'volume']
-        min_df = pd.DataFrame(data, columns=column_names)
-        return min_df
+        processed_df = pd.DataFrame(data, columns=column_names)
+        return processed_df
 
     url_obj = download_data(url_string)
 
     try:
         raw_df = google_data_processing(url_obj)
+    except IndexError:
+        raw_df = pd.DataFrame()
 
+    if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list
         codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
         if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
@@ -575,9 +570,9 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
             if verbose:
                 print('%s was removed from the wo_data CSV file since data '
                       'was available for download.' % (tsid,))
-    except IndexError:
+    else:
+        # There is no price data for this code; add to CSV file via DataFrame
         try:
-            # There is no minute data for this code; add to CSV file via DF
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
             cur_date = datetime.utcnow().isoformat()
             if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
@@ -601,29 +596,233 @@ def download_google_data(db_url, tsid, exchanges_df, threads, verbose=True,
                 if verbose:
                     print('%s did not have data, thus it was added to the '
                           'wo_data CSV file.' % (tsid,))
-
-            # Return an empty DF; DataExtraction class will be able to handle it
-            return pd.DataFrame()
         except Exception as e:
-            print('Flag: Error occurred when trying to update '
-                  'goog_min_codes_wo_data CSV data for %s' % (tsid,))
+            print('Error occurred when trying to update %s CSV data for %s' %
+                  (csv_out, tsid))
             print(e)
-            return pd.DataFrame()
-    except Exception as e:
-        print('Flag: Error occurred when processing data for %s' % (tsid,))
-        print(e)
-        return pd.DataFrame()
 
-    if len(raw_df.index) == 0:
-        return raw_df
+        # Return an empty DF; DataExtraction class will be able to handle it
+        return pd.DataFrame()
 
     def datetime_to_iso(row, column):
         return row[column].isoformat()
 
+    # google_data_processing method converts the string dates to datetimes
     raw_df['date'] = raw_df.apply(datetime_to_iso, axis=1, args=('date',))
     raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
                   datetime.utcnow().isoformat())
+
+    return raw_df
+
+
+def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
+    """ Receives a tsid as a string, splits the code into ticker and
+    exchange, then passes it to the url to download the data. Once downloaded,
+    this adds titles to the column headers.
+
+    :param db_url: Dictionary of yahoo finance url components
+    :param tsid: A string of the tsid
+    :param exchanges_df: DataFrame with all exchanges and their symbols
+    :param csv_out: String with the file directory for the CSV file that has
+        all the codes that don't have any data
+    :param verbose: Boolean of whether to print debugging statements
+    :return: A DataFrame with the data points for the tsid.
+    """
+
+    ticker = tsid[:tsid.find('.')]
+    exchange_symbol = tsid[tsid.find('.')+1:tsid.find('.', tsid.find('.')+1)]
+
+    try:
+        # Use the tsid exchange symbol to get the Yahoo exchange symbol
+        exchange = (exchanges_df.loc[exchanges_df['tsid_symbol'] ==
+                                     exchange_symbol, 'yahoo_symbol'].values)
+    except KeyError:
+        exchange = None
+
+    # Make the url string; aside from the root, the items can be in any order
+    url_string = db_url['root']      # Establish the url root
+    for key, item in db_url.items():
+        if key == 'root':
+            continue    # Already used above
+        elif key == 'ticker':
+            if exchange:
+                # If an exchange was found, Yahoo requires both ticker and
+                #   exchange
+                url_string += '&' + item + ticker + '.' + exchange
+            else:
+                # Ticker is in a major exchange and doesn't need exchange info
+                url_string += '&' + item + ticker
+        else:
+            url_string += '&' + item
+
+    def download_data(url, download_try=0):
+        """ Downloads the CSV file from the url provided.
+
+        :param url: String that contains the url of the data to download.
+        :param download_try: Integer of the number of attempts to download data.
+        :return: A list of bytes of the data downloaded.
+        """
+
+        download_try += 1
+        try:
+            # Download the csv file
+            return urlopen(url)
+
+        except HTTPError as e:
+            if str(e) == 'HTTP Error 403: Forbidden':
+                raise OSError('HTTPError %s: Reached API call limit. Make the '
+                              'RateLimit more restrictive.' % (e.reason,))
+            elif str(e) == 'HTTP Error 404: Not Found':
+                # if verbose:
+                #     print('HTTPError %s: %s not found' % (e.reason, tsid))
+                return None
+            elif str(e) == 'HTTP Error 429: Too Many Requests':
+                if download_try <= 5:
+                    print('HTTPError %s: Exceeded API limit. Make the '
+                          'RateLimit more restrictive. Program will sleep for '
+                          '11 minutes and will try again...' % (e.reason,))
+                    time.sleep(11 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Exceeded API limit. After '
+                                  'trying 5 time, the download was still not '
+                                  'successful. You could have hit the per day '
+                                  'call limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 502: Bad Gateway':
+                if download_try <= 10:
+                    print('HTTPError %s: Encountered a bad gateway with the '
+                          'server. Maybe the network is down. Will sleep for '
+                          '5 minutes'
+                          % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 times, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
+            elif str(e) == 'HTTP Error 503: Service Unavailable':
+                # Received this HTTP Error after 2000 queries. Browser showed
+                #   captcha message upon loading url.
+                if download_try <= 10:
+                    print('HTTPError %s: Server is currently unavailable. '
+                          'Maybe the network is down or the server is blocking '
+                          'you. Will sleep for 5 minutes...' % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. '
+                                  'Quitting for now.' % (e.reason,))
+            elif str(e) == 'HTTP Error 504: GATEWAY_TIMEOUT':
+                if download_try <= 10:
+                    print('HTTPError %s: Server connection timed out. Maybe '
+                          'the network is down. Will sleep for 5 minutes'
+                          % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
+            else:
+                print('Base URL used: %s' % (url,))
+                raise OSError('HTTPError %s: Unknown error when downloading %s'
+                              % (e.reason, tsid))
+
+        except URLError as e:
+            if download_try <= 10:
+                print('Warning: Experienced URL Error %s. Program will '
+                      'sleep for 5 minutes and will then try again...' %
+                      (e.reason,))
+                time.sleep(5 * 60)
+                download_data(url, download_try)
+            else:
+                raise URLError('Warning: Still experiencing URL Error %s. '
+                               'After trying 10 times, the error remains. '
+                               'Quitting for now, but you can try again later.'
+                               % (e.reason,))
+
+        except Exception as e:
+            print(e)
+            print('Warning: Encountered an unknown error when downloading %s '
+                  'in download_yahoo_data.download_data' % (tsid,))
+
+    url_obj = download_data(url_string)
+
+    column_names = ['date', 'open', 'high', 'low', 'close', 'volume',
+                    'adj_close']
+
+    try:
+        raw_df = pd.read_csv(url_obj, index_col=False, names=column_names,
+                             encoding='utf-8')
+    except IndexError:
+        raw_df = pd.DataFrame()
+    except OSError:
+        # Occurs when the url_obj is None, meaning the url returned a 404 error
+        raw_df = pd.DataFrame()
+
+    if len(raw_df.index) > 0:
+        # Data successfully downloaded; check to see if code was on the list
+        codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+        if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
+            # This tsid now has data whereas it didn't on that last run.
+            #   Remove the code from the DataFrame
+            wo_data_df = codes_wo_data_df[codes_wo_data_df.tsid != tsid]
+            # Remove any duplicates (keeping the latest) and save to a CSV
+            clean_wo_data_df = wo_data_df.drop_duplicates(subset='tsid',
+                                                          keep='last')
+            clean_wo_data_df.to_csv(csv_out, index=False)
+            if verbose:
+                print('%s was removed from the wo_data CSV file since data '
+                      'was available for download.' % (tsid,))
+    else:
+        # There is no price data for this code; add to CSV file via DataFrame
+        try:
+            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+            cur_date = datetime.utcnow().isoformat()
+            if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
+                # The code already exists within the CSV, so update the date
+                codes_wo_data_df.set_value(codes_wo_data_df['tsid'] == tsid,
+                                           'date_tried', cur_date)
+                # Remove any duplicates (keeping the latest) and save to a CSV
+                clean_wo_data_df = \
+                    codes_wo_data_df.drop_duplicates(subset='tsid', keep='last')
+                clean_wo_data_df.to_csv(csv_out, index=False)
+                if verbose:
+                    print('%s still did not have data. Date tried was updated '
+                          'in the wo_data CSV file.' % (tsid,))
+            else:
+                # The code does not exists within the CSV, so create and append
+                #   it to the CSV file. Do this via a DataFrame to CSV append
+                no_data_df = pd.DataFrame(data=[(tsid, cur_date)],
+                                          columns=['tsid', 'date_tried'])
+                with open(csv_out, 'a') as f:
+                    no_data_df.to_csv(f, mode='a', header=False, index=False)
+                if verbose:
+                    print('%s did not have data, thus it was added to the '
+                          'wo_data CSV file.' % (tsid,))
+        except Exception as e:
+            print('Error occurred when trying to update %s CSV data for %s' %
+                  (csv_out, tsid))
+            print(e)
+
+        # Return an empty DF; DataExtraction class will be able to handle it
+        return pd.DataFrame()
+
+    # Removes the column headers from data download
+    raw_df = raw_df[1:]
+
+    raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
+    raw_df.insert(0, 'tsid', tsid)
+    raw_df.insert(len(raw_df.columns), 'updated_date',
+                  datetime.utcnow().isoformat())
+
+    # Remove the adjusted close column since this is calculated manually
+    raw_df.drop('adj_close', axis=1, inplace=True)
 
     return raw_df
 

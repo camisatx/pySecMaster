@@ -67,17 +67,29 @@ This system is built around the idea of having extractor modules 'plug-in' to th
 The default extractors handle daily and minute price data, along with basic exchange information. I have built extra tables that can have extractors built to fill in data. If you have ideas on additional tables to include, please create an issue with your idea.
 
 #### Default Extractors
-- Daily Historical Stock Prices (Quandl; complete history)
-- Minute Historical Stock Prices (Google Finance; restricted to prior 15 days)
+- Daily Historical Stock Prices (Quandl and Yahoo Finance (complete history); Google Finance (restricted to prior 50 days))
+- Minute Historical Stock Prices (Google Finance (restricted to prior 15 days))
 - Exchange Information
 - Symbology generator (symbol translator)
 
 #### Custom Extractors (aka, build your own)
+- Cash Dividends (NASDAQ)
 - Corporate Activities (conference calls, earnings data, splits) (Yahoo)
-- Financial Statement Data (may require table modification as I haven't tried this yet) (SEC Edgar)
-- IPO Pricings Data (Yahoo)
 - Economic Events Data (Yahoo)
+- Financial Statement Data (may require table modification as I haven't tried this yet) (SEC Edgar)
 - Historical Indices Membership (?)
+- IPO Pricings Data (Yahoo)
+
+## Cross Validator
+The cross validator automatically selects the most likely prices from all available sources.
+
+The validator uses a cumulative score to select the most likely value, where the individual data source *weights* are specified in the data_vendor table of the database. The weights range from 0 to 100, with 100 holding the greatest weight.
+
+The system is setup to work with as many data sources as available, so future data sources can be easily implemented into this consensus value. It is possible for **all** prior consensus values to be replaced by new values. Alternatively, it is possible for only values over the past *n* days to be replaced.
+
+**Currently, the only way to run the cross validator is to run the system through the pySecMaster.py script. The validator has not been implemented into the GUI yet.**
+
+This can be multi-processed based on tsids. By default, 4 threads are used. This value is dependent on the disk and processor speed, so you may need to lower this value.
 
 
 # Quick Start Guides
@@ -93,16 +105,38 @@ The default extractors handle daily and minute price data, along with basic exch
   
   5. In the *Data* tab, change *Download Source* combo-box to **quandl**
   
-  6. In the *Data* tab, change *Quandl Data* combo-box to:
-    - **quandl_wiki** if you want all Quandl WIKI daily data ([Note 4](#notes)) (~3,000 symbols)
-    - **quandl_goog** if you want all *US, Toronto and London* Quandl Google Finance daily data (~38,000 symbols)
-    - **quandl_goog_etf** if you want all Quandl Google Finance ETF daily data ([Note 5](#notes))) (~3,700 symbols)
+  6. In the *Data* tab, change *Selection* combo-box to:
+    - **wiki** if you want all Quandl WIKI data ([Note 4](#notes)) (~3,000 symbols)
+    - **goog** if you want all *US, Toronto and London* Quandl Google Finance data (~38,000 symbols)
+    - **goog_etf** if you want all Quandl Google Finance ETF data ([Note 5](#notes))) (~3,700 symbols)
+    - **goog_us_main_no_end_date** if you want main US exchange Quandl Google Finance data ([Note 6](#notes))) (~15,000 symbols)
 
   7. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
 
   8. Click on the *Ok* button, and the database will start building itself
   
   9. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+
+### Yahoo Finance daily data
+  1. Clone the pySecMaster to your computer
+
+  2. Open the folder called pySecMaster, and run **main_gui.py**
+
+  3. Within the GUI, provide a file directory in *Database Directory* where you want the database to be built
+
+  4. In the *Data* tab, change *Download Source* combo-box to **yahoo**
+  
+  5. In the *Data* tab, change *Selection* combo-box to:
+    - **all** if you want all *US, Toronto and London* Yahoo Finance data (~38,000 symbols)
+    - **us_main** if you want main US exchange Yahoo Finance data that's been active within the prior two years ([Note 6](#notes)) (~9,000 symbols)
+    - **us_main_no_end_date** if you want main US exchange Yahoo Finance data ([Note 6](#notes)) (~15,000 symbols)
+    - **us_canada_london** if you want all *US, Toronto and London* Yahoo Finance data that's been active within the prior two years (~25,000 symbols)
+  
+  6. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
+
+  7. Click on the *Ok* button, and the database will start building itself with daily data from Yahoo Finance
+  
+  8. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
 
 ### Google Finance minute data
   1. Clone the pySecMaster to your computer
@@ -111,18 +145,20 @@ The default extractors handle daily and minute price data, along with basic exch
 
   3. Within the GUI, provide a file directory in *Database Directory* where you want the database to be built
 
-  4. In the *Data* tab, change *Download Source* combo-box to **google_fin**
+  4. In the *Data* tab, change *Download Source* combo-box to **google**
   
-  5. In the *Data* tab, change *Google Finance Data* combo-box to:
-    - **all** if you want all *US, Toronto and London* Google Finance minute data (~38,000 symbols)
-    - **us_main** if you want main US exchange Google Finance minute data ([Note 6](#notes)) (~9,000 symbols)
-    - **us_canada_london** if you want all *US, Toronto and London* Google Finance minute data that's been active within the prior two years (~25,000 symbols)
+  5. In the *Data* tab, change *Selection* combo-box to:
+    - **all** if you want all *US, Toronto and London* Google Finance data (~38,000 symbols)
+    - **us_main** if you want main US exchange Google Finance data that's been active within the prior two years ([Note 6](#notes)) (~9,000 symbols)
+    - **us_canada_london** if you want all *US, Toronto and London* Google Finance data that's been active within the prior two years (~25,000 symbols)
   
-  6. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
+  6. In the *Data* tab, change *Interval* combo-box to **minute**
+  
+  7. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
 
-  7. Click on the *Ok* button, and the database will start building itself with minute data from Google Finance
+  8. Click on the *Ok* button, and the database will start building itself with minute data from Google Finance
   
-  8. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+  9. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
 
 ### Retrieve SQLite Data
   1. To retrieve the data in the SQLite database, open **query_data.py** in a code editor (IDE, PyCharm, Sublime, etc.)
@@ -135,7 +171,7 @@ The default extractors handle daily and minute price data, along with basic exch
   - Python 3.4+
   - Pandas 0.16.2+
   - PyQt 4.11+
-  - More than 10GB of storage space (daily Quandl WIKI data is about 3.4 GB, while Google Finance minute data can become 30+ GB)
+  - More than 20GB of storage space (daily Quandl WIKI data is about 4 GB, while a year's worth of Google Finance minute data can become 50+ GB)
 
 # User Requirements
   - Quandl API Token (free at <https://www.quandl.com>)
@@ -143,9 +179,6 @@ The default extractors handle daily and minute price data, along with basic exch
 # Future Goals
   - Change the database from Sqlite3 to PostgreSQL
   - Build a table tsid re-index function (if a tsid changes, all tables that have data of that tsid should be updated)
-  - Add a cross-source data validator (check data validity between two or more sources; preferably three or more to get a consensus)
-  - Add a direct Yahoo Finance data extractor (instead of relying completely on Quandl for Yahoo data)
-  - Perform cross system checks (especially Linux)
   - Add function to manually calculate the adjusted prices for all price tables (instead of relying on the source) 
 
 # Additional Info
@@ -160,9 +193,10 @@ To view the SQLite3 database, you can download SQLite Database Browser for free 
   - Note 6: US main exchanges include AMEX, NYSE, BATS, NASDAQ (CM, GM, GS) and NYSE ARCA; includes stocks and ETFs
 
 # Disclaimer
-Before using this software, be sure to understand and follow the terms of all data providers (Quandl and Google). I am not responsible for how you use this software, so please be responsible in your use of it! Please see the following links for some information:
+Before using this software, be sure to understand and follow the terms of all data providers. I am not responsible for how you use this software, so please be responsible in your use of it! Please see the following links for some information:
   - [Quandl TOS](http://help.quandl.com/category/133-terms-and-conditions)
   - [Google Finance TOS](https://www.google.com/intl/en/googlefinance/disclaimer)
+  - [Yahoo Finance TOS] (https://policies.yahoo.com/us/en/yahoo/terms/utos/index.htm)
 
 For further information, please seek legal counsel.
 

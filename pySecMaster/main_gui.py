@@ -18,7 +18,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.1'
+__version__ = '1.3.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -72,20 +72,18 @@ class MainWindow(QtGui.QMainWindow):
         quandl_databases_index = self.cmb_tickers_quandl_db.findText('WIKI')
         self.cmb_tickers_quandl_db.setCurrentIndex(quandl_databases_index)
 
-        # Modify the combobox items of 'Quandl Data' and 'Google Finance Data'
-        # (Data tab) to make sure they only show valid options
-        self.data_selection_toggle()
-        # If 'Download Source' (Ticker Source tab) is changed, re-run the
-        # data_selection_toggle method to check selections
-        self.cmb_tickers_quandl.currentIndexChanged.\
-            connect(self.data_selection_toggle)
-
         # Hide the data fields if data won't be downloaded for them
         self.data_provider_toggle()
-        # If 'Download Source' (Ticker Source tab) is changed, re-run the
+        # If 'Download Source' (Data tab) is changed, re-run the
         # data_provider_toggle method to re-process items
         self.cmb_data_source.currentIndexChanged.\
             connect(self.data_provider_toggle)
+        self.cmb_data_source.currentIndexChanged.\
+            connect(self.data_selection_toggle)
+
+        # Modify the combobox items of 'Selection' (Data tab) to make sure it
+        # only shows valid options.
+        self.data_selection_toggle()
 
         # Hide the details text browser by default
         # ToDo: Doesn't hide at startup; .isVisible() always returned 'False'
@@ -155,74 +153,87 @@ class MainWindow(QtGui.QMainWindow):
 
         provider_selected = self.cmb_data_source.currentText()
 
-        if provider_selected == 'google_fin':
-            # Downloading Google Fin data; hide Quandl options
+        # The default interval is daily; all sources have daily data.
+        intervals = ['daily']
 
-            self.lbl_data_googfin.show()
-            self.cmb_data_googfin.show()
-
+        if provider_selected in ['google', 'yahoo']:
+            # Downloading Google or Yahoo Finance data; hide Quandl options
             self.lbl_quandlkey.hide()
             self.lineedit_quandlkey.hide()
-            self.lbl_data_quandl.hide()
-            self.cmb_data_quandl.hide()
             self.lbl_tickers_quandl.hide()
             self.cmb_tickers_quandl.hide()
             self.lbl_tickers_quandl_db.hide()
             self.cmb_tickers_quandl_db.hide()
 
+            # Set the data interval
+            self.cmb_data_interval.clear()
+            if provider_selected == 'google':
+                google_intervals = ['daily', 'minute']
+                self.cmb_data_interval.addItems(google_intervals)
+                self.cmb_data_interval.setCurrentIndex(0)
+            else:
+                self.cmb_data_interval.addItems(intervals)
+                self.cmb_data_interval.setCurrentIndex(0)
+
         elif provider_selected == 'quandl':
             # Downloading quandl data; hide all Google Fin options
-
             self.lbl_quandlkey.show()
             self.lineedit_quandlkey.show()
-            self.lbl_data_quandl.show()
-            self.cmb_data_quandl.show()
             self.lbl_tickers_quandl.show()
             self.cmb_tickers_quandl.show()
             self.lbl_tickers_quandl_db.show()
             self.cmb_tickers_quandl_db.show()
 
-            self.lbl_data_googfin.hide()
-            self.cmb_data_googfin.hide()
+            # Set the data interval
+            self.cmb_data_interval.clear()
+            self.cmb_data_interval.addItems(intervals)
+            self.cmb_data_interval.setCurrentIndex(0)
 
         else:
-            # Downloading all data (Quandl and Google Fin)
-
-            self.lbl_quandlkey.show()
-            self.lineedit_quandlkey.show()
-            self.lbl_data_quandl.show()
-            self.cmb_data_quandl.show()
-            self.lbl_tickers_quandl.show()
-            self.cmb_tickers_quandl.show()
-            self.lbl_tickers_quandl_db.show()
-            self.cmb_tickers_quandl_db.show()
-
-            self.lbl_data_googfin.show()
-            self.cmb_data_googfin.show()
+            raise NotImplementedError('%s is not implemented in the '
+                                      'data_provider_toggle function within '
+                                      'main_gui.py' % provider_selected)
 
     def data_selection_toggle(self):
         """
-        Modify the combobox items of 'Quandl Data' and 'Google Finance Data'
-        (Data tab) to make sure they only show valid options. Each one of these
-        options has explicit SQL queries established in the extractor.py file.
+        Modify the combobox items of 'Selection' (Data tab) to make sure it
+        only shows valid options. Each one of these options has explicit SQL
+        queries established in the database_queries.query_codes function.
         """
 
-        # The default options for Google Finance Data (Data tab)
-        google_fin_possible_selections = ['all', 'us_main', 'us_canada_london']
-        default_selection = 1
+        # The selected provider
+        provider_selected = self.cmb_data_source.currentText()
 
-        self.cmb_data_googfin.clear()
-        self.cmb_data_googfin.addItems(google_fin_possible_selections)
-        self.cmb_data_googfin.setCurrentIndex(default_selection)
+        # The data selections for the currently selected data provider.
+        google_fin_possible_selections = ['all', 'us_main',
+                                          'us_main_no_end_date',
+                                          'us_canada_london']
+        google_default_selection = 1
 
-        # The default options for Google Finance Data (Data tab)
-        quandl_possible_selections = ['quandl_wiki', 'quandl_goog',
-                                      'quandl_goog_etf']
-        default_selection = 0
+        yahoo_fin_possible_selections = ['all', 'us_main',
+                                         'us_main_no_end_date',
+                                         'us_canada_london']
+        yahoo_default_selection = 2
 
-        self.cmb_data_quandl.clear()
-        self.cmb_data_quandl.addItems(quandl_possible_selections)
-        self.cmb_data_quandl.setCurrentIndex(default_selection)
+        quandl_possible_selections = ['wiki', 'goog', 'goog_us_main',
+                                      'goog_us_main_no_end_date',
+                                      'goog_us_canada_london', 'goog_etf']
+        quandl_default_selection = 0
+
+        self.cmb_data_selection.clear()
+        if provider_selected == 'google':
+            self.cmb_data_selection.addItems(google_fin_possible_selections)
+            self.cmb_data_selection.setCurrentIndex(google_default_selection)
+        elif provider_selected == 'yahoo':
+            self.cmb_data_selection.addItems(yahoo_fin_possible_selections)
+            self.cmb_data_selection.setCurrentIndex(yahoo_default_selection)
+        elif provider_selected == 'quandl':
+            self.cmb_data_selection.addItems(quandl_possible_selections)
+            self.cmb_data_selection.setCurrentIndex(quandl_default_selection)
+        else:
+            raise NotImplementedError('%s is not implemented in the '
+                                      'data_selection_toggle function within '
+                                      'main_gui.py' % provider_selected)
 
     def onDataReady(self, string):
         """
@@ -260,9 +271,9 @@ class MainWindow(QtGui.QMainWindow):
             raise ValueError('Blank database name and/or directory provided')
 
         # Determine if the Quandl API Key is required; if so, was it provided?
-        if (self.cmb_data_source.currentText() in ['quandl', 'all'] and
+        if (self.cmb_data_source.currentText() in ['quandl'] and
                 self.lineedit_quandlkey.text() == ''):
-            raise ValueError('Blank Quandl API key provided')
+            raise ValueError('No Quandl API key provided')
 
         # Combine the directory path with the database name
         db_link = os.path.abspath(os.path.join(self.lineedit_dbdir.text(),
@@ -275,14 +286,20 @@ class MainWindow(QtGui.QMainWindow):
         symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
                              'seeking_alpha', 'yahoo']
 
+        download_list = [{'source': self.cmb_data_source.currentText(),
+                          'selection': self.cmb_data_selection.currentText(),
+                          'interval': self.cmb_data_interval.currentText(),
+                          'redownload_time': 60 * 60 * 12,
+                          'data_process': 'replace',
+                          'replace_days_back': 60,
+                          'period': 60}]
+
         # Build the dictionary with all the pySecMaster settings
         settings_dict = {
             'db_link': db_link,
             'quandl_ticker_source': self.cmb_tickers_quandl.currentText(),
             'quandl_db_list': quandl_db_list,
-            'download_source': self.cmb_data_source.currentText(),
-            'quandl_selection': self.cmb_data_quandl.currentText(),
-            'google_fin_selection': self.cmb_data_googfin.currentText(),
+            'download_list': download_list,
             'quandl_update_range': self.spinbx_settings_quandl_update.value(),
             'google_fin_update_range': self.spinbx_settings_csi_update.value(),
             'threads': self.spinbx_settings_threads.value(),
@@ -490,20 +507,19 @@ class Worker(QtCore.QObject):
                             (os.path.basename(db_link),
                              os.path.dirname(db_link)))
 
-        maintenance(db_link,
-                    settings_dict['quandl_ticker_source'],
-                    settings_dict['quandl_db_list'],
-                    settings_dict['threads'],
-                    settings_dict['quandl_key'],
-                    settings_dict['quandl_update_range'],
-                    settings_dict['google_fin_update_range'],
-                    settings_dict['symbology_sources'])
-        data_download(db_link,
-                      settings_dict['download_source'],
-                      settings_dict['quandl_selection'],
-                      settings_dict['google_fin_selection'],
-                      settings_dict['threads'],
-                      settings_dict['quandl_key'])
+        maintenance(database_link=db_link,
+                    quandl_ticker_source=settings_dict['quandl_ticker_source'],
+                    database_list=settings_dict['quandl_db_list'],
+                    threads=settings_dict['threads'],
+                    quandl_key=settings_dict['quandl_key'],
+                    quandl_update_range=settings_dict['quandl_update_range'],
+                    csidata_update_range=settings_dict['google_fin_update_range'],
+                    symbology_sources=settings_dict['symbology_sources'])
+        data_download(database_link=db_link,
+                      download_list=settings_dict['download_list'],
+                      threads=settings_dict['threads'],
+                      quandl_key=settings_dict['quandl_key'],
+                      verbose=True)
 
         self.dataReady.emit('Finished running the pySecMaster process\n')
         self.finished.emit()

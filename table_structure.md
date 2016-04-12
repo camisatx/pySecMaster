@@ -38,15 +38,16 @@
 
 #### data_vendor
 
-| Column Name    | Type                              | Foreign Key | Index |
-|----------------|-----------------------------------|-------------|-------|
-| data_vendor_id | INTEGER PRIMARY KEY AUTOINCREMENT |             |       |
-| name           | TEXT UNIQUE                       |             |       |
-| url            | TEXT                              |             |       |
-| support_email  | TEXT                              |             |       |
-| api            | TEXT                              |             |       |
-| created_date   | FLOAT                             |             |       |
-| updated_date   | FLOAT                             |             |       |
+| Column Name      | Type                              | Foreign Key | Index |
+|------------------|-----------------------------------|-------------|-------|
+| data_vendor_id   | INTEGER PRIMARY KEY AUTOINCREMENT |             |       |
+| name             | TEXT UNIQUE                       |             |       |
+| url              | TEXT                              |             |       |
+| support_email    | TEXT                              |             |       |
+| api              | TEXT                              |             |       |
+| consensus_weight | FLOAT                             |             |       |
+| created_date     | FLOAT                             |             |       |
+| updated_date     | FLOAT                             |             |       |
 
 #### exchange
 
@@ -116,25 +117,25 @@
 
 #### daily_prices
 
-| Column Name    | Type                              | Foreign Key                 | Index               |
-|----------------|-----------------------------------|-----------------------------|---------------------|
-| daily_price_id | INTEGER PRIMARY KEY AUTOINCREMENT |                             |                     |
-| data_vendor_id | INT                               | data_vendor(data_vendor_id) |                     |
-| tsid           | TEXT                              | symbology(source_id)        | idx_dp_tsid         |
-| date           | FLOAT                             |                             | idx_dp_date         |
-| open           | REAL                              |                             |                     |
-| high           | REAL                              |                             |                     |
-| low            | REAL                              |                             |                     |
-| close          | REAL                              |                             |                     |
-| volume         | REAL                              |                             |                     |
-| ex_dividend    | REAL                              |                             |                     |
-| split_ratio    | REAL                              |                             |                     |
-| adj_open       | REAL                              |                             |                     |
-| adj_high       | REAL                              |                             |                     |
-| adj_low        | REAL                              |                             |                     |
-| adj_close      | REAL                              |                             |                     |
-| adj_volume     | REAL                              |                             |                     |
-| updated_date   | FLOAT                             |                             | idx_dp_updated_date |
+| Column Name    | Type                              | Foreign Key                 | Index                 |
+|----------------|-----------------------------------|-----------------------------|-----------------------|
+| daily_price_id | INTEGER PRIMARY KEY AUTOINCREMENT |                             |                       |
+| data_vendor_id | INT                               | data_vendor(data_vendor_id) | idx_dp_data_vendor_id |
+| tsid           | TEXT                              | symbology(source_id)        | idx_dp_tsid           |
+| date           | FLOAT                             |                             | idx_dp_date           |
+| open           | REAL                              |                             |                       |
+| high           | REAL                              |                             |                       |
+| low            | REAL                              |                             |                       |
+| close          | REAL                              |                             |                       |
+| volume         | REAL                              |                             |                       |
+| ex_dividend    | REAL                              |                             |                       |
+| split_ratio    | REAL                              |                             |                       |
+| adj_open       | REAL                              |                             |                       |
+| adj_high       | REAL                              |                             |                       |
+| adj_low        | REAL                              |                             |                       |
+| adj_close      | REAL                              |                             |                       |
+| adj_volume     | REAL                              |                             |                       |
+| updated_date   | FLOAT                             |                             | idx_dp_updated_date   |
 
 #### finra_data
 
@@ -162,18 +163,18 @@
 
 #### minute_prices
 
-| Column Name     | Type                              | Foreign Key                 | Index               |
-|-----------------|-----------------------------------|-----------------------------|---------------------|
-| minute_price_id | INTEGER PRIMARY KEY AUTOINCREMENT |                             |                     |
-| data_vendor_id  | INT                               | data_vendor(data_vendor_id) |                     |
-| tsid            | TEXT                              | symbology(source_id)        | idx_mp_tsid         |
-| date            | TEXT                              |                             | idx_mp_date         |
-| close           | REAL                              |                             |                     |
-| high            | REAL                              |                             |                     |
-| low             | REAL                              |                             |                     |
-| open            | REAL                              |                             |                     |
-| volume          | REAL                              |                             |                     |
-| update_date     | FLOAT                             |                             | idx_mp_updated_date |
+| Column Name     | Type                              | Foreign Key                 | Index                 |
+|-----------------|-----------------------------------|-----------------------------|-----------------------|
+| minute_price_id | INTEGER PRIMARY KEY AUTOINCREMENT |                             |                       |
+| data_vendor_id  | INT                               | data_vendor(data_vendor_id) | idx_mp_data_vendor_id |
+| tsid            | TEXT                              | symbology(source_id)        | idx_mp_tsid           |
+| date            | TEXT                              |                             | idx_mp_date           |
+| close           | REAL                              |                             |                       |
+| high            | REAL                              |                             |                       |
+| low             | REAL                              |                             |                       |
+| open            | REAL                              |                             |                       |
+| volume          | REAL                              |                             |                       |
+| update_date     | FLOAT                             |                             | idx_mp_updated_date   |
 
 
 ## Events Tables
@@ -189,6 +190,22 @@
 | event_title  | TEXT                              |                      |               |
 | created_date | FLOAT                             |                      |               |
 | updated_date | FLOAT                             |                      |               |
+
+#### dividends
+
+| Column Name       | Type                              | Foreign Key          | Index        |
+|-------------------|-----------------------------------|----------------------|--------------|
+| dividend_id       | INTEGER PRIMARY KEY AUTOINCREMENT |                      |              |
+| tsid              | TEXT                              | symbology(source_id) | idx_div_tsid |
+| symbol            | TEXT                              |                      |              |
+| company           | TEXT                              |                      |              |
+| dividend          | FLOAT                             |                      |              |
+| ex_dividend_date  | FLOAT                             |                      |              |
+| record_date       | FLOAT                             |                      |              |
+| announcement_date | FLOAT                             |                      |              |
+| payment_date      | FLOAT                             |                      |              |
+| created_date      | FLOAT                             |                      |              |
+| updated_date      | FLOAT                             |                      |              |
 
 #### earnings
 
