@@ -1,4 +1,5 @@
 import sqlite3
+import psycopg2
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -31,9 +32,11 @@ __version__ = '1.3.2'
 #   futures_prices
 
 
-def main_tables(db_location):
+def main_tables(database='pySecMaster', user='test', password='password',
+                host='localhost', port=5432):
 
-    conn = sqlite3.connect(db_location)
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
     cur = conn.cursor()
 
     def baskets(c):
@@ -48,7 +51,7 @@ def main_tables(db_location):
 
     def csidata_stock_factsheet(c):
         c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
-        (CsiNumber          INTEGER PRIMARY KEY,
+        (CsiNumber          TEXT PRIMARY KEY,
         Symbol              TEXT,
         Name                TEXT,
         Exchange            TEXT,
@@ -72,7 +75,7 @@ def main_tables(db_location):
 
     def data_vendor(c):
         c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
-        (data_vendor_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+        (data_vendor_id     BIGSERIAL PRIMARY KEY,
         name                TEXT UNIQUE,
         url                 TEXT,
         support_email       TEXT,
@@ -83,7 +86,7 @@ def main_tables(db_location):
 
     def exchange(c):
         c.execute('''CREATE TABLE IF NOT EXISTS exchange
-         (exchange_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+         (exchange_id       BIGSERIAL PRIMARY KEY,
          symbol             TEXT UNIQUE,
          goog_symbol        TEXT,
          yahoo_symbol       TEXT,
@@ -113,7 +116,7 @@ def main_tables(db_location):
 
     def quandl_codes(c):
         c.execute('''CREATE TABLE IF NOT EXISTS quandl_codes
-        (q_code_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        (q_code_id          BIGSERIAL PRIMARY KEY,
         data_vendor         TEXT,
         data                TEXT,
         component           TEXT,
@@ -128,7 +131,7 @@ def main_tables(db_location):
         created_date        FLOAT,
         updated_date        FLOAT,
         FOREIGN KEY(data_vendor) REFERENCES data_vendor(name),
-        FOREIGN KEY(q_code_id) REFERENCES symbology(source_id))''')
+        FOREIGN KEY(q_code) REFERENCES symbology(source_id))''')
         c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_data
                     ON quandl_codes(data)""")
 
@@ -136,7 +139,7 @@ def main_tables(db_location):
         c.execute('''CREATE TABLE IF NOT EXISTS symbology
         (symbol_id      INTEGER,
         source          TEXT,
-        source_id       TEXT,
+        source_id       TEXT UNIQUE,
         type            TEXT,
         created_date    FLOAT,
         updated_date    FLOAT)''')
@@ -168,14 +171,19 @@ def main_tables(db_location):
         c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
                     ON tickers(sector)""")
 
+    symbology(cur)
     baskets(cur)
     csidata_stock_factsheet(cur)
     data_vendor(cur)
     exchange(cur)
     indices(cur)
     quandl_codes(cur)
-    symbology(cur)
     # tickers(cur)
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
 
     print('All tables in MainTables are created')
 
