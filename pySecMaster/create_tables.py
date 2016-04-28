@@ -1,5 +1,7 @@
-import sqlite3
 import psycopg2
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+
+from utilities.user_dir import user_dir
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -32,380 +34,513 @@ __version__ = '1.3.2'
 #   futures_prices
 
 
-def main_tables(database='pySecMaster', user='test', password='password',
+def create_database(database='pysecmaster', user='postgres'):
+    """ Determine if the provided database exists within the postgres server.
+    If the database doesn't exist, create it using the provided user as the
+    owner. This requires connecting to the default database before psycopg2 is
+    able to send an execute command.
+
+    NOTE: The provided user must have a valid login role within postgres before
+    they are able to log into the server and create databases.
+
+    :param database: String of the database to create
+    :param user: String of the user who should own the database
+    """
+
+    userdir = user_dir()['postgresql']
+
+    conn = psycopg2.connect(database=userdir['main_db'],
+                            user=userdir['main_user'],
+                            password=userdir['main_password'],
+                            host=userdir['main_host'],
+                            port=userdir['main_port'])
+    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+
+    try:
+        with conn:
+            cur = conn.cursor()
+
+            cur.execute("""SELECT datname FROM pg_catalog.pg_database
+                        WHERE lower(datname)=lower('%s')""" % database)
+            database_exist = cur.fetchone()
+
+            if not database_exist:
+                cur.execute("""CREATE DATABASE %s OWNER %s""" %
+                            (database, user))
+            else:
+                print('The %s database already exists.' % database)
+
+            cur.close()
+
+    except psycopg2.Error as e:
+        conn.rollback()
+        print('Failed to create the %s database' % database)
+        print(e)
+        return
+    except conn.OperationalError:
+        print('Unable to connect to the SQL Database in create_database. Make '
+              'sure the database address/name are correct.')
+        return
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: An unknown issue occurred in create_database')
+
+
+def main_tables(database='pysecmaster', user='postgres', password='password',
                 host='localhost', port=5432):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
-    cur = conn.cursor()
+    try:
+        with conn:
+            cur = conn.cursor()
 
-    def baskets(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS baskets
-        (basket_id      INTEGER PRIMARY KEY,
-        basket_name     TEXT,
-        tsid            TEXT,
-        date            FLOAT,
-        created_date    FLOAT,
-        updated_date    FLOAT,
-        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
+            def baskets(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS baskets
+                (basket_id      SERIAL                      PRIMARY KEY,
+                name            TEXT                        NOT NULL,
+                description     TEXT,
+                start_date      TIMESTAMP WITH TIME ZONE,
+                end_date        TIMESTAMP WITH TIME ZONE,
+                created_by      TEXT,
+                created_date    TIMESTAMP WITH TIME ZONE,
+                updated_date    TIMESTAMP WITH TIME ZONE)''')
 
-    def csidata_stock_factsheet(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
-        (CsiNumber          TEXT PRIMARY KEY,
-        Symbol              TEXT,
-        Name                TEXT,
-        Exchange            TEXT,
-        IsActive            INTEGER,
-        StartDate           TEXT,
-        EndDate             TEXT,
-        Sector              TEXT,
-        Industry            TEXT,
-        ConversionFactor    INTEGER,
-        SwitchCfDate        TEXT,
-        PreSwitchCf         INTEGER,
-        LastVolume          INTEGER,
-        Type                TEXT,
-        ChildExchange       TEXT,
-        Currency            TEXT,
-        created_date        FLOAT,
-        updated_date        FLOAT,
-        FOREIGN KEY(CsiNumber) REFERENCES symbology(source_id))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_csidata_symbol
-                    ON csidata_stock_factsheet(Symbol)""")
+            def basket_values(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS basket_values
+                (basket_val_id  BIGSERIAL                   PRIMARY KEY,
+                basket_id       INTEGER                     NOT NULL,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
+                updated_date    TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(basket_id) REFERENCES baskets(basket_id),
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
 
-    def data_vendor(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
-        (data_vendor_id     BIGSERIAL PRIMARY KEY,
-        name                TEXT UNIQUE,
-        url                 TEXT,
-        support_email       TEXT,
-        api                 TEXT,
-        consensus_weight    FLOAT,
-        created_date        FLOAT,
-        updated_date        FLOAT)''')
+            def csidata_stock_factsheet(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
+                (CsiNumber          TEXT                        PRIMARY KEY,
+                Symbol              TEXT                        NOT NULL,
+                Name                TEXT,
+                Exchange            TEXT                        NOT NULL,
+                IsActive            BOOLEAN,
+                StartDate           DATE,
+                EndDate             DATE,
+                Sector              TEXT,
+                Industry            TEXT,
+                ConversionFactor    SMALLINT,
+                SwitchCfDate        DATE,
+                PreSwitchCf         SMALLINT,
+                LastVolume          BIGINT,
+                Type                TEXT,
+                ChildExchange       TEXT,
+                Currency            TEXT,
+                symbology_source    TEXT,
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(symbology_source, CsiNumber)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_csidata_symbol
+                            ON csidata_stock_factsheet(Symbol)""")
 
-    def exchange(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS exchange
-         (exchange_id       BIGSERIAL PRIMARY KEY,
-         symbol             TEXT UNIQUE,
-         goog_symbol        TEXT,
-         yahoo_symbol       TEXT,
-         csi_symbol         TEXT,
-         tsid_symbol        TEXT,
-         name               TEXT,
-         country            TEXT,
-         city               TEXT,
-         currency           TEXT,
-         time_zone          TEXT,
-         utc_offset         INT,
-         open               TEXT,
-         close              TEXT,
-         lunch              TEXT,
-         created_date       FLOAT,
-         updated_date       FLOAT)''')
+            def data_vendor(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
+                (data_vendor_id     SERIAL      PRIMARY KEY,
+                name                TEXT        UNIQUE,
+                url                 TEXT,
+                support_email       TEXT,
+                api                 TEXT,
+                consensus_weight    SMALLINT,
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE)''')
 
-    def indices(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS indices
-        (index_id           INTEGER PRIMARY KEY,
-        stock_index         TEXT,
-        tsid                TEXT,
-        as_of_date          FLOAT,
-        created_date        FLOAT,
-        updated_date        FLOAT,
-        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
+            def exchange(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS exchange
+                 (exchange_id       SMALLSERIAL     PRIMARY KEY,
+                 symbol             TEXT            UNIQUE NOT NULL,
+                 goog_symbol        TEXT,
+                 yahoo_symbol       TEXT,
+                 csi_symbol         TEXT,
+                 tsid_symbol        TEXT            NOT NULL,
+                 name               TEXT,
+                 country            TEXT,
+                 city               TEXT,
+                 currency           TEXT,
+                 time_zone          TEXT,
+                 utc_offset         REAL,
+                 open               TIME,
+                 close              TIME,
+                 lunch              TEXT,
+                 created_date       TIMESTAMP WITH TIME ZONE,
+                 updated_date       TIMESTAMP WITH TIME ZONE)''')
 
-    def quandl_codes(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS quandl_codes
-        (q_code_id          BIGSERIAL PRIMARY KEY,
-        data_vendor         TEXT,
-        data                TEXT,
-        component           TEXT,
-        period              TEXT,
-        q_code              TEXT,
-        name                TEXT,
-        start_date          FLOAT,
-        end_date            FLOAT,
-        frequency           TEXT,
-        last_updated        FLOAT,
-        page_num            INTEGER,
-        created_date        FLOAT,
-        updated_date        FLOAT,
-        FOREIGN KEY(data_vendor) REFERENCES data_vendor(name),
-        FOREIGN KEY(q_code) REFERENCES symbology(source_id))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_data
-                    ON quandl_codes(data)""")
+            def indices(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS indices
+                (index_id           SERIAL                      PRIMARY KEY,
+                stock_index         TEXT                        NOT NULL,
+                source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
+                as_of_date          TIMESTAMP WITH TIME ZONE,
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
 
-    def symbology(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS symbology
-        (symbol_id      INTEGER,
-        source          TEXT,
-        source_id       TEXT UNIQUE,
-        type            TEXT,
-        created_date    FLOAT,
-        updated_date    FLOAT)''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_symbology_symbol_id
-                    ON symbology(symbol_id)""")
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_symbology_source_id
-                    ON symbology(source_id)""")
+            def quandl_codes(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS quandl_codes
+                (q_code_id          BIGSERIAL                   PRIMARY KEY,
+                data_vendor         TEXT                        NOT NULL,
+                data                TEXT                        NOT NULL,
+                component           TEXT                        NOT NULL,
+                period              TEXT,
+                symbology_source    TEXT                        NOT NULL,
+                q_code              TEXT                        NOT NULL,
+                name                TEXT,
+                start_date          TIMESTAMP WITH TIME ZONE,
+                end_date            TIMESTAMP WITH TIME ZONE,
+                frequency           TEXT,
+                last_updated        TIMESTAMP WITH TIME ZONE,
+                page_num            INTEGER,
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(data_vendor)
+                    REFERENCES data_vendor(name)
+                    ON UPDATE CASCADE,
+                FOREIGN KEY(symbology_source, q_code)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_data
+                            ON quandl_codes(data)""")
 
-    def tickers(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS tickers
-        (tsid           TEXT PRIMARY KEY,
-        ticker          TEXT,
-        name            TEXT,
-        exchange        TEXT,
-        child_exchange  TEXT,
-        is_active       INTEGER,
-        start_date      FLOAT,
-        end_date        FLOAT,
-        type            TEXT,
-        sector          TEXT,
-        industry        TEXT,
-        sub_industry    TEXT,
-        currency        TEXT,
-        hq_country      TEXT,
-        created_date    FLOAT,
-        updated_date    FLOAT,
-        FOREIGN KEY(tsid) REFERENCES symbology(source_id),
-        FOREIGN KEY(exchange) REFERENCES exchange(abbrev))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
-                    ON tickers(sector)""")
+            def symbology(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS symbology
+                (symbol_id      BIGINT                      NOT NULL,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
+                type            TEXT,
+                created_date    TIMESTAMP WITH TIME ZONE,
+                updated_date    TIMESTAMP WITH TIME ZONE)''')
+                c.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
+                    idx_symbology_sources ON symbology(source, source_id)""")
 
-    symbology(cur)
-    baskets(cur)
-    csidata_stock_factsheet(cur)
-    data_vendor(cur)
-    exchange(cur)
-    indices(cur)
-    quandl_codes(cur)
-    # tickers(cur)
+            def tickers(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS tickers
+                (tsid               TEXT                        PRIMARY KEY,
+                ticker              TEXT                        NOT NULL,
+                name                TEXT,
+                exchange            TEXT                        NOT NULL,
+                child_exchange      TEXT,
+                is_active           BOOLEAN,
+                start_date          TIMESTAMP WITH TIME ZONE,
+                end_date            TIMESTAMP WITH TIME ZONE,
+                type                TEXT,
+                sector              TEXT,
+                industry            TEXT,
+                sub_industry        TEXT,
+                currency            TEXT,
+                hq_country          TEXT,
+                symbology_source    TEXT                        NOT NULL,
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(symbology_source, tsid)
+                    REFERENCES symbology(source, source_id) ON UPDATE CASCADE,
+                FOREIGN KEY(exchange)
+                    REFERENCES exchange(abbrev) ON UPDATE CASCADE)''')
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
+                            ON tickers(sector)""")
 
-    conn.commit()
+            symbology(cur)
+            baskets(cur)
+            basket_values(cur)
+            csidata_stock_factsheet(cur)
+            data_vendor(cur)
+            exchange(cur)
+            indices(cur)
+            quandl_codes(cur)
+            # tickers(cur)
 
-    cur.close()
-    conn.close()
+            conn.commit()
 
-    print('All tables in MainTables are created')
+            cur.close()
 
+            print('All tables in MainTables are created')
 
-def data_tables(db_location):
-
-    conn = sqlite3.connect(db_location)
-    cur = conn.cursor()
-
-    def daily_prices(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS daily_prices
-        (daily_price_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_vendor_id  INTEGER,
-        tsid            TEXT,
-        date            FLOAT,
-        open            REAL,
-        high            REAL,
-        low             REAL,
-        close           REAL,
-        volume          REAL,
-        ex_dividend     REAL,
-        split_ratio     REAL,
-        adj_open        REAL,
-        adj_high        REAL,
-        adj_low         REAL,
-        adj_close       REAL,
-        adj_volume      REAL,
-        updated_date    FLOAT,
-        FOREIGN KEY(data_vendor_id) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_tsid
-                    ON daily_prices(tsid)""")
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_data_vendor_id
-                    ON daily_prices(data_vendor_id)""")
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_date
-                    ON daily_prices(date)""")
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_updated_date
-                    ON daily_prices(updated_date)""")
-
-    def finra_data(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS finra_data
-        (finra_id               INTEGER PRIMARY KEY AUTOINCREMENT,
-        tsid                    TEXT,
-        date                    TEXT,
-        short_volume            REAL,
-        short_exempt_volume     REAL,
-        total_volume            REAL,
-        updated_date            FLOAT,
-        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
-        c.execute('''CREATE INDEX IF NOT EXISTS idx_finra_tsid
-                    ON finra_data(tsid)''')
-
-    def fundamental_data(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS fundamental_data
-        (fundamental_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tsid            TEXT,
-        date            TEXT,
-        value           FLOAT,
-        note            TEXT,
-        created_date    FLOAT,
-        updated_date    FLOAT,
-        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_tsid
-                    ON fundamental_data(tsid)""")
-
-    def minute_prices(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS minute_prices
-        (minute_price_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_vendor_id  INTEGER,
-        tsid            TEXT,
-        date            TEXT,
-        close           REAL,
-        high            REAL,
-        low             REAL,
-        open            REAL,
-        volume          REAL,
-        updated_date    FLOAT,
-        FOREIGN KEY(data_vendor_id) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(tsid) REFERENCES symbology(source_id))''')
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_tsid
-                    ON minute_prices(tsid)""")
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_data_vendor_id
-                    ON minute_prices(data_vendor_id)""")
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_date
-                    ON minute_prices(date)""")
-        c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_updated_date
-                    ON minute_prices(updated_date)""")
-
-    def options_prices(c):
-        c.execute('''CREATE TABLE IF NOT EXISTS options_prices
-        (options_prices_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_vendor             INTEGER,
-        underlying_tsid         TEXT,
-        underlying_price        REAL,
-        quote_time              TEXT,
-        strike                  REAL,
-        expiration              TEXT,
-        type                    TEXT,
-        option_symbol           TEXT,
-        last                    REAL,
-        bid                     REAL,
-        ask                     REAL,
-        chg                     REAL,
-        pct_chg                 TEXT,
-        vol                     INTEGER,
-        open_int                INTEGER,
-        imp_vol                 TEXT,
-        updated_date            FLOAT,
-        FOREIGN KEY(data_vendor) REFERENCES data_vendor(data_vendor_id),
-        FOREIGN KEY(underlying_tsid) REFERENCES symbology(source_id))''')
-
-    daily_prices(cur)
-    finra_data(cur)
-    fundamental_data(cur)
-    minute_prices(cur)
-    # options_prices(cur)
-
-    print('All tables in data_tables are created')
+    except psycopg2.Error as e:
+        conn.rollback()
+        print('Failed to create the main tables in the database')
+        print(e)
+        return
+    except conn.OperationalError:
+        print('Unable to connect to the SQL Database in main_tables. Make '
+              'sure the database address/name are correct.')
+        return
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: An unknown issue occurred in main_tables')
 
 
-def events_tables(db_location):
+def data_tables(database='pysecmaster', user='postgres', password='password',
+                host='localhost', port=5432):
 
-    conn = sqlite3.connect(db_location)
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+    try:
+        with conn:
+            cur = conn.cursor()
+
+            def daily_prices(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS daily_prices
+                (daily_price_id BIGSERIAL                   PRIMARY KEY,
+                data_vendor_id  SMALLINT,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
+                date            TIMESTAMP WITH TIME ZONE    NOT NULL,
+                open            DECIMAL(11,4),
+                high            DECIMAL(11,4),
+                low             DECIMAL(11,4),
+                close           DECIMAL(11,4),
+                volume          BIGINT,
+                ex_dividend     DECIMAL(6,3),
+                split_ratio     DECIMAL(11,4),
+                updated_date    TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(data_vendor_id)
+                    REFERENCES data_vendor(data_vendor_id),
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_identifiers
+                    ON daily_prices(source_id, data_vendor_id, date,
+                        updated_date)""")
+
+            def finra_data(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS finra_data
+                (finra_id               SERIAL                      PRIMARY KEY,
+                source                  TEXT                        NOT NULL,
+                source_id               TEXT                        NOT NULL,
+                date                    TIMESTAMP WITH TIME ZONE    NOT NULL,
+                short_volume            INTEGER,
+                short_exempt_volume     INTEGER,
+                total_volume            INTEGER,
+                updated_date            TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
+                c.execute('''CREATE INDEX IF NOT EXISTS idx_finra_source_id
+                            ON finra_data(source_id)''')
+
+            def fundamental_data(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS fundamental_data
+                (fundamental_id BIGSERIAL                   PRIMARY KEY,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
+                date            TIMESTAMP WITH TIME ZONE    NOT NULL,
+                value           DECIMAL(14,2),
+                note            TEXT,
+                created_date    TIMESTAMP WITH TIME ZONE,
+                updated_date    TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_source_id
+                            ON fundamental_data(source_id)""")
+
+            def minute_prices(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS minute_prices
+                (minute_price_id    BIGSERIAL                   PRIMARY KEY,
+                data_vendor_id      SMALLINT,
+                source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
+                date                TIMESTAMP WITH TIME ZONE    NOT NULL,
+                close               DECIMAL(11,4),
+                high                DECIMAL(11,4),
+                low                 DECIMAL(11,4),
+                open                DECIMAL(11,4),
+                volume              BIGINT,
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(data_vendor_id)
+                    REFERENCES data_vendor(data_vendor_id),
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_identifiers
+                    ON minute_prices(source_id, data_vendor_id, date,
+                    updated_date)""")
+
+            def options_prices(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS options_prices
+                (options_prices_id      BIGSERIAL                   PRIMARY KEY,
+                data_vendor             SMALLINT,
+                underlying_source       TEXT                        NOT NULL,
+                underlying_source_id    TEXT                        NOT NULL,
+                underlying_price        DECIMAL(11,4),
+                quote_time              TIMESTAMP WITH TIME ZONE    NOT NULL,
+                strike                  DECIMAL(11,4),
+                expiration              TIMESTAMP WITH TIME ZONE,
+                type                    TEXT,
+                contract_id             TEXT,
+                last                    DECIMAL(11,4),
+                bid                     DECIMAL(11,4),
+                ask                     DECIMAL(11,4),
+                vol                     INTEGER,
+                open_int                INTEGER,
+                imp_vol                 DECIMAL(8,4),
+                updated_date            TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(data_vendor)
+                    REFERENCES data_vendor(data_vendor_id),
+                FOREIGN KEY(underlying_source, underlying_source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)''')
+
+            daily_prices(cur)
+            finra_data(cur)
+            fundamental_data(cur)
+            minute_prices(cur)
+            # options_prices(cur)
+
+            conn.commit()
+            cur.close()
+
+            print('All tables in data_tables are created')
+
+    except psycopg2.Error as e:
+        conn.rollback()
+        print('Failed to create the data tables in the database')
+        print(e)
+        return
+    except conn.OperationalError:
+        print('Unable to connect to the SQL Database in data_tables. Make '
+              'sure the database address/name are correct.')
+        return
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: An unknown issue occurred in data_tables')
+
+
+def events_tables(database='pysecmaster', user='postgres', password='password',
+                  host='localhost', port=5432):
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
     try:
         with conn:
             cur = conn.cursor()
 
             def conference_calls(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS conference_calls
-                (conf_call_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                tsid                TEXT,
+                (conf_call_id       SERIAL                      PRIMARY KEY,
+                source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
                 symbol              TEXT,
-                date                FLOAT,
+                date                TIMESTAMP WITH TIME ZONE    NOT NULL,
                 event_title         TEXT,
-                created_date        FLOAT,
-                updated_date        FLOAT,
-                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_conf_tsid
-                            ON conference_calls(tsid)""")
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_conf_source_id
+                            ON conference_calls(source_id, date)""")
 
             def dividends(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS dividends
-                (dividend_id                INTEGER PRIMARY KEY AUTOINCREMENT,
-                tsid                        TEXT,
-                symbol                      TEXT,
-                company                     TEXT,
-                dividend                    FLOAT,
-                ex_dividend_date            FLOAT,
-                record_date                 FLOAT,
-                announcement_date           FLOAT,
-                payment_date                FLOAT,
-                created_date                FLOAT,
-                updated_date                FLOAT,
-                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_div_tsid
-                            ON dividends(tsid)""")
+                (dividend_id        SERIAL                      PRIMARY KEY,
+                source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
+                symbol              TEXT,
+                company             TEXT,
+                dividend            DECIMAL(6,3),
+                ex_dividend_date    TIMESTAMP WITH TIME ZONE    NOT NULL,
+                record_date         TIMESTAMP WITH TIME ZONE,
+                announcement_date   TIMESTAMP WITH TIME ZONE,
+                payment_date        TIMESTAMP WITH TIME ZONE,
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_div_source_id
+                            ON dividends(source_id)""")
 
             def earnings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS earnings
-                (earnings_id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                tsid            TEXT,
+                (earnings_id    SERIAL                      PRIMARY KEY,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
                 symbol          TEXT,
                 company_name    TEXT,
-                date            FLOAT,
-                reported_eps    FLOAT,
-                consensus_eps   FLOAT,
-                created_date    FLOAT,
-                updated_date    FLOAT,
-                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_earn_tsid
-                            ON earnings(tsid)""")
+                date            TIMESTAMP WITH TIME ZONE    NOT NULL,
+                reported_eps    DECIMAL(6,3),
+                consensus_eps   DECIMAL(6,3),
+                created_date    TIMESTAMP WITH TIME ZONE,
+                updated_date    TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_earn_source_id
+                            ON earnings(source_id)""")
 
             def economic_events(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS economic_events
-                (event_id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                tsid                TEXT,
+                (event_id           SERIAL                      PRIMARY KEY,
+                source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
                 event_name          TEXT,
-                date                FLOAT,
-                date_for            FLOAT,
+                date                TIMESTAMP WITH TIME ZONE,
+                date_for            TIMESTAMP WITH TIME ZONE,
                 actual              TEXT,
                 briefing_forecast   TEXT,
                 market_expects      TEXT,
                 prior               TEXT,
                 revised_from        TEXT,
-                created_date        FLOAT,
-                updated_date        FLOAT,
-                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_econ_event_tsid
-                            ON economic_events(tsid)""")
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_econ_event_source_id
+                            ON economic_events(source_id)""")
 
             def ipo_pricings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS ipo_pricings
-                (ipo_id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                tsid            TEXT,
+                (ipo_id         SERIAL                      PRIMARY KEY,
+                source          TEXT                    NOT NULL,
+                source_id       TEXT                    NOT NULL,
                 symbol          TEXT,
                 company_name    TEXT,
-                offer_date      FLOAT,
+                offer_date      TIMESTAMP WITH TIME ZONE,
                 shares_offered  TEXT,
                 proposed_price  TEXT,
                 initial_price   TEXT,
-                created_date    FLOAT,
-                updated_date    FLOAT,
-                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_ipop_tsid
-                            ON ipo_pricings(tsid)""")
+                created_date    TIMESTAMP WITH TIME ZONE,
+                updated_date    TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_ipop_source_id
+                            ON ipo_pricings(source_id)""")
 
             def splits(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS splits
-                (split_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                tsid            TEXT,
+                (split_id       SERIAL                      PRIMARY KEY,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
                 symbol          TEXT,
                 company_name    TEXT,
-                payable_date    FLOAT,
-                ex_date         FLOAT,
-                announced_date  FLOAT,
+                payable_date    TIMESTAMP WITH TIME ZONE,
+                ex_date         TIMESTAMP WITH TIME ZONE,
+                announced_date  TIMESTAMP WITH TIME ZONE,
                 optionable      INTEGER,
-                ratio           FLOAT,
-                created_date    FLOAT,
-                updated_date    FLOAT,
-                FOREIGN KEY(tsid) REFERENCES symbology(source_id))""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_splits_tsid
-                            ON splits(tsid)""")
+                ratio           DECIMAL(11,4),
+                created_date    TIMESTAMP WITH TIME ZONE,
+                updated_date    TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_splits_source_id
+                            ON splits(source_id)""")
 
             conference_calls(cur)
             dividends(cur)
@@ -414,9 +549,12 @@ def events_tables(db_location):
             ipo_pricings(cur)
             splits(cur)
 
+            conn.commit()
+            cur.close()
+
             print('All tables in events_tables are in the database.')
 
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         conn.rollback()
         print('Failed to create the main events tables in the database')
         print(e)
