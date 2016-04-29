@@ -86,8 +86,8 @@ def create_database(database='pysecmaster', user='postgres'):
         raise SystemError('Error: An unknown issue occurred in create_database')
 
 
-def main_tables(database='pysecmaster', user='postgres', password='password',
-                host='localhost', port=5432):
+def main_tables(database='pysecmaster', user='pysecmaster',
+                password='pysecmaster', host='localhost', port=5432):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
@@ -282,8 +282,8 @@ def main_tables(database='pysecmaster', user='postgres', password='password',
         raise SystemError('Error: An unknown issue occurred in main_tables')
 
 
-def data_tables(database='pysecmaster', user='postgres', password='password',
-                host='localhost', port=5432):
+def data_tables(database='pysecmaster', user='pysecmaster',
+                password='pysecmaster', host='localhost', port=5432):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
@@ -369,36 +369,102 @@ def data_tables(database='pysecmaster', user='postgres', password='password',
                     ON minute_prices(source_id, data_vendor_id, date,
                     updated_date)""")
 
-            def options_prices(c):
-                c.execute('''CREATE TABLE IF NOT EXISTS options_prices
-                (options_prices_id      BIGSERIAL                   PRIMARY KEY,
-                data_vendor             SMALLINT,
-                underlying_source       TEXT                        NOT NULL,
-                underlying_source_id    TEXT                        NOT NULL,
-                underlying_price        DECIMAL(11,4),
-                quote_time              TIMESTAMP WITH TIME ZONE    NOT NULL,
-                strike                  DECIMAL(11,4),
-                expiration              TIMESTAMP WITH TIME ZONE,
-                type                    TEXT,
-                contract_id             TEXT,
-                last                    DECIMAL(11,4),
-                bid                     DECIMAL(11,4),
-                ask                     DECIMAL(11,4),
-                vol                     INTEGER,
-                open_int                INTEGER,
-                imp_vol                 DECIMAL(8,4),
-                updated_date            TIMESTAMP WITH TIME ZONE,
-                FOREIGN KEY(data_vendor)
-                    REFERENCES data_vendor(data_vendor_id),
-                FOREIGN KEY(underlying_source, underlying_source_id)
+            def option_contracts(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS option_contracts
+                (contract_id    SERIAL                      PRIMARY KEY,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
+                symbol          TEXT,
+                exchange        TEXT,
+                currency        TEXT,
+                multiplier      SMALLINT,
+                date_updated    TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
                     REFERENCES symbology(source, source_id)
-                    ON UPDATE CASCADE)''')
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_option_contracts_id
+                    ON option_contracts(source_id)""")
+
+            def option_chains(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS option_chains
+                (option_id      BIGSERIAL                   PRIMARY KEY,
+                data_vendor_id  SMALLINT,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
+                contract_type   INTEGER                     NOT NULL,
+                leg_id          SMALLINT,
+                contract_id     BIGINT                      NOT NULL,
+                expiry          DATE,
+                type            TEXT,
+                strike          DECIMAL(8,2),
+                bid             DECIMAL(10,4),
+                bid_size        INTEGER,
+                ask             DECIMAL(10,4),
+                ask_size        INTEGER,
+                close           DECIMAL(10,4),
+                open_interest   INTEGER,
+                volume          INTEGER,
+                imp_volatility  DECIMAL(6,4),
+                delta           DECIMAL(4,2),
+                gamma           DECIMAL(4,2),
+                rho             DECIMAL(4,2),
+                theta           DECIMAL(4,2),
+                vega            DECIMAL(4,2),
+                date_update     TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(data_vendor_id)
+                    REFERENCES data_vendor(data_vendor_id),
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE,
+                FOREIGN KEY(contract_type)
+                    REFERENCES option_contracts(contract_id))""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_option_chains_values
+                    ON option_chains(source_id, contract_id, expiry, strike)""")
+
+            def tick(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS tick_prices
+                (tick_id        BIGSERIAL                   PRIMARY KEY,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
+                date            TIMESTAMP WITH TIME ZONE,
+                bid             DECIMAL(11,4),
+                ask             DECIMAL(11,4),
+                last            DECIMAL(11,4),
+                high            DECIMAL(11,4),
+                low             DECIMAL(11,4),
+                close           DECIMAL(11,4),
+                bid_size        INTEGER,
+                ask_size        INTEGER,
+                last_size       INTEGER,
+                volume          INTEGER,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_tick_values
+                            ON tick_prices(source_id, date)""")
+
+            def tick_stream(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS tick_prices_stream
+                (tick_id        BIGSERIAL                   PRIMARY KEY,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
+                date            TIMESTAMP WITH TIME ZONE,
+                field           TEXT,
+                value           DECIMAL(11,4),
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS idx_tick_stream_values
+                            ON tick_prices_stream(source_id, date, field)""")
 
             daily_prices(cur)
             finra_data(cur)
             fundamental_data(cur)
             minute_prices(cur)
-            # options_prices(cur)
+            option_contracts(cur)
+            option_chains(cur)
+            tick(cur)
+            tick_stream(cur)
 
             conn.commit()
             cur.close()
@@ -419,8 +485,8 @@ def data_tables(database='pysecmaster', user='postgres', password='password',
         raise SystemError('Error: An unknown issue occurred in data_tables')
 
 
-def events_tables(database='pysecmaster', user='postgres', password='password',
-                  host='localhost', port=5432):
+def events_tables(database='pysecmaster', user='pysecmaster',
+                  password='pysecmaster', host='localhost', port=5432):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
@@ -566,3 +632,11 @@ def events_tables(database='pysecmaster', user='postgres', password='password',
     except Exception as e:
         print(e)
         raise SystemError('Error: An unknown issue occurred in events_tables')
+
+
+if __name__ == '__main__':
+
+    create_database()
+    main_tables()
+    data_tables()
+    events_tables()
