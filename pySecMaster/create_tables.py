@@ -120,30 +120,30 @@ def main_tables(database='pysecmaster', user='pysecmaster',
 
             def csidata_stock_factsheet(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
-                (CsiNumber          TEXT                        PRIMARY KEY,
-                Symbol              TEXT                        NOT NULL,
-                Name                TEXT,
-                Exchange            TEXT                        NOT NULL,
-                IsActive            BOOLEAN,
-                StartDate           DATE,
-                EndDate             DATE,
-                Sector              TEXT,
-                Industry            TEXT,
-                ConversionFactor    SMALLINT,
-                SwitchCfDate        DATE,
-                PreSwitchCf         SMALLINT,
-                LastVolume          BIGINT,
-                Type                TEXT,
-                ChildExchange       TEXT,
-                Currency            TEXT,
+                (csi_number         TEXT                        PRIMARY KEY,
+                symbol              TEXT                        NOT NULL,
+                name                TEXT,
+                exchange            TEXT                        NOT NULL,
+                is_active           BOOLEAN,
+                start_date          DATE,
+                end_date            DATE,
+                sector              TEXT,
+                industry            TEXT,
+                conversion_factor   SMALLINT,
+                switch_cf_date      DATE,
+                pre_switch_cf       SMALLINT,
+                last_volume         BIGINT,
+                type                TEXT,
+                child_exchange      TEXT,
+                currency            TEXT,
                 symbology_source    TEXT,
                 created_date        TIMESTAMP WITH TIME ZONE,
                 updated_date        TIMESTAMP WITH TIME ZONE,
-                FOREIGN KEY(symbology_source, CsiNumber)
+                FOREIGN KEY(symbology_source, csi_number)
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)''')
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_csidata_symbol
-                            ON csidata_stock_factsheet(Symbol)""")
+                            ON csidata_stock_factsheet(symbol)""")
 
             def data_vendor(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
@@ -156,8 +156,8 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                 created_date        TIMESTAMP WITH TIME ZONE,
                 updated_date        TIMESTAMP WITH TIME ZONE)''')
 
-            def exchange(c):
-                c.execute('''CREATE TABLE IF NOT EXISTS exchange
+            def exchanges(c):
+                c.execute('''CREATE TABLE IF NOT EXISTS exchanges
                  (exchange_id       SMALLSERIAL     PRIMARY KEY,
                  symbol             TEXT            UNIQUE NOT NULL,
                  goog_symbol        TEXT,
@@ -248,7 +248,7 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                 FOREIGN KEY(symbology_source, tsid)
                     REFERENCES symbology(source, source_id) ON UPDATE CASCADE,
                 FOREIGN KEY(exchange)
-                    REFERENCES exchange(abbrev) ON UPDATE CASCADE)''')
+                    REFERENCES exchanges(abbrev) ON UPDATE CASCADE)''')
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
                             ON tickers(sector)""")
 
@@ -257,7 +257,7 @@ def main_tables(database='pysecmaster', user='pysecmaster',
             basket_values(cur)
             csidata_stock_factsheet(cur)
             data_vendor(cur)
-            exchange(cur)
+            exchanges(cur)
             indices(cur)
             quandl_codes(cur)
             # tickers(cur)
@@ -391,7 +391,10 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                 data_vendor_id  SMALLINT,
                 source          TEXT                        NOT NULL,
                 source_id       TEXT                        NOT NULL,
-                contract_type   INTEGER                     NOT NULL,
+                symbol          TEXT,
+                exchange        TEXT,
+                currency        TEXT,
+                multiplier      SMALLINT,
                 leg_id          SMALLINT,
                 contract_id     BIGINT                      NOT NULL,
                 expiry          DATE,
@@ -410,14 +413,12 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                 rho             DECIMAL(4,2),
                 theta           DECIMAL(4,2),
                 vega            DECIMAL(4,2),
-                date_update     TIMESTAMP WITH TIME ZONE,
+                date_updated    TIMESTAMP WITH TIME ZONE,
                 FOREIGN KEY(data_vendor_id)
                     REFERENCES data_vendor(data_vendor_id),
                 FOREIGN KEY(source, source_id)
                     REFERENCES symbology(source, source_id)
-                    ON UPDATE CASCADE,
-                FOREIGN KEY(contract_type)
-                    REFERENCES option_contracts(contract_id))""")
+                    ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_option_chains_values
                     ON option_chains(source_id, contract_id, expiry, strike)""")
 
@@ -461,7 +462,7 @@ def data_tables(database='pysecmaster', user='pysecmaster',
             finra_data(cur)
             fundamental_data(cur)
             minute_prices(cur)
-            option_contracts(cur)
+            # option_contracts(cur)
             option_chains(cur)
             tick(cur)
             tick_stream(cur)

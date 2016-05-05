@@ -63,8 +63,8 @@ class DatabaseCreationTests(unittest.TestCase):
                             'ipo_pricings', 'symbology', 'splits',
                             'csidata_stock_factsheet', 'baskets',
                             'basket_values', 'indices', 'quandl_codes',
-                            'data_vendor', 'option_contracts', 'option_chains',
-                            'tick_prices', 'tick_prices_stream']
+                            'data_vendor', 'option_chains', 'tick_prices',
+                            'tick_prices_stream']
         tables_created = []
         extra_table = []
         missing_table = []

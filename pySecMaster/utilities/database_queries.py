@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import pandas as pd
-import sqlite3
+import psycopg2
+from sqlalchemy import create_engine
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -28,16 +29,21 @@ __version__ = '1.3.2'
 '''
 
 
-def delete_sql_table_rows(db_location, query, table, tsid, verbose=False):
+def delete_sql_table_rows(database, user, password, host, port, query, table,
+                          item, verbose=False):
     """ Execute the provided query in the specified table in the database.
     Normally, this will delete the existing prices over dates where the new
     prices would overlap. Returns a string value indicating whether the query
     was successfully executed.
 
-    :param db_location: String of the directory location for the SQL database.
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param query: String representing the SQL query to perform on the database.
     :param table: String indicating which table should be worked on.
-    :param tsid: String of the tsid being worked on.
+    :param item: String of the tsid being worked on.
     :param verbose: Boolean indicating whether debugging prints should occur.
     :return: String of either 'success' or 'failure', which the function that
         called this function uses determine whether it should add new values.
@@ -46,34 +52,41 @@ def delete_sql_table_rows(db_location, query, table, tsid, verbose=False):
     if verbose:
         print('Deleting all rows in %s that fit the provided criteria' % table)
 
-    conn = sqlite3.connect(db_location)
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
     try:
         with conn:
             cur = conn.cursor()
             cur.execute(query)
         return 'success'
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         conn.rollback()
         print(e)
         print('Error: Not able to delete the overlapping rows for %s in '
-              'the %s table.' % (tsid, table))
+              'the %s table.' % (item, table))
         return 'failure'
     except conn.OperationalError:
-        print('Unable to connect to the SQL Database in delete_sql_table_rows. '
-              'Make sure the database address/name are correct.')
+        print('Unable to connect to the %s database in delete_sql_table_rows. '
+              'Make sure the database address/name are correct.' % database)
         return 'failure'
     except Exception as e:
         print('Error: Unknown issue when trying to delete overlapping rows for'
-              '%s in the %s table.' % (tsid, table))
+              '%s in the %s table.' % (item, table))
         print(e)
         return 'failure'
 
 
-def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
+def df_to_sql(database, user, password, host, port, df, sql_table, exists,
+              item, verbose=False):
     """ Save a DataFrame to a specified SQL database table.
 
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param df: Pandas DataFrame with values to insert into the SQL database.
-    :param db_location: String of the directory location for the SQL database.
     :param sql_table: String indicating which table the DataFrame should be
         put into.
     :param exists: String indicating how the DataFrame values should interact
@@ -84,34 +97,78 @@ def df_to_sql(df, db_location, sql_table, exists, item, verbose=False):
     """
 
     if verbose:
-        print('Entering the data for %s into the SQL database.' % (item,))
+        print('Entering the data for %s into the %s database.' %
+              (item, database))
 
-    conn = sqlite3.connect(db_location)
+    engine = create_engine('postgresql://%s:%s@%s:%s/%s' %
+                           (user, password, host, port, database))
+    conn = engine.connect()
 
     # Try and except block writes the new data to the SQL Database.
     try:
         # if_exists options: append new df rows, replace all table values
         df.to_sql(sql_table, conn, if_exists=exists, index=False)
-        conn.execute("PRAGMA journal_mode = MEMORY")
-        conn.execute("PRAGMA busy_timeout = 60000")
         if verbose:
-            print('Successfully entered the values into the SQL Database')
-    except conn.Error:
-        conn.rollback()
-        print("Failed to insert the DataFrame into the database for %s" %
-              (item,))
-    except conn.OperationalError:
-        raise ValueError('Unable to connect to the SQL Database in df_to_sql. '
-                         'Make sure the database address/name are correct.')
+            print('Successfully entered the values into the %s database' %
+                  database)
     except Exception as e:
-        print('Error: Unknown issue when adding DF to SQL for %s' % (item,))
+        print('Error: Unknown issue when adding the DataFrame to the %s '
+              'database for %s' % (database, item))
         print(e)
 
 
-def query_all_active_tsids(db_location, table, period=None):
+def insert_csi_data(database, user, password, host, port, df, source):
+    """ DEPRECIATED
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param df:
+    :param source:
+    :return: DataFrame of exchanges
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+    try:
+        with conn:
+            for index, row in df.iterrows():
+                symbol_id = int(row['symbol_id'])
+
+                cur_time = datetime.now().isoformat()
+                cur = conn.cursor()
+                cur.execute("""INSERT INTO symbology
+                            (symbol_id, source, source_id, type, created_date,
+                            updated_date)
+                            VALUES (%s,%s,%s,%s,%s,%s)""",
+                            (symbol_id, source, symbol_id, 'stock',
+                             cur_time, cur_time))
+                conn.commit()
+            conn.close()
+    except psycopg2.Error as e:
+        conn.rollback()
+        print('Failed to insert the data into the symbology table within '
+              'insert_csi_data.')
+        print(e)
+    except conn.OperationalError:
+        print('Unable to connect to the %s database in insert_csi_data. Make '
+              'sure the database address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        print('Error: Unknown issue occurred in insert_csi_data')
+
+
+def query_all_active_tsids(database, user, password, host, port, table,
+                           period=None):
     """ Get a list of all tickers that have data.
 
-    :param db_location: String of the database directory location
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param table: String of the table that should be queried from
     :param period: Optional integer indicating the prior number of days a
         tsid must have had active data before it should be included.
@@ -125,16 +182,17 @@ def query_all_active_tsids(db_location, table, period=None):
     #       to query the initial data, but it is accurate
 
     try:
-        conn = sqlite3.connect(db_location)
+        conn = psycopg2.connect(database=database, user=user, password=password,
+                                host=host, port=port)
         with conn:
             cur = conn.cursor()
 
             if period:
                 beg_date = datetime.today() - timedelta(days=period)
-                query = ("""SELECT tsid
+                query = ("""SELECT source_id as tsid
                             FROM %s
                             WHERE date>'%s'
-                            GROUP BY tsid""" % (table, beg_date))
+                            GROUP BY source_id""" % (table, beg_date))
             else:
                 # Option 1:
                 # query = ("""SELECT source_id
@@ -142,9 +200,9 @@ def query_all_active_tsids(db_location, table, period=None):
                 #             WHERE source='tsid' AND type='stock'""")
 
                 # Option 2:
-                query = ("""SELECT tsid
+                query = ("""SELECT source_id as tsid
                             FROM %s
-                            GROUP BY tsid""" % (table,))
+                            GROUP BY source_id""" % (table,))
 
             cur.execute(query)
             data = cur.fetchall()
@@ -154,30 +212,35 @@ def query_all_active_tsids(db_location, table, period=None):
                 return df
             else:
                 raise TypeError('Not able to query any tsid codes in '
-                                'query_all_codes')
-    except sqlite3.Error as e:
+                                'query_all_active_tsids')
+    except psycopg2.Error as e:
         print(e)
-        raise TypeError('Error when trying to connect to the database '
-                        'in query_all_codes')
+        raise TypeError('Error when trying to connect to the %s database '
+                        'in query_all_active_tsids' % database)
 
 
-def query_all_tsid_prices(db_location, table, tsid):
+def query_all_tsid_prices(database, user, password, host, port, table, tsid):
     """ Query all relevant interval data for this ticker from the relevant
     sources. Then process the price DataFrame.
 
-    :param db_location: String of the database directory location
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param table: String of the database table to query from
     :param tsid: String of the tsid whose prices should be queried
     """
 
     try:
-        conn = sqlite3.connect(db_location)
+        conn = psycopg2.connect(database=database, user=user, password=password,
+                                host=host, port=port)
         with conn:
             cur = conn.cursor()
             query = ("""SELECT data_vendor_id, date, open, high, low, close,
                         volume
                         FROM %s
-                        WHERE tsid='%s'""" % (table, tsid))
+                        WHERE source_id='%s'""" % (table, tsid))
             cur.execute(query)
             data = cur.fetchall()
             if data:
@@ -204,13 +267,13 @@ def query_all_tsid_prices(db_location, table, tsid):
             else:
                 raise TypeError('Not able to query any prices for %s in '
                                 'query_all_tsid_prices' % tsid)
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(e)
-        raise TypeError('Error when trying to connect to the database '
-                        'in query_all_tsid_prices')
+        raise TypeError('Error when trying to connect to the %s database '
+                        'in query_all_tsid_prices' % database)
 
 
-def query_codes(db_location, download_selection):
+def query_codes(database, user, password, host, port, download_selection):
     """ Builds a DataFrame of tsid codes from a SQL query. These codes are the
     items that will have their data downloaded.
 
@@ -219,13 +282,18 @@ def query_codes(db_location, download_selection):
     Perhaps the best way will be to have some predefined queries, and if
     those don't work for the user, they write a custom query.
 
-    :param db_location: String of the database directory
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param download_selection: String that specifies which data is required
     :return: DataFrame with the the specified tsid values
     """
 
     try:
-        conn = sqlite3.connect(db_location)
+        conn = psycopg2.connect(database=database, user=user, password=password,
+                                host=host, port=port)
         with conn:
             cur = conn.cursor()
 
@@ -239,16 +307,16 @@ def query_codes(db_location, download_selection):
             elif download_selection == 'us_main':
                 # Retrieve tsid tickers that trade only on main US exchanges
                 #   and that have been active within the prior two years.
-                beg_date = (datetime.utcnow() - timedelta(days=730))
+                beg_date = (datetime.now() - timedelta(days=730))
                 cur.execute("""SELECT source_id
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
-                                   SELECT CsiNumber
+                                   SELECT csi_number
                                    FROM csidata_stock_factsheet
-                                   WHERE EndDate > ?
-                                   AND (Exchange IN ('AMEX', 'NYSE')
-                                   OR ChildExchange IN ('AMEX',
+                                   WHERE end_date > %s
+                                   AND (exchange IN ('AMEX', 'NYSE')
+                                   OR child_exchange IN ('AMEX',
                                        'BATS Global Markets',
                                        'Nasdaq Capital Market',
                                        'Nasdaq Global Market',
@@ -263,10 +331,10 @@ def query_codes(db_location, download_selection):
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
-                                   SELECT CsiNumber
+                                   SELECT csi_number
                                    FROM csidata_stock_factsheet
-                                   WHERE (Exchange IN ('AMEX', 'NYSE')
-                                   OR ChildExchange IN ('AMEX',
+                                   WHERE (exchange IN ('AMEX', 'NYSE')
+                                   OR child_exchange IN ('AMEX',
                                        'BATS Global Markets',
                                        'Nasdaq Capital Market',
                                        'Nasdaq Global Market',
@@ -278,17 +346,17 @@ def query_codes(db_location, download_selection):
                 # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
                 #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
                 #   active within the prior two years.
-                beg_date = (datetime.utcnow() - timedelta(days=730))
+                beg_date = (datetime.now() - timedelta(days=730))
                 cur.execute("""SELECT source_id
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
-                                   SELECT CsiNumber
+                                   SELECT csi_number
                                    FROM csidata_stock_factsheet
-                                   WHERE EndDate > ?
-                                   AND (Exchange IN ('AMEX', 'LSE', 'NYSE',
+                                   WHERE end_date > %s
+                                   AND (exchange IN ('AMEX', 'LSE', 'NYSE',
                                    'TSX', 'VSE')
-                                   OR ChildExchange IN ('AMEX',
+                                   OR child_exchange IN ('AMEX',
                                        'BATS Global Markets',
                                        'Nasdaq Capital Market',
                                        'Nasdaq Global Market',
@@ -316,17 +384,209 @@ def query_codes(db_location, download_selection):
             else:
                 raise TypeError('Not able to determine the tsid from '
                                 'the SQL query in query_codes.')
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(e)
-        raise TypeError('Error when trying to connect to the database '
-                        'in query_codes')
+        raise TypeError('Error when trying to connect to the %s database '
+                        'in query_codes' % database)
 
 
-def query_last_price(db_location, table, vendor_id):
+def query_csi_stocks(database, user, password, host, port, query='all'):
+    """ Query the CSI stock data based on the query specified.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param query: String of which query to run
+    :return: DataFrame of exchanges
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+    try:
+        with conn:
+            cur = conn.cursor()
+
+            if query == 'all':
+                cur.execute("""SELECT csi_number, symbol, exchange,
+                               child_exchange
+                               FROM csidata_stock_factsheet""")
+                rows = cur.fetchall()
+                csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
+                                                     'exchange',
+                                                     'child_exchange'])
+                csi_df.sort_values('sid', axis=0, inplace=True)
+                csi_df.reset_index(drop=True, inplace=True)
+
+            elif query == 'exchanges_only':
+                # Restricts tickers to those that are traded on exchanges only
+                #   (AMEX, LSE, MSE, NYSE, OTC (NASDAQ, BATS), TSX, VSE). For
+                #   the few duplicate tickers, choose the active one over the
+                #   non-active one (same company but different start and end
+                #   dates, with one being active).
+                cur.execute("""SELECT csi.csi_number, csi.symbol, csi.exchange,
+                               csi.child_exchange
+                               FROM (SELECT csi_number, symbol, exchange,
+                                   child_exchange, is_active
+                                   FROM csidata_stock_factsheet
+                                   WHERE (exchange IN ('AMEX', 'LSE', 'NYSE',
+                                       'TSX', 'VSE')
+                                   OR child_exchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA',
+                                       'OTC Markets Pink Sheets'))
+                                   AND symbol IS NOT NULL
+                                   ORDER BY is_active ASC) AS csi
+                               GROUP BY csi.symbol, csi.exchange,
+                               csi.child_exchange""")
+                rows = cur.fetchall()
+                if rows:
+                    csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
+                                                         'exchange',
+                                                         'child_exchange'])
+                else:
+                    raise SystemExit('Not able to retrieve any tickers after '
+                                     'querying %s in query_csi_stocks'
+                                     % (query,))
+
+            elif query == 'main_us':
+                # Restricts tickers to those that have been active within the
+                #   prior two years. For the few duplicate tickers, choose the
+                #   active one over the non-active one (same company but
+                #   different start and end dates, with one being active).
+                beg_date = (datetime.now() - timedelta(days=730))
+                cur.execute("""SELECT csi.csi_number, csi.symbol, csi.exchange,
+                               csi.child_exchange
+                               FROM (SELECT csi_number, symbol, exchange,
+                                   child_exchange, is_active
+                                   FROM csidata_stock_factsheet
+                                   WHERE end_date > %s
+                                   AND (exchange IN ('AMEX', 'NYSE')
+                                   OR child_exchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA'))
+                                   AND symbol IS NOT NULL
+                                   ORDER BY is_active ASC) AS csi
+                               GROUP BY csi.symbol, csi.exchange,
+                               csi.child_exchange""",
+                            (beg_date.isoformat(),))
+                rows = cur.fetchall()
+                if rows:
+                    csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
+                                                         'exchange',
+                                                         'child_exchange'])
+                else:
+                    raise SystemExit('Not able to retrieve any tickers after '
+                                     'querying %s in query_csi_stocks'
+                                     % (query,))
+            else:
+                raise SystemExit('%s query does not exist within '
+                                 'query_csi_stocks. Valid queries '
+                                 'include: all, main_us, exchanges_only' %
+                                 (query,))
+            return csi_df
+    except psycopg2.Error as e:
+        print(e)
+        raise SystemError('Failed to query the data into the symbology table '
+                          'within query_csi_stocks')
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_csi_stocks. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_csi_stocks')
+
+
+def query_existing_sid(database, user, password, host, port):
+    """
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :return: DataFrame of exchanges
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT symbol_id, source, source_id, type,
+                        created_date, updated_date
+                        FROM symbology""")
+            rows = cur.fetchall()
+            sid_df = pd.DataFrame(rows, columns=['symbol_id', 'source',
+                                                 'source_id', 'type',
+                                                 'created_date',
+                                                 'updated_date'])
+            return sid_df
+    except psycopg2.Error as e:
+        print(e)
+        raise SystemError('Failed to query the data from the symbology table '
+                          'within query_existing_sid')
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_existing_sid. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_existing_sid')
+
+
+def query_exchanges(database, user, password, host, port):
+    """
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :return: DataFrame of exchanges
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT symbol, name, goog_symbol, yahoo_symbol,
+                        csi_symbol, tsid_symbol
+                        FROM exchanges""")
+            rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=['symbol', 'name', 'goog_symbol',
+                                             'yahoo_symbol', 'csi_symbol',
+                                             'tsid_symbol'])
+            return df
+    except psycopg2.Error as e:
+        print(e)
+        raise SystemError('Failed to query the data from the exchange table '
+                          'within query_exchanges')
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_exchanges. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_exchanges')
+
+
+def query_last_price(database, user, password, host, port, table, vendor_id):
     """ Queries the pricing database to find the latest dates for each item
     in the database, regardless of whether it is in the tsid list.
 
-    :param db_location: String of the database directory location
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param table: String of the table whose prices should be worked on
     :param vendor_id: Integer or list of integers representing the vendor id
         whose prices should be considered
@@ -344,12 +604,13 @@ def query_last_price(db_location, table, vendor_id):
                         'variable in query_last_price.' % type(vendor_id))
 
     try:
-        conn = sqlite3.connect(db_location)
+        conn = psycopg2.connect(database=database, user=user, password=password,
+                                host=host, port=port)
         with conn:
-            query = """SELECT tsid, MAX(date) as date, updated_date
+            query = """SELECT source_id as tsid, MAX(date) as date, updated_date
                         FROM %s
                         WHERE data_vendor_id IN (%s)
-                        GROUP BY tsid""" % (table, vendor_id)
+                        GROUP BY source_id""" % (table, vendor_id)
             df = pd.read_sql(query, conn, index_col='tsid')
             if len(df.index) == 0:
                 return df
@@ -359,13 +620,13 @@ def query_last_price(db_location, table, vendor_id):
             df['updated_date'] = pd.to_datetime(df['updated_date'])
             # df.to_csv('query_last_price.csv')
             return df
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(e)
-        raise TypeError('Error when trying to connect to the database '
-                        'in query_last_price.')
+        raise TypeError('Error when trying to connect to the %s database '
+                        'in query_last_price.' % database)
 
 
-def query_q_codes(db_location, download_selection):
+def query_q_codes(database, user, password, host, port, download_selection):
     """ Builds a list of Quandl Codes from a SQL query. These codes are the
     items that will have their data downloaded.
 
@@ -374,13 +635,18 @@ def query_q_codes(db_location, download_selection):
     Perhaps the best way will be to have some predefined queries, and if
     those don't work for the user, they write a custom query.
 
-    :param db_location: String of the database directory location
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param download_selection: String that specifies which data is required
     :return: DataFrame with two columns (tsid, q_code)
     """
 
     try:
-        conn = sqlite3.connect(db_location)
+        conn = psycopg2.connect(database=database, user=user, password=password,
+                                host=host, port=port)
         with conn:
             cur = conn.cursor()
 
@@ -405,7 +671,7 @@ def query_q_codes(db_location, download_selection):
             elif download_selection == 'goog_us_main':
                 # Retrieve tsid tickers that trade only on main US exchanges
                 #   and that have been active within the prior two years.
-                beg_date = (datetime.utcnow() - timedelta(days=730))
+                beg_date = (datetime.now() - timedelta(days=730))
                 cur.execute("""SELECT tsid.source_id, wiki.source_id
                                FROM symbology tsid
                                INNER JOIN symbology wiki
@@ -415,7 +681,7 @@ def query_q_codes(db_location, download_selection):
                                AND wiki.symbol_id IN (
                                    SELECT CsiNumber
                                    FROM csidata_stock_factsheet
-                                   WHERE EndDate > ?
+                                   WHERE EndDate > %s
                                    AND (Exchange IN ('AMEX', 'NYSE')
                                    OR ChildExchange IN ('AMEX',
                                        'BATS Global Markets',
@@ -448,7 +714,7 @@ def query_q_codes(db_location, download_selection):
                 # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
                 #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
                 #   active within the prior two years.
-                beg_date = (datetime.utcnow() - timedelta(days=730))
+                beg_date = (datetime.now() - timedelta(days=730))
                 cur.execute("""SELECT tsid.source_id, wiki.source_id
                                    FROM symbology tsid
                                    INNER JOIN symbology wiki
@@ -458,7 +724,7 @@ def query_q_codes(db_location, download_selection):
                                    AND wiki.symbol_id IN (
                                        SELECT CsiNumber
                                        FROM csidata_stock_factsheet
-                                       WHERE EndDate > ?
+                                       WHERE EndDate > %s
                                        AND (Exchange IN ('AMEX', 'LSE', 'NYSE',
                                        'TSX', 'VSE')
                                        OR ChildExchange IN ('AMEX',
@@ -502,21 +768,26 @@ def query_q_codes(db_location, download_selection):
             else:
                 raise SystemError('Not able to determine the q_codes '
                                   'from the SQL query in query_q_codes')
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(e)
-        raise SystemError('Error when trying to connect to the database '
-                          'in query_q_codes')
+        raise SystemError('Error when trying to connect to the %s database '
+                          'in query_q_codes' % database)
 
 
-def query_source_weights(db_location):
+def query_source_weights(database, user, password, host, port):
     """ Create a DataFrame of the source weights.
 
-    :param db_location: String of the database directory location
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :return: DataFrame of all data sources
     """
 
     try:
-        conn = sqlite3.connect(db_location)
+        conn = psycopg2.connect(database=database, user=user, password=password,
+                                host=host, port=port)
         with conn:
             cur = conn.cursor()
             query = ("""SELECT data_vendor_id, consensus_weight
@@ -531,18 +802,22 @@ def query_source_weights(db_location):
             else:
                 raise TypeError('Unable to query data vendor weights within '
                                 'query_source_weights')
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(e)
-        raise TypeError('Error when trying to connect to the database '
-                        'in query_source_weights')
+        raise TypeError('Error when trying to connect to the %s database '
+                        'in query_source_weights' % database)
 
 
-def retrieve_data_vendor_id(db_location, name):
+def retrieve_data_vendor_id(database, user, password, host, port, name):
     """ Takes the name provided and tries to find data vendor(s) from the
     data_vendor table in the database. If nothing is returned in the
     query, then 'Unknown' is used.
 
-    :param db_location: String of the database directory location
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param name: String that has the database name, or a special SQL string
         to retrieve extra ids (i.e. 'Quandl_%' to retrieve all Quandl ids)
     :return: If one vendor id is queried, return a int of the data vendor's id.
@@ -551,7 +826,8 @@ def retrieve_data_vendor_id(db_location, name):
     """
 
     try:
-        conn = sqlite3.connect(db_location)
+        conn = psycopg2.connect(database=database, user=user, password=password,
+                                host=host, port=port)
         with conn:
             cur = conn.cursor()
             query = """SELECT data_vendor_id
@@ -572,7 +848,7 @@ def retrieve_data_vendor_id(db_location, name):
                 print('Not able to determine the data_vendor_id for %s'
                       % name)
             return data
-    except sqlite3.Error as e:
-        print('Error when trying to retrieve data from database in '
-              'retrieve_data_vendor_id')
+    except psycopg2.Error as e:
+        print('Error when trying to retrieve data from the %s database in '
+              'retrieve_data_vendor_id' % database)
         print(e)

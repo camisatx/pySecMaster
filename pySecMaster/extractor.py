@@ -1,8 +1,8 @@
 import csv
 from datetime import datetime, timedelta
 import pandas as pd
+import psycopg2
 import re
-import sqlite3
 import time
 
 from download import QuandlDownload, download_google_data, \
@@ -40,9 +40,13 @@ __version__ = '1.3.2'
 
 class QuandlCodeExtract(object):
 
-    def __init__(self, db_location, quandl_token, database_list, database_url,
-                 update_range, threads):
-        self.db_location = db_location
+    def __init__(self, database, user, password, host, port, quandl_token,
+                 database_list, database_url, update_range, threads):
+        self.database = database
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
         self.quandl_token = quandl_token
         self.db_list = database_list
         self.db_url = database_url
@@ -138,10 +142,11 @@ class QuandlCodeExtract(object):
                               'old codes' % (data_vendor, self.update_range))
                         query = ("""DELETE FROM quandl_codes
                                     WHERE data_vendor='%s'""" % (data_vendor,))
-                        del_success = delete_sql_table_rows(self.db_location,
-                                                            query,
-                                                            'quandl_codes',
-                                                            'UNUSED')
+                        del_success = delete_sql_table_rows(
+                            database=self.database, user=self.user,
+                            password=self.password, host=self.host,
+                            port=self.port, query=query, table='quandl_codes',
+                            item='quandl_code_download')
                         if del_success == 'success':
                             self.extractor(data_vendor)
                         elif del_success == 'failure':
@@ -160,16 +165,19 @@ class QuandlCodeExtract(object):
         """
 
         try:
-            conn = sqlite3.connect(self.db_location)
+            conn = psycopg2.connect(database=self.database, user=self.user,
+                                    password=self.password, host=self.host,
+                                    port=self.port)
             with conn:
                 df = pd.read_sql("SELECT data_vendor, "
                                  "MAX(page_num) AS page_num, updated_date "
-                                 "FROM  quandl_codes "
+                                 "FROM quandl_codes "
                                  "GROUP BY data_vendor ", conn)
                 return df
-        except sqlite3.Error as e:
-            print('Error when trying to connect to the database quandl_codes '
-                  'table in query_latest_codes in QuandlCodeExtract.')
+        except psycopg2.Error as e:
+            print('Error when trying to connect to the %s database '
+                  'quandl_codes table in query_latest_codes in '
+                  'QuandlCodeExtract.query_last_download_pg' % self.database)
             print(e)
 
     def extractor(self, db_name, page_num=1):
@@ -216,8 +224,10 @@ class QuandlCodeExtract(object):
                 else:       # 'WIKI', 'EIA', 'ZEP', 'EOD', 'CURRFX'
                     clean_df = self.process_1_item_q_codes(db_pg_df)
 
-                df_to_sql(clean_df, self.db_location, 'quandl_codes', 'append',
-                          db_name)
+                df_to_sql(database=self.database, user=self.user,
+                          password=self.password, host=self.host,
+                          port=self.port, df=clean_df, sql_table='quandl_codes',
+                          exists='append', item=db_name)
 
                 if page_num % 100 == 0:
                     print('Still downloading %s codes. Just finished page '
@@ -225,7 +235,9 @@ class QuandlCodeExtract(object):
                 page_num += 1
 
         # Remove duplicate q_codes
-        conn = sqlite3.connect(self.db_location)
+        conn = psycopg2.connect(database=self.database, user=self.user,
+                                password=self.password, host=self.host,
+                                port=self.port)
         try:
             with conn:
                 cur = conn.cursor()
@@ -236,7 +248,7 @@ class QuandlCodeExtract(object):
                                GROUP BY q_code)""")
                 print('Successfully removed all duplicate q_codes from '
                       'quandl_codes')
-        except sqlite3.Error as e:
+        except psycopg2.Error as e:
             conn.rollback()
             print(e)
             print('Error: Not able to remove duplicate q_codes in the %s data '
@@ -250,16 +262,18 @@ class QuandlCodeExtract(object):
             print(e)
 
         # Change the data set page_num variable to -2, indicating it finished
-        conn = sqlite3.connect(self.db_location)
+        conn = psycopg2.connect(database=self.database, user=self.user,
+                                password=self.password, host=self.host,
+                                port=self.port)
         try:
             with conn:
                 cur = conn.cursor()
                 cur.execute("""UPDATE quandl_codes
                                SET page_num=-2
-                               WHERE data_vendor=?""", (db_name,))
+                               WHERE data_vendor=%s""", (db_name,))
                 print('Successfully updated %s codes with final page_num '
                       'variable.' % (db_name,))
-        except sqlite3.Error as e:
+        except psycopg2.Error as e:
             conn.rollback()
             print(e)
             print('Error: Not able to update the page_num rows for codes in '
@@ -369,11 +383,15 @@ class QuandlCodeExtract(object):
 
 class QuandlDataExtraction(object):
 
-    def __init__(self, db_location, quandl_token, db_url, download_selection,
-                 redownload_time, data_process, days_back, threads, table,
-                 verbose=False):
+    def __init__(self, database, user, password, host, port, quandl_token,
+                 db_url, download_selection, redownload_time, data_process,
+                 days_back, threads, table, verbose=False):
         """
-        :param db_location: String of the database directory location
+        :param database: String of the directory location for the SQL database.
+        :param user: String of the username used to login to the database
+        :param password: String of the password used to login to the database
+        :param host: String of the database address (localhost, url, ip, etc.)
+        :param port: Integer of the database port number (5432)
         :param quandl_token: String of the Quandl API token
         :param db_url: List of Quandl API url components
         :param download_selection: String indicating what selection of codes
@@ -393,7 +411,11 @@ class QuandlDataExtraction(object):
         :param verbose: Boolean of whether debugging prints should occur.
         """
 
-        self.db_location = db_location
+        self.database = database
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
         self.quandl_token = quandl_token
         self.db_url = db_url
         self.download_selection = download_selection
@@ -415,13 +437,16 @@ class QuandlDataExtraction(object):
         #   Quandl data vendor IDs because that prevents data being downloaded
         #   for the same tsid but from different Quandl sources (ie wiki % goog)
         # vendor_id = retrieve_data_vendor_id(
-        #     db_location=self.db_location, name='Quandl_%')
+        #     database=self.database, user=self.user, password=self.password,
+        #     host=self.host, port=self.port, name='Quandl_%')
         if self.download_selection[:4] == 'wiki':
             self.vendor_id = retrieve_data_vendor_id(
-                db_location=self.db_location, name='Quandl_WIKI')
+                database=self.database, user=self.user, password=self.password,
+                host=self.host, port=self.port, name='Quandl_WIKI')
         elif self.download_selection[:4] == 'goog':
             self.vendor_id = retrieve_data_vendor_id(
-                db_location=self.db_location, name='Quandl_GOOG')
+                database=self.database, user=self.user, password=self.password,
+                host=self.host, port=self.port, name='Quandl_GOOG')
         else:
             raise NotImplementedError('The %s Quandl source is not implemented '
                                       'in the init within QuandlDataExtraction'
@@ -430,9 +455,10 @@ class QuandlDataExtraction(object):
         print('Retrieving dates of the last price per ticker for all Quandl '
               'values.')
         # Creates a DataFrame with the last price for each Quandl code
-        self.latest_prices = query_last_price(db_location=self.db_location,
-                                              table=self.table,
-                                              vendor_id=self.vendor_id)
+        self.latest_prices = query_last_price(
+            database=self.database, user=self.user, password=self.password,
+            host=self.host, port=self.port, table=self.table,
+            vendor_id=self.vendor_id)
 
         self.main()
 
@@ -446,7 +472,9 @@ class QuandlDataExtraction(object):
 
         print('Analyzing the Quandl Codes that will be downloaded...')
         # Create a list of securities to download
-        q_code_df = query_q_codes(db_location=self.db_location,
+        q_code_df = query_q_codes(database=self.database, user=self.user,
+                                  password=self.password, host=self.host,
+                                  port=self.port,
                                   download_selection=self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
@@ -465,7 +493,7 @@ class QuandlDataExtraction(object):
             # Load the codes that did not have data from the last extractor run
             codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
             # Exclude these codes that are within the 15 day re-download period
-            beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
+            beg_date_ob_wo_data = datetime.now() - timedelta(days=15)
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
                                                 beg_date_ob_wo_data.isoformat()]
             # Change DF to a list of only the q_codes
@@ -482,8 +510,7 @@ class QuandlDataExtraction(object):
                 writer.writerow(('q_code', 'date_tried'))
 
         # The cut-off time for when code data can be re-downloaded
-        beg_date_obj = (datetime.utcnow() -
-                        timedelta(seconds=self.redownload_time))
+        beg_date_obj = datetime.now() - timedelta(seconds=self.redownload_time)
         # For the final download list, only include new and non-recent codes
         q_codes_final = q_codes_df[(q_codes_df['updated_date'] < beg_date_obj) |
                                    (q_codes_df['updated_date'].isnull())]
@@ -555,11 +582,14 @@ class QuandlDataExtraction(object):
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
 
                 # Add the tsid into the DataFrame, and then remove the q_code
-                clean_data.insert(1, 'tsid', tsid)
-                clean_data.drop('q_code', axis=1, inplace=True)
+                clean_data.insert(1, 'source', 'tsid')
+                clean_data.insert(2, 'source_id', tsid)
+                # clean_data.drop('q_code', axis=1, inplace=True)
 
-                df_to_sql(clean_data, self.db_location, 'daily_prices',
-                          'append', tsid)
+                df_to_sql(database=self.database, user=self.user,
+                          password=self.password, host=self.host,
+                          port=self.port, df=clean_data,
+                          sql_table='daily_prices', exists='append', item=tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
 
@@ -604,8 +634,9 @@ class QuandlDataExtraction(object):
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
 
                 # Add the tsid into the DataFrame, and then remove the q_code
-                clean_data.insert(1, 'tsid', tsid)
-                clean_data.drop('q_code', axis=1, inplace=True)
+                clean_data.insert(1, 'source', 'tsid')
+                clean_data.insert(2, 'source_id', tsid)
+                # clean_data.drop('q_code', axis=1, inplace=True)
 
                 # If replacing existing data, delete the overlapping data points
                 if self.data_process == 'replace' and self.days_back:
@@ -614,15 +645,17 @@ class QuandlDataExtraction(object):
                     #   deleted before the new data can be added.
                     first_date_iso = clean_data['date'].min()
                     query = ("""DELETE FROM daily_prices
-                                WHERE tsid='%s'
+                                WHERE source_id='%s'
                                 AND date>='%s'""" % (tsid, first_date_iso))
 
                     del_success = 'failure'
                     retry_count = 5
                     while retry_count > 0:
                         del_success = delete_sql_table_rows(
-                            db_location=self.db_location, query=query,
-                            table='daily_prices', tsid=tsid)
+                            database=self.database, user=self.user,
+                            password=self.password, host=self.host,
+                            port=self.port, query=query, table='daily_prices',
+                            item=tsid)
 
                         if del_success == 'failure':
                             retry_count -= 1
@@ -634,18 +667,25 @@ class QuandlDataExtraction(object):
                         return
 
                 # Append the new data to the end, regardless of replacement
-                df_to_sql(clean_data, self.db_location, 'daily_prices',
-                          'append', tsid)
+                df_to_sql(database=self.database, user=self.user,
+                          password=self.password, host=self.host,
+                          port=self.port, df=clean_data,
+                          sql_table='daily_prices', exists='append', item=tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
 
 
 class GoogleFinanceDataExtraction(object):
 
-    def __init__(self, db_location, db_url, download_selection, redownload_time,
-                 data_process, days_back, threads, table, verbose=True):
+    def __init__(self, database, user, password, host, port, db_url,
+                 download_selection, redownload_time, data_process, days_back,
+                 threads, table, verbose=True):
         """
-        :param db_location: String of the database directory location
+        :param database: String of the directory location for the SQL database.
+        :param user: String of the username used to login to the database
+        :param password: String of the password used to login to the database
+        :param host: String of the database address (localhost, url, ip, etc.)
+        :param port: Integer of the database port number (5432)
         :param db_url: Dictionary of Google Finance url components
         :param download_selection: String indicating what selection of codes
             should be downloaded from Google
@@ -664,7 +704,11 @@ class GoogleFinanceDataExtraction(object):
         :param verbose: Boolean of whether debugging prints should occur.
         """
 
-        self.db_location = db_location
+        self.database = database
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
         self.db_url = db_url
         self.download_selection = download_selection
         self.redownload_time = redownload_time
@@ -680,15 +724,18 @@ class GoogleFinanceDataExtraction(object):
         period_sec = 60
         self.min_interval = float((period_sec/rate)*threads)
 
-        self.vendor_id = retrieve_data_vendor_id(db_location=self.db_location,
-                                                 name='Google_Finance')
+        self.vendor_id = retrieve_data_vendor_id(
+            database=self.database, user=self.user, password=self.password,
+            host=self.host, port=self.port, name='Google_Finance')
+
         self.csv_wo_data = 'load_tables/goog_' + self.table + '_wo_data.csv'
 
         print('Retrieving dates for the last Google prices per ticker...')
         # Creates a DataFrame with the last price for each security
-        self.latest_prices = query_last_price(db_location=self.db_location,
-                                              table=self.table,
-                                              vendor_id=self.vendor_id)
+        self.latest_prices = query_last_price(
+            database=self.database, user=self.user, password=self.password,
+            host=self.host, port=self.port, table=self.table,
+            vendor_id=self.vendor_id)
 
         # Build a DataFrame with all the exchange symbols
         self.exchanges_df = self.query_exchanges()
@@ -705,29 +752,24 @@ class GoogleFinanceDataExtraction(object):
 
         print('Analyzing the tsid codes that will be downloaded...')
         # Create a list of securities to download
-        code_df = query_codes(db_location=self.db_location,
+        code_df = query_codes(database=self.database, user=self.user,
+                              password=self.password, host=self.host,
+                              port=self.port,
                               download_selection=self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         codes_df = pd.merge(code_df, self.latest_prices, left_on='tsid',
                             right_index=True, how='left')
-        # Sort the DF with un-downloaded items first, then based on last update
-        try:
-            # df.sort_values introduced in 0.17.0
-            codes_df.sort_values('updated_date', axis=0, ascending=True,
-                                 na_position='first', inplace=True)
-        except:
-            print('extractor.py is using the depreciated DataFrame sort '
-                  'function. You should update Pandas. (line 860)')
-            # df.sort() was depreciated in 0.17.0
-            codes_df.sort('updated_date', ascending=True, na_position='first',
-                          inplace=True)
+        # Sort the DF with un-downloaded items first, then based on last update.
+        # df.sort_values introduced in 0.17.0
+        codes_df.sort_values('updated_date', axis=0, ascending=True,
+                             na_position='first', inplace=True)
 
         try:
             # Load the codes that did not have data from the last extractor run
             # for this interval
             codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
             # Exclude these codes that are within a 15 day period
-            beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
+            beg_date_ob_wo_data = datetime.now() - timedelta(days=15)
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
                                                 beg_date_ob_wo_data.isoformat()]
             # Change DF to a list of only the codes
@@ -744,8 +786,7 @@ class GoogleFinanceDataExtraction(object):
                 writer.writerow(('tsid', 'date_tried'))
 
         # The cut-off time for when code data can be re-downloaded
-        beg_date_obj = (datetime.utcnow() -
-                        timedelta(seconds=self.redownload_time))
+        beg_date_obj = datetime.now() - timedelta(seconds=self.redownload_time)
         # Final download list should include both new/null and non-recent codes
         codes_final = codes_df[(codes_df['updated_date'] < beg_date_obj) |
                                (codes_df['updated_date'].isnull())]
@@ -786,7 +827,9 @@ class GoogleFinanceDataExtraction(object):
         :return: DataFrame with exchange symbols
         """
 
-        conn = sqlite3.connect(self.db_location)
+        conn = psycopg2.connect(database=self.database, user=self.user,
+                                password=self.password, host=self.host,
+                                port=self.port)
         try:
             with conn:
                 cur = conn.cursor()
@@ -798,7 +841,7 @@ class GoogleFinanceDataExtraction(object):
                 df = pd.DataFrame(rows, columns=['symbol', 'goog_symbol',
                                                  'tsid_symbol'])
                 return df
-        except sqlite3.Error as e:
+        except psycopg2.Error as e:
             print(e)
             raise SystemError('Failed to query the data from the exchange '
                               'table within query_exchanges in '
@@ -839,9 +882,13 @@ class GoogleFinanceDataExtraction(object):
             # There is new data to add to the database
             else:
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
+                clean_data.insert(1, 'source', 'tsid')
+                clean_data.insert(2, 'source_id', tsid)
 
-                df_to_sql(df=clean_data, db_location=self.db_location,
-                          sql_table=self.table, exists='append', item=tsid)
+                df_to_sql(database=self.database, user=self.user,
+                          password=self.password, host=self.host,
+                          port=self.port, df=clean_data, sql_table=self.table,
+                          exists='append', item=tsid)
 
                 if self.verbose:
                     print('Updated %s | %0.1f seconds' %
@@ -877,6 +924,8 @@ class GoogleFinanceDataExtraction(object):
             # There is new data to add to the database
             else:
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
+                clean_data.insert(1, 'source', 'tsid')
+                clean_data.insert(2, 'source_id', tsid)
 
                 # If replacing existing data, delete the overlapping data points
                 if self.data_process == 'replace' and self.days_back:
@@ -886,7 +935,7 @@ class GoogleFinanceDataExtraction(object):
                     first_date_iso = clean_data['date'].min()
 
                     query = ("""DELETE FROM %s
-                                WHERE tsid='%s'
+                                WHERE source_id='%s'
                                 AND date>='%s'
                                 AND data_vendor_id='%s'""" %
                              (self.table, tsid, first_date_iso, self.vendor_id))
@@ -895,8 +944,10 @@ class GoogleFinanceDataExtraction(object):
                     retry_count = 5
                     while retry_count > 0:
                         del_success = delete_sql_table_rows(
-                            db_location=self.db_location, query=query,
-                            table=self.table, tsid=tsid)
+                            database=self.database, user=self.user,
+                            password=self.password, host=self.host,
+                            port=self.port, query=query, table=self.table,
+                            item=tsid)
 
                         if del_success == 'failure':
                             retry_count -= 1
@@ -913,8 +964,10 @@ class GoogleFinanceDataExtraction(object):
                         return
 
                 # Append the new data to the end, regardless of replacement
-                df_to_sql(df=clean_data, db_location=self.db_location,
-                          sql_table=self.table, exists='append', item=tsid)
+                df_to_sql(database=self.database, user=self.user,
+                          password=self.password, host=self.host,
+                          port=self.port, df=clean_data, sql_table=self.table,
+                          exists='append', item=tsid)
 
                 if self.verbose:
                     print('Updated %s | %0.1f seconds' %
@@ -923,10 +976,15 @@ class GoogleFinanceDataExtraction(object):
 
 class YahooFinanceDataExtraction(object):
 
-    def __init__(self, db_location, db_url, download_selection, redownload_time,
-                 data_process, days_back, threads, table, verbose=True):
+    def __init__(self, database, user, password, host, port, db_url,
+                 download_selection, redownload_time, data_process, days_back,
+                 threads, table, verbose=True):
         """
-        :param db_location: String of the database directory location
+        :param database: String of the directory location for the SQL database.
+        :param user: String of the username used to login to the database
+        :param password: String of the password used to login to the database
+        :param host: String of the database address (localhost, url, ip, etc.)
+        :param port: Integer of the database port number (5432)
         :param db_url: Dictionary of Yahoo Finance url components
         :param download_selection: String indicating what selection of codes
             should be downloaded from Yahoo
@@ -945,7 +1003,11 @@ class YahooFinanceDataExtraction(object):
         :param verbose: Boolean of whether debugging prints should occur.
         """
 
-        self.db_location = db_location
+        self.database = database
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
         self.db_url = db_url
         self.download_selection = download_selection
         self.redownload_time = redownload_time
@@ -961,15 +1023,18 @@ class YahooFinanceDataExtraction(object):
         period_sec = 60
         self.min_interval = float((period_sec / rate) * threads)
 
-        self.vendor_id = retrieve_data_vendor_id(db_location=self.db_location,
-                                                 name='Yahoo_Finance')
+        self.vendor_id = retrieve_data_vendor_id(
+            database=self.database, user=self.user, password=self.password,
+            host=self.host, port=self.port, name='Yahoo_Finance')
+
         self.csv_wo_data = 'load_tables/yahoo_' + self.table + '_wo_data.csv'
 
         print('Retrieving dates for the last Yahoo prices per ticker...')
         # Creates a DataFrame with the last price for each security
-        self.latest_prices = query_last_price(db_location=self.db_location,
-                                              table=self.table,
-                                              vendor_id=self.vendor_id)
+        self.latest_prices = query_last_price(
+            database=self.database, user=self.user, password=self.password,
+            host=self.host, port=self.port, table=self.table,
+            vendor_id=self.vendor_id)
 
         # Build a DataFrame with all the exchange symbols
         self.exchanges_df = self.query_exchanges()
@@ -986,29 +1051,24 @@ class YahooFinanceDataExtraction(object):
 
         print('Analyzing the tsid codes that will be downloaded...')
         # Create a list of tsids to download
-        code_df = query_codes(db_location=self.db_location,
+        code_df = query_codes(database=self.database, user=self.user,
+                              password=self.password, host=self.host,
+                              port=self.port,
                               download_selection=self.download_selection)
         # Get DF of selected codes plus when (if ever) they were last updated
         codes_df = pd.merge(code_df, self.latest_prices, left_on='tsid',
                             right_index=True, how='left')
-        # Sort the DF with un-downloaded items first, then based on last update
-        try:
-            # df.sort_values introduced in 0.17.0
-            codes_df.sort_values('updated_date', axis=0, ascending=True,
-                                 na_position='first', inplace=True)
-        except:
-            print('The YahooFinanceDataExtraction.main is using the '
-                  'depreciated DataFrame sort function. Update Pandas.')
-            # df.sort() was depreciated in 0.17.0
-            codes_df.sort('updated_date', ascending=True, na_position='first',
-                          inplace=True)
+        # Sort the DF with un-downloaded items first, then based on last update.
+        # df.sort_values introduced in 0.17.0
+        codes_df.sort_values('updated_date', axis=0, ascending=True,
+                             na_position='first', inplace=True)
 
         try:
             # Load the codes that did not have data from the last extractor run
             #   for this interval
             codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
             # Exclude these codes that are within a 15 day period
-            beg_date_ob_wo_data = (datetime.utcnow() - timedelta(days=15))
+            beg_date_ob_wo_data = datetime.now() - timedelta(days=15)
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
                                                 beg_date_ob_wo_data.isoformat()]
             # Change DF to a list of only the codes
@@ -1025,8 +1085,7 @@ class YahooFinanceDataExtraction(object):
                 writer.writerow(('tsid', 'date_tried'))
 
         # The cut-off time for when code data can be re-downloaded
-        beg_date_obj = (datetime.utcnow() -
-                        timedelta(seconds=self.redownload_time))
+        beg_date_obj = datetime.now() - timedelta(seconds=self.redownload_time)
         # Final download list should include both new/null and non-recent codes
         codes_final = codes_df[(codes_df['updated_date'] < beg_date_obj) |
                                (codes_df['updated_date'].isnull())]
@@ -1067,7 +1126,9 @@ class YahooFinanceDataExtraction(object):
         :return: DataFrame with exchange symbols
         """
 
-        conn = sqlite3.connect(self.db_location)
+        conn = psycopg2.connect(database=self.database, user=self.user,
+                                password=self.password, host=self.host,
+                                port=self.port)
         try:
             with conn:
                 cur = conn.cursor()
@@ -1079,7 +1140,7 @@ class YahooFinanceDataExtraction(object):
                 df = pd.DataFrame(rows, columns=['symbol', 'yahoo_symbol',
                                                  'tsid_symbol'])
                 return df
-        except sqlite3.Error as e:
+        except psycopg2.Error as e:
             print(e)
             raise SystemError('Failed to query the data from the exchange '
                               'table within query_exchanges in '
@@ -1120,9 +1181,13 @@ class YahooFinanceDataExtraction(object):
             # There is new data to add to the database
             else:
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
+                clean_data.insert(1, 'source', 'tsid')
+                clean_data.insert(2, 'source_id', tsid)
 
-                df_to_sql(df=clean_data, db_location=self.db_location,
-                          sql_table=self.table, exists='append', item=tsid)
+                df_to_sql(database=self.database, user=self.user,
+                          password=self.password, host=self.host,
+                          port=self.port, df=clean_data, sql_table=self.table,
+                          exists='append', item=tsid)
 
                 if self.verbose:
                     print('Updated %s | %0.1f seconds' %
@@ -1158,6 +1223,8 @@ class YahooFinanceDataExtraction(object):
             # There is new data to add to the database
             else:
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
+                clean_data.insert(1, 'source', 'tsid')
+                clean_data.insert(2, 'source_id', tsid)
 
                 # If replacing existing data, delete the overlapping data points
                 if self.data_process == 'replace' and self.days_back:
@@ -1167,7 +1234,7 @@ class YahooFinanceDataExtraction(object):
                     first_date_iso = clean_data['date'].min()
 
                     query = ("""DELETE FROM %s
-                                WHERE tsid='%s'
+                                WHERE source_id='%s'
                                 AND date>='%s'
                                 AND data_vendor_id='%s'""" %
                              (self.table, tsid, first_date_iso, self.vendor_id))
@@ -1176,8 +1243,10 @@ class YahooFinanceDataExtraction(object):
                     retry_count = 5
                     while retry_count > 0:
                         del_success = delete_sql_table_rows(
-                            db_location=self.db_location, query=query,
-                            table=self.table, tsid=tsid)
+                            database=self.database, user=self.user,
+                            password=self.password, host=self.host,
+                            port=self.port, query=query, table=self.table,
+                            item=tsid)
 
                         if del_success == 'failure':
                             retry_count -= 1
@@ -1194,8 +1263,10 @@ class YahooFinanceDataExtraction(object):
                         return
 
                 # Append the new data to the end, regardless of replacement
-                df_to_sql(df=clean_data, db_location=self.db_location,
-                          sql_table=self.table, exists='append', item=tsid)
+                df_to_sql(database=self.database, user=self.user,
+                          password=self.password, host=self.host,
+                          port=self.port, df=clean_data, sql_table=self.table,
+                          exists='append', item=tsid)
 
                 if self.verbose:
                     print('Updated %s | %0.1f seconds' %
@@ -1204,10 +1275,14 @@ class YahooFinanceDataExtraction(object):
 
 class CSIDataExtractor(object):
 
-    def __init__(self, db_location, db_url, data_type, redownload_time,
-                 exchange_id=None):
+    def __init__(self, database, user, password, host, port, db_url, data_type,
+                 redownload_time, exchange_id=None):
 
-        self.db_location = db_location
+        self.database = database
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
         self.db_url = db_url
         self.data_type = data_type
         self.exchange_id = exchange_id
@@ -1230,9 +1305,9 @@ class CSIDataExtractor(object):
                               'methods in the CSIDataExtractor class of '
                               'extractor.py.' % (self.data_type,))
 
-        existing_data = self.query_existing_data(table)
+        existing_data = self.query_existing_data()
 
-        if len(existing_data) == 0:
+        if len(existing_data.index) == 0:
             # The csidata_stock_factsheet table is empty; download new data
 
             print('Downloading the CSI Data factsheet for %s' %
@@ -1250,8 +1325,7 @@ class CSIDataExtractor(object):
             #   specified update range. If so, ensure that data looks
             #   reasonable, and then delete the existing data.
 
-            beg_date_obj = (datetime.utcnow() -
-                            timedelta(days=self.redownload_time))
+            beg_date_obj = datetime.now() - timedelta(days=self.redownload_time)
             if existing_data.loc[0, 'updated_date'] < beg_date_obj.isoformat():
 
                 # Download the latest data
@@ -1274,10 +1348,12 @@ class CSIDataExtractor(object):
                               'the existing data')
                         return
 
-                    # Delete old data
+                    # Delete old data [since not referenced in a foreign key]
                     query = ('DELETE FROM %s' % (table,))
-                    del_success = delete_sql_table_rows(self.db_location, query,
-                                                        table, self.data_type)
+                    del_success = delete_sql_table_rows(
+                        database=self.database, user=self.user,
+                        password=self.password, host=self.host, port=self.port,
+                        query=query, table=table, item=self.data_type)
 
                     if del_success == 'success':
                         print('The data in the %s table was successfully '
@@ -1294,11 +1370,14 @@ class CSIDataExtractor(object):
                 return
 
         # Add the new data to the specified table
-        df_to_sql(data, self.db_location, table, 'append', self.data_type)
+        df_to_sql(database=self.database, user=self.user,
+                  password=self.password, host=self.host, port=self.port,
+                  df=data, sql_table=table, exists='append',
+                  item=self.data_type)
         print('Updated %s | %0.1f seconds' %
               (self.data_type, time.time() - start_time))
 
-    def query_existing_data(self, table):
+    def query_existing_data(self):
         """ Determine what prior CSI Data codes are in the database for the
         current data type (stock, commodity, etc.).
 
@@ -1306,7 +1385,9 @@ class CSIDataExtractor(object):
         """
 
         try:
-            conn = sqlite3.connect(self.db_location)
+            conn = psycopg2.connect(database=self.database, user=self.user,
+                                    password=self.password, host=self.host,
+                                    port=self.port)
             with conn:
                 # Add new CSI Data tables to this if block
                 if self.data_type == 'stock':
@@ -1320,7 +1401,7 @@ class CSIDataExtractor(object):
                           'class of extractor.py.' % (self.data_type,))
                     df = pd.DataFrame()
                 return df
-        except sqlite3.Error as e:
-            print('Error when trying to connect to the database %s table in '
-                  'query_existing_data.' % (table,))
+        except psycopg2.Error as e:
+            print('Error when trying to connect to the %s database in '
+                  'query_existing_data.' % (self.database,))
             print(e)

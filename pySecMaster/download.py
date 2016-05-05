@@ -132,8 +132,8 @@ class QuandlDownload(object):
         df['last_updated'] = df.apply(date_to_iso, axis=1, args=('last_updated',))
 
         df.insert(len(df.columns), 'page_num', page_num)
-        df.insert(len(df.columns), 'created_date', datetime.utcnow().isoformat())
-        df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
+        df.insert(len(df.columns), 'created_date', datetime.now().isoformat())
+        df.insert(len(df.columns), 'updated_date', datetime.now().isoformat())
 
         return df
 
@@ -163,11 +163,15 @@ class QuandlDownload(object):
             column_names = ['date', 'open', 'high', 'low', 'close', 'volume',
                             'ex_dividend', 'split_ratio', 'adj_open',
                             'adj_high', 'adj_low', 'adj_close', 'adj_volume']
+            columns_to_remove = ['adj_open', 'adj_high', 'adj_low', 'adj_close',
+                                 'adj_volume']
         elif q_code[:4] == 'GOOG':
             column_names = ['date', 'open', 'high', 'low', 'close', 'volume']
+            columns_to_remove = []
         elif q_code[:5] == 'YAHOO':
             column_names = ['date', 'open', 'high', 'low', 'close',
                             'volume', 'adjusted_close']
+            columns_to_remove = ['adjusted_close']
         else:
             print('The data source for %s is not implemented in the price '
                   'extractor. Please define the columns in '
@@ -195,7 +199,7 @@ class QuandlDownload(object):
         else:
             # There is no minute data for this code so add it to the CSV file
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-            cur_date = datetime.utcnow().isoformat()
+            cur_date = datetime.now().isoformat()
             if len(codes_wo_data_df.
                     loc[codes_wo_data_df['q_code'] == q_code]) > 0:
                 # The code already exists within the CSV, so update the date
@@ -227,9 +231,12 @@ class QuandlDownload(object):
 
         raw_df = raw_df[1:]     # Removes the column headers from data download
         raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
-        raw_df.insert(0, 'q_code', q_code)
+        # raw_df.insert(0, 'q_code', q_code)
         raw_df.insert(len(raw_df.columns), 'updated_date',
-                      datetime.utcnow().isoformat())
+                      datetime.now().isoformat())
+
+        # Remove all adjusted value columns
+        raw_df.drop(columns_to_remove, inplace=True)
 
         return raw_df
 
@@ -574,7 +581,7 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         # There is no price data for this code; add to CSV file via DataFrame
         try:
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-            cur_date = datetime.utcnow().isoformat()
+            cur_date = datetime.now().isoformat()
             if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
                 # The code already exists within the CSV, so update the date
                 codes_wo_data_df.set_value(codes_wo_data_df['tsid'] == tsid,
@@ -609,9 +616,9 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     # google_data_processing method converts the string dates to datetimes
     raw_df['date'] = raw_df.apply(datetime_to_iso, axis=1, args=('date',))
-    raw_df.insert(0, 'tsid', tsid)
+    # raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
-                  datetime.utcnow().isoformat())
+                  datetime.now().isoformat())
 
     return raw_df
 
@@ -783,7 +790,7 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         # There is no price data for this code; add to CSV file via DataFrame
         try:
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-            cur_date = datetime.utcnow().isoformat()
+            cur_date = datetime.now().isoformat()
             if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
                 # The code already exists within the CSV, so update the date
                 codes_wo_data_df.set_value(codes_wo_data_df['tsid'] == tsid,
@@ -817,9 +824,9 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     raw_df = raw_df[1:]
 
     raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
-    raw_df.insert(0, 'tsid', tsid)
+    # raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
-                  datetime.utcnow().isoformat())
+                  datetime.now().isoformat())
 
     # Remove the adjusted close column since this is calculated manually
     raw_df.drop('adj_close', axis=1, inplace=True)
@@ -829,9 +836,8 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
 def download_csidata_factsheet(db_url, data_type, exchange_id=None,
                                data_format='csv'):
-    """
-    Downloads the CSV factsheet for the provided data_type (stocks, commodities,
-    currencies, etc.). A DataFrame is returned.
+    """ Downloads the CSV factsheet for the provided data_type (stocks,
+    commodities, currencies, etc.). A DataFrame is returned.
 
     http://www.csidata.com/factsheets.php?type=stock&format=csv
 
@@ -960,21 +966,35 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
     try:
         df = pd.read_csv(csv_file, encoding='latin_1', low_memory=False)
 
+        # Rename column headers to a standardized format
+        df.rename(columns={'CsiNumber': 'csi_number', 'Symbol': 'symbol',
+                           'Name': 'name', 'Exchange': 'exchange',
+                           'IsActive': 'is_active', 'StartDate': 'start_date',
+                           'EndDate': 'end_date', 'Sector': 'sector',
+                           'Industry': 'industry',
+                           'ConversionFactor': 'conversion_factor',
+                           'SwitchCfDate': 'switch_cf_date',
+                           'PreSwitchCf': 'pre_switch_cf',
+                           'LastVolume': 'last_volume', 'Type': 'type',
+                           'ChildExchange': 'child_exchange',
+                           'Currency': 'currency'})
+
         if data_type == 'stock':
-            df['StartDate'] = df.apply(datetime_to_iso, axis=1,
-                                       args=('StartDate',))
-            df['EndDate'] = df.apply(datetime_to_iso, axis=1,
-                                     args=('EndDate',))
-            df['SwitchCfDate'] = df.apply(datetime_to_iso, axis=1,
-                                          args=('SwitchCfDate',))
+            df['start_date'] = df.apply(datetime_to_iso, axis=1,
+                                        args=('start_date',))
+            df['end_date'] = df.apply(datetime_to_iso, axis=1,
+                                      args=('end_date',))
+            df['switch_cf_date'] = df.apply(datetime_to_iso, axis=1,
+                                            args=('switch_cf_date',))
 
     except Exception as e:
         print('Flag: Error occurred when processing CSI %s data' % data_type)
         print(e)
         return pd.DataFrame()
 
-    df.insert(len(df.columns), 'created_date', datetime.utcnow().isoformat())
-    df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
+    df.insert(len(df.columns), 'symbology_source', 'CSI_Data')
+    df.insert(len(df.columns), 'created_date', datetime.now().isoformat())
+    df.insert(len(df.columns), 'updated_date', datetime.now().isoformat())
 
     return df
 
@@ -986,6 +1006,6 @@ if __name__ == '__main__':
     url_root = 'http://www.csidata.com/factsheets.php?'
     csi_data_type = 'commodity'     # commodity, stock
     csi_exchange_id = '113'     # 113, 89
-    df = download_csidata_factsheet(url_root, csi_data_type, csi_exchange_id)
+    df1 = download_csidata_factsheet(url_root, csi_data_type, csi_exchange_id)
 
-    print(df.head(10))
+    print(df1.head(10))
