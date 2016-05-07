@@ -7,7 +7,7 @@ from create_tables import create_database, main_tables, data_tables, \
 from load_aux_tables import LoadTables
 from extractor import CSIDataExtractor, QuandlCodeExtract
 from utilities.database_queries import df_to_sql, query_csi_stocks, \
-    query_existing_sid, query_exchanges
+    query_existing_sid, query_exchanges, update_symbology_values
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -33,6 +33,35 @@ __version__ = '1.3.2'
     You should have received a copy of the GNU Affero General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
+
+
+def altered_values(existing_df, new_df):
+    """ Compare the two provided DataFrames, returning a new DataFrame that only
+    includes rows from the new_df that are different from the existing_df.
+
+    :param existing_df: DataFrame of the existing values
+    :param new_df: DataFrame of the next values
+    :return: DataFrame with the altered/new values
+    """
+
+    # Convert both DataFrames to all string objects. Normally, the symbol_id
+    #   column of the existing_df is an int64 object, messing up the merge
+    if len(existing_df.index) > 0:
+        existing_df = existing_df.applymap(str)
+    new_df = new_df.applymap(str)
+
+    # DataFrame with the similar values from both the existing_df and the
+    #   new_df. The comparison is based on the symbol_id/sid and
+    #   source_id/ticker columns.
+    combined_df = pd.merge(left=existing_df, right=new_df, how='inner',
+                           left_on=['symbol_id', 'source_id'],
+                           right_on=['sid', 'ticker'])
+
+    # In a new DataFrame, only keep the new_df rows that did NOT have a match
+    #   to the existing_df
+    altered_df = new_df[~new_df['sid'].isin(combined_df['sid'])]
+
+    return altered_df
 
 
 def create_symbology(database, user, password, host, port, source_list):
@@ -66,47 +95,42 @@ def create_symbology(database, user, password, host, port, source_list):
     exch_df = query_exchanges(database=database, user=user, password=password,
                               host=host, port=port)
 
+    # ToDo: Add economic_events codes
+
     for source in source_list:
         source_start = time.time()
 
         # Retrieve any existing ID values from the symbology table
-        symbology_df = query_existing_sid(database=database, user=user,
-                                          password=password, host=host,
-                                          port=port)
+        existing_symbology_df = query_existing_sid(database=database, user=user,
+                                                   password=password, host=host,
+                                                   port=port, source=source)
 
-        # A DF of all the values except the current source, which will be
-        #   rebuilt and appended to this DF before being added to the database
-        other_symbology_df = symbology_df[symbology_df['source'] != source]
-
-        cur_time = datetime.now().isoformat()
         if source == 'csi_data':
             csi_stock_df = query_csi_stocks(database=database, user=user,
                                             password=password, host=host,
                                             port=port, query='all')
 
-            source_sym_df = pd.DataFrame()
-            source_sym_df.insert(0, 'symbol_id', csi_stock_df['sid'])
-            source_sym_df.insert(1, 'source', source)
-            source_sym_df.insert(2, 'source_id', csi_stock_df['sid'])
-            source_sym_df.insert(3, 'type', 'stock')
-            source_sym_df.insert(len(source_sym_df.columns), 'created_date',
-                                 cur_time)
-            source_sym_df.insert(len(source_sym_df.columns), 'updated_date',
-                                 cur_time)
+            # csi_data is unique where the sid (csi_num) is the source_id
+            csi_stock_df['ticker'] = csi_stock_df['sid']
 
-            # Append this new DF to the non-changing sources DF
-            new_symbology_df = other_symbology_df.append(source_sym_df,
-                                                         ignore_index=True)
-            # Replace the existing table since we have a copy to replace it
-            df_to_sql(database=database, user=user, password=password,
-                      host=host, port=port, df=new_symbology_df,
-                      sql_table='symbology', exists='replace', item=source)
+            # Find the values that are different between the two DataFrames
+            altered_values_df = altered_values(
+                existing_df=existing_symbology_df, new_df=csi_stock_df)
+
+            # Prepare a new DataFrame with all relevant data for these values
+            altered_df = pd.DataFrame()
+            altered_df.insert(0, 'symbol_id', altered_values_df['sid'])
+            altered_df.insert(1, 'source', source)
+            altered_df.insert(2, 'source_id', altered_values_df['sid'])
+            altered_df.insert(3, 'type', 'stock')
+            altered_df.insert(len(altered_df.columns), 'created_date',
+                              datetime.now().isoformat())
+            altered_df.insert(len(altered_df.columns), 'updated_date',
+                              datetime.now().isoformat())
 
         elif source in ['tsid', 'quandl_wiki', 'quandl_goog', 'seeking_alpha',
                         'yahoo']:
             # These sources have a similar symbology creation process
-
-            # ToDo: Add economic_events codes
 
             if source == 'quandl_wiki':
                 # I don't trust that Quandl provides all available WIKI codes
@@ -128,7 +152,7 @@ def create_symbology(database, user, password, host, port, source_list):
                 csi_stock_df['ticker'] = csi_stock_df['ticker'].\
                     apply(lambda x: 'WIKI/' + x)
 
-            if source == 'quandl_goog':
+            elif source == 'quandl_goog':
                 # Imply plausible Quandl codes for their GOOG database. Only
                 #   codes for American, Canadian and London exchanges
                 csi_stock_df = query_csi_stocks(database=database, user=user,
@@ -333,23 +357,49 @@ def create_symbology(database, user, password, host, port, source_list):
                 csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_yahoo,
                                                             axis=1)
 
-            source_sym_df = pd.DataFrame()
-            source_sym_df.insert(0, 'symbol_id', csi_stock_df['sid'])
-            source_sym_df.insert(1, 'source', source)
-            source_sym_df.insert(2, 'source_id', csi_stock_df['ticker'])
-            source_sym_df.insert(3, 'type', 'stock')
-            source_sym_df.insert(len(source_sym_df.columns), 'created_date',
-                                 cur_time)
-            source_sym_df.insert(len(source_sym_df.columns), 'updated_date',
-                                 cur_time)
+            else:
+                return NotImplementedError('%s is not implemented in the '
+                                           'create_symbology function of '
+                                           'build_symbology.py' % source)
 
-            # Append this new DF to the non-changing sources DF
-            new_symbology_df = other_symbology_df.append(source_sym_df,
-                                                         ignore_index=True)
-            # Replace the existing table since we have a copy to replace it
-            df_to_sql(database=database, user=user, password=password,
-                      host=host, port=port, df=new_symbology_df,
-                      sql_table='symbology', exists='replace', item=source)
+            # Remove post processed duplicates to prevent database FK errors
+            csi_stock_df.drop_duplicates(subset=['ticker'], inplace=True)
+
+            # Find the values that are different between the two DataFrames
+            altered_values_df = altered_values(
+                existing_df=existing_symbology_df, new_df=csi_stock_df)
+
+            # Prepare a new DataFrame with all relevant data for these values
+            altered_df = pd.DataFrame()
+            altered_df.insert(0, 'symbol_id', altered_values_df['sid'])
+            altered_df.insert(1, 'source', source)
+            altered_df.insert(2, 'source_id', altered_values_df['ticker'])
+            altered_df.insert(3, 'type', 'stock')
+            altered_df.insert(len(altered_df.columns), 'created_date',
+                              datetime.now().isoformat())
+            altered_df.insert(len(altered_df.columns), 'updated_date',
+                              datetime.now().isoformat())
+
+        else:
+            return NotImplementedError('%s is not implemented in the '
+                                       'create_symbology function of '
+                                       'build_symbology.py' % source)
+
+        # Separate out the updated values from the altered_df
+        updated_symbols_df = (altered_df[altered_df['symbol_id'].
+                              isin(existing_symbology_df['symbol_id'])])
+        # Update all modified symbology values in the database
+        update_symbology_values(database=database, user=user, password=password,
+                                host=host, port=port,
+                                values_df=updated_symbols_df)
+
+        # Separate out the new values from the altered_df
+        new_symbols_df = (altered_df[~altered_df['symbol_id'].
+                          isin(existing_symbology_df['symbol_id'])])
+        # Append the new symbol values to the existing database table
+        df_to_sql(database=database, user=user, password=password, host=host,
+                  port=port, df=new_symbols_df, sql_table='symbology',
+                  exists='append', item=source)
 
         print('Finished processing the symbology IDs for %s taking '
               '%0.2f seconds' % (source, (time.time() - source_start)))

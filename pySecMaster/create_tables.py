@@ -121,10 +121,10 @@ def main_tables(database='pysecmaster', user='pysecmaster',
             def csidata_stock_factsheet(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
                 (csi_number         TEXT                        PRIMARY KEY,
-                symbol              TEXT                        NOT NULL,
+                symbol              TEXT,
                 name                TEXT,
-                exchange            TEXT                        NOT NULL,
-                is_active           BOOLEAN,
+                exchange            TEXT,
+                is_active           SMALLINT,
                 start_date          DATE,
                 end_date            DATE,
                 sector              TEXT,
@@ -136,18 +136,14 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                 type                TEXT,
                 child_exchange      TEXT,
                 currency            TEXT,
-                symbology_source    TEXT,
                 created_date        TIMESTAMP WITH TIME ZONE,
-                updated_date        TIMESTAMP WITH TIME ZONE,
-                FOREIGN KEY(symbology_source, csi_number)
-                    REFERENCES symbology(source, source_id)
-                    ON UPDATE CASCADE)''')
+                updated_date        TIMESTAMP WITH TIME ZONE)''')
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_csidata_symbol
                             ON csidata_stock_factsheet(symbol)""")
 
             def data_vendor(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
-                (data_vendor_id     SERIAL      PRIMARY KEY,
+                (data_vendor_id     INTEGER     PRIMARY KEY,
                 name                TEXT        UNIQUE,
                 url                 TEXT,
                 support_email       TEXT,
@@ -158,7 +154,7 @@ def main_tables(database='pysecmaster', user='pysecmaster',
 
             def exchanges(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS exchanges
-                 (exchange_id       SMALLSERIAL     PRIMARY KEY,
+                 (exchange_id       SMALLINT        PRIMARY KEY,
                  symbol             TEXT            UNIQUE NOT NULL,
                  goog_symbol        TEXT,
                  yahoo_symbol       TEXT,
@@ -233,7 +229,7 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                 name                TEXT,
                 exchange            TEXT                        NOT NULL,
                 child_exchange      TEXT,
-                is_active           BOOLEAN,
+                is_active           SMALLINT,
                 start_date          TIMESTAMP WITH TIME ZONE,
                 end_date            TIMESTAMP WITH TIME ZONE,
                 type                TEXT,

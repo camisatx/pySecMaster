@@ -146,7 +146,6 @@ def insert_csi_data(database, user, password, host, port, df, source):
                             (symbol_id, source, symbol_id, 'stock',
                              cur_time, cur_time))
                 conn.commit()
-            conn.close()
     except psycopg2.Error as e:
         conn.rollback()
         print('Failed to insert the data into the symbology table within '
@@ -158,6 +157,8 @@ def insert_csi_data(database, user, password, host, port, df, source):
     except Exception as e:
         print(e)
         print('Error: Unknown issue occurred in insert_csi_data')
+
+    conn.close()
 
 
 def query_all_active_tsids(database, user, password, host, port, table,
@@ -425,8 +426,11 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                 #   the few duplicate tickers, choose the active one over the
                 #   non-active one (same company but different start and end
                 #   dates, with one being active).
-                cur.execute("""SELECT csi.csi_number, csi.symbol, csi.exchange,
-                               csi.child_exchange
+                # NOTE: Due to different punctuations, it is possible for
+                #   items with similar symbol, exchange and child exchange
+                #   to be returned (ie. 'ABK.A TSX' and 'ABK+A TSX')
+                cur.execute("""SELECT DISTINCT ON (symbol, exchange)
+                                   csi_number, symbol, exchange, child_exchange
                                FROM (SELECT csi_number, symbol, exchange,
                                    child_exchange, is_active
                                    FROM csidata_stock_factsheet
@@ -440,9 +444,7 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                        'NYSE', 'NYSE ARCA',
                                        'OTC Markets Pink Sheets'))
                                    AND symbol IS NOT NULL
-                                   ORDER BY is_active ASC) AS csi
-                               GROUP BY csi.symbol, csi.exchange,
-                               csi.child_exchange""")
+                                   ORDER BY is_active DESC) AS csi""")
                 rows = cur.fetchall()
                 if rows:
                     csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
@@ -458,9 +460,12 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                 #   prior two years. For the few duplicate tickers, choose the
                 #   active one over the non-active one (same company but
                 #   different start and end dates, with one being active).
+                # NOTE: Due to different punctuations, it is possible for
+                #   items with similar symbol, exchange and child exchange
+                #   to be returned (ie. 'ABK.A TSX' and 'ABK+A TSX')
                 beg_date = (datetime.now() - timedelta(days=730))
-                cur.execute("""SELECT csi.csi_number, csi.symbol, csi.exchange,
-                               csi.child_exchange
+                cur.execute("""SELECT DISTINCT ON (symbol, exchange)
+                                   csi_number, symbol, exchange, child_exchange
                                FROM (SELECT csi_number, symbol, exchange,
                                    child_exchange, is_active
                                    FROM csidata_stock_factsheet
@@ -473,9 +478,7 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                        'Nasdaq Global Select',
                                        'NYSE', 'NYSE ARCA'))
                                    AND symbol IS NOT NULL
-                                   ORDER BY is_active ASC) AS csi
-                               GROUP BY csi.symbol, csi.exchange,
-                               csi.child_exchange""",
+                                   ORDER BY is_active DESC) AS csi""",
                             (beg_date.isoformat(),))
                 rows = cur.fetchall()
                 if rows:
@@ -505,13 +508,15 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
         raise SystemError('Error: Unknown issue occurred in query_csi_stocks')
 
 
-def query_existing_sid(database, user, password, host, port):
-    """
+def query_existing_sid(database, user, password, host, port, source):
+    """ Query existing symbology id values based on the provided source.
+
     :param database: String of the database name
     :param user: String of the username used to login to the database
     :param password: String of the password used to login to the database
     :param host: String of the database address (localhost, url, ip, etc.)
     :param port: Integer of the database port number (5432)
+    :param source: String of which symbology source to query
     :return: DataFrame of exchanges
     """
 
@@ -520,19 +525,16 @@ def query_existing_sid(database, user, password, host, port):
     try:
         with conn:
             cur = conn.cursor()
-            cur.execute("""SELECT symbol_id, source, source_id, type,
-                        created_date, updated_date
-                        FROM symbology""")
+            cur.execute("""SELECT symbol_id, source_id
+                        FROM symbology
+                        WHERE source=%s""", (source,))
             rows = cur.fetchall()
-            sid_df = pd.DataFrame(rows, columns=['symbol_id', 'source',
-                                                 'source_id', 'type',
-                                                 'created_date',
-                                                 'updated_date'])
+            sid_df = pd.DataFrame(rows, columns=['symbol_id', 'source_id'])
             return sid_df
     except psycopg2.Error as e:
         print(e)
-        raise SystemError('Failed to query the data from the symbology table '
-                          'within query_existing_sid')
+        raise SystemError('Failed to query the %s data from the symbology '
+                          'table within query_existing_sid' % source)
     except conn.OperationalError:
         raise SystemError('Unable to connect to the %s database in '
                           'query_existing_sid. Make sure the database '
@@ -607,10 +609,10 @@ def query_last_price(database, user, password, host, port, table, vendor_id):
         conn = psycopg2.connect(database=database, user=user, password=password,
                                 host=host, port=port)
         with conn:
-            query = """SELECT source_id as tsid, MAX(date) as date, updated_date
-                        FROM %s
-                        WHERE data_vendor_id IN (%s)
-                        GROUP BY source_id""" % (table, vendor_id)
+            query = """SELECT source_id AS tsid, MAX(date) AS date, updated_date
+                    FROM %s
+                    WHERE data_vendor_id IN (%s)
+                    GROUP BY source_id""" % (table, vendor_id)
             df = pd.read_sql(query, conn, index_col='tsid')
             if len(df.index) == 0:
                 return df
@@ -624,6 +626,60 @@ def query_last_price(database, user, password, host, port, table, vendor_id):
         print(e)
         raise TypeError('Error when trying to connect to the %s database '
                         'in query_last_price.' % database)
+
+
+def query_load_table(database, user, password, host, port, table):
+    """ Query all existing values from the provided table. Used in
+    load_aux_tables for comparing existing and new values. Relevant tables
+    include data_vendor and exchanges.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param table: String of which table to query
+    :return: DataFrame of table values
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+    try:
+        with conn:
+            cur = conn.cursor()
+            if table == 'data_vendor':
+                cur.execute("""SELECT * FROM data_vendor""")
+                columns = ['data_vendor_id', 'name', 'url', 'support_email',
+                           'api', 'consensus_weight', 'created_date',
+                           'updated_date']
+            elif table == 'exchanges':
+                cur.execute("""SELECT * FROM exchanges""")
+                columns = ['exchange_id', 'symbol', 'goog_symbol',
+                           'yahoo_symbol', 'csi_symbol', 'tsid_symbol',
+                           'name', 'country', 'city', 'currency', 'time_zone',
+                           'utc_offset', 'open', 'close', 'lunch',
+                           'created_date', 'updated_date']
+            else:
+                raise NotImplementedError('%s is not implemented within '
+                                          'query_load_table' % table)
+            rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=columns)
+
+            # created/updated date columns are not needed for comparison
+            df.drop(labels=['created_date', 'updated_date'], axis=1,
+                    inplace=True)
+            return df
+    except psycopg2.Error as e:
+        print(e)
+        raise SystemError('Failed to query the data from the symbology table '
+                          '%s within query_load_table' % table)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_load_table. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_load_table')
 
 
 def query_q_codes(database, user, password, host, port, download_selection):
@@ -852,3 +908,127 @@ def retrieve_data_vendor_id(database, user, password, host, port, name):
         print('Error when trying to retrieve data from the %s database in '
               'retrieve_data_vendor_id' % database)
         print(e)
+
+
+def update_load_table(database, user, password, host, port, values_df, table,
+                      verbose=False):
+    """ Update the load table values for each item in the values_df. Assuming
+    that the id column (first column) will never be reused by new values.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param values_df: DataFrame with all the symbology values to update
+    :param table: String of the table being worked on
+    :param verbose: Boolean of whether to print debugging statement
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
+    try:
+        with conn:
+            cur = conn.cursor()
+
+            if table == 'data_vendor':
+                for index, row in values_df.iterrows():
+                    cur.execute("""UPDATE data_vendor
+                                SET name=(%s), url=(%s), support_email=(%s),
+                                api=(%s), consensus_weight=(%s),
+                                updated_date=(%s)
+                                WHERE data_vendor_id=(%s)""",
+                                (row['name'], row['url'], row['support_email'],
+                                 row['api'], row['consensus_weight'],
+                                 row['updated_date'], row['data_vendor_id']))
+                    if verbose:
+                        print('Updated data vendor id %s' %
+                              row['data_vendor_id'])
+
+            elif table == 'exchanges':
+                for index, row in values_df.iterrows():
+                    cur.execute("""UPDATE exchanges
+                                SET symbol=(%s), goog_symbol=(%s),
+                                yahoo_symbol=(%s), csi_symbol=(%s),
+                                tsid_symbol=(%s), name=(%s), country=(%s),
+                                city=(%s), currency=(%s), time_zone=(%s),
+                                utc_offset=(%s), open=(%s), close=(%s),
+                                lunch=(%s), updated_date=(%s)
+                                WHERE exchange_id=(%s)""",
+                                (row['symbol'], row['goog_symbol'],
+                                 row['yahoo_symbol'], row['csi_symbol'],
+                                 row['tsid_symbol'], row['name'],
+                                 row['country'], row['city'], row['currency'],
+                                 row['time_zone'], row['utc_offset'],
+                                 row['open'], row['close'], row['lunch'],
+                                 row['updated_date'], row['exchange_id']))
+                    if verbose:
+                        print('Updated exchange id %s' % row['exchange_id'])
+
+            else:
+                raise NotImplementedError('%s is not implemented within '
+                                          'update_load_table' % table)
+            conn.commit()
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(e)
+        raise SystemError('Failed to update the %s values within '
+                          'update_load_table' % table)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'update_load_table. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in update_load_table')
+
+    conn.close()
+
+
+def update_symbology_values(database, user, password, host, port, values_df,
+                            verbose=True):
+    """ Update the source_id and updated_date values for each item in the
+    values_df. Assuming that the symbol_id will never be reused by new values.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param values_df: DataFrame with all the symbology values to update
+    :param verbose: Boolean of whether to print debugging statement
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
+    try:
+        with conn:
+            cur = conn.cursor()
+            # Updating each database value
+            for index, row in values_df.iterrows():
+                cur.execute("""UPDATE symbology
+                            SET source_id=(%s), updated_date=(%s)
+                            WHERE symbol_id=(%s) and source=(%s)""",
+                            (row['source_id'], row['updated_date'],
+                             row['symbol_id'], row['source']))
+                if verbose:
+                    print('Updated symbology source id %s to be %s' %
+                          (row['symbol_id'], row['source_id']))
+            conn.commit()
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(e)
+        raise SystemError('Failed to update the symbology values within '
+                          'update_symbology_values')
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'update_symbology_values. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'update_symbology_values')
+
+    conn.close()

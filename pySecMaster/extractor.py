@@ -1,5 +1,5 @@
 import csv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 import psycopg2
 import re
@@ -119,7 +119,7 @@ class QuandlCodeExtract(object):
                                                  data_vendor, 'updated_date']
                     updated_date = updated_date.iloc[0]
 
-                    beg_date_obj = (datetime.now() - timedelta(
+                    beg_date_obj = (datetime.now(timezone.utc) - timedelta(
                                     days=self.update_range))
                     # beg_date = beg_date_obj.strftime('%Y-%m-%d')
 
@@ -493,9 +493,10 @@ class QuandlDataExtraction(object):
             # Load the codes that did not have data from the last extractor run
             codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
             # Exclude these codes that are within the 15 day re-download period
-            beg_date_ob_wo_data = datetime.now() - timedelta(days=15)
+            beg_date_ob_wo_data = (datetime.now(timezone.utc) -
+                                   timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
-                                                beg_date_ob_wo_data.isoformat()]
+                                                beg_date_ob_wo_data]
             # Change DF to a list of only the q_codes
             list_to_exclude = exclude_codes_df['q_code'].values.flatten()
             # Create a temp DF from q_codes_df with only the codes to exclude
@@ -510,7 +511,8 @@ class QuandlDataExtraction(object):
                 writer.writerow(('q_code', 'date_tried'))
 
         # The cut-off time for when code data can be re-downloaded
-        beg_date_obj = datetime.now() - timedelta(seconds=self.redownload_time)
+        beg_date_obj = (datetime.now(timezone.utc) -
+                        timedelta(seconds=self.redownload_time))
         # For the final download list, only include new and non-recent codes
         q_codes_final = q_codes_df[(q_codes_df['updated_date'] < beg_date_obj) |
                                    (q_codes_df['updated_date'].isnull())]
@@ -613,7 +615,7 @@ class QuandlDataExtraction(object):
                     raw_data = quandl_download.download_quandl_data(
                         q_code=q_code, csv_out=self.csv_wo_data)
                     # DataFrame of only the new data
-                    clean_data = raw_data[raw_data.date > last_date.isoformat()]
+                    clean_data = raw_data[raw_data.date > last_date]
 
             except Exception as e:
                 print('Failed to determine what data is new for %s in extractor'
@@ -769,9 +771,10 @@ class GoogleFinanceDataExtraction(object):
             # for this interval
             codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
             # Exclude these codes that are within a 15 day period
-            beg_date_ob_wo_data = datetime.now() - timedelta(days=15)
+            beg_date_ob_wo_data = (datetime.now(timezone.utc) -
+                                   timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
-                                                beg_date_ob_wo_data.isoformat()]
+                                                beg_date_ob_wo_data]
             # Change DF to a list of only the codes
             list_to_exclude = exclude_codes_df['tsid'].values.flatten()
             # Create a temp DF from codes_df with only the codes to exclude
@@ -786,7 +789,8 @@ class GoogleFinanceDataExtraction(object):
                 writer.writerow(('tsid', 'date_tried'))
 
         # The cut-off time for when code data can be re-downloaded
-        beg_date_obj = datetime.now() - timedelta(seconds=self.redownload_time)
+        beg_date_obj = (datetime.now(timezone.utc) -
+                        timedelta(seconds=self.redownload_time))
         # Final download list should include both new/null and non-recent codes
         codes_final = codes_df[(codes_df['updated_date'] < beg_date_obj) |
                                (codes_df['updated_date'].isnull())]
@@ -905,11 +909,11 @@ class GoogleFinanceDataExtraction(object):
                 # Only keep data that is after the days_back period
                 if self.data_process == 'replace' and self.days_back:
                     beg_date = (last_date - timedelta(days=self.days_back))
-                    clean_data = raw_data[raw_data.date > beg_date.isoformat()]
+                    clean_data = raw_data[raw_data.date > beg_date]
 
                 # Only keep data that is after the latest existing data point
                 else:
-                    clean_data = raw_data[raw_data.date > last_date.isoformat()]
+                    clean_data = raw_data[raw_data.date > last_date]
             except Exception as e:
                 print('Failed to determine what data is new for %s in extractor'
                       % tsid)
@@ -1068,9 +1072,10 @@ class YahooFinanceDataExtraction(object):
             #   for this interval
             codes_wo_data_df = pd.read_csv(self.csv_wo_data, index_col=False)
             # Exclude these codes that are within a 15 day period
-            beg_date_ob_wo_data = datetime.now() - timedelta(days=15)
+            beg_date_ob_wo_data = (datetime.now(timezone.utc) -
+                                   timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
-                                                beg_date_ob_wo_data.isoformat()]
+                                                beg_date_ob_wo_data]
             # Change DF to a list of only the codes
             list_to_exclude = exclude_codes_df['tsid'].values.flatten()
             # Create a temp DF from codes_df with only the codes to exclude
@@ -1085,7 +1090,8 @@ class YahooFinanceDataExtraction(object):
                 writer.writerow(('tsid', 'date_tried'))
 
         # The cut-off time for when code data can be re-downloaded
-        beg_date_obj = datetime.now() - timedelta(seconds=self.redownload_time)
+        beg_date_obj = (datetime.now(timezone.utc) -
+                        timedelta(seconds=self.redownload_time))
         # Final download list should include both new/null and non-recent codes
         codes_final = codes_df[(codes_df['updated_date'] < beg_date_obj) |
                                (codes_df['updated_date'].isnull())]
@@ -1204,11 +1210,11 @@ class YahooFinanceDataExtraction(object):
                 # Only keep data that is after the days_back period
                 if self.data_process == 'replace' and self.days_back:
                     beg_date = (last_date - timedelta(days=self.days_back))
-                    clean_data = raw_data[raw_data.date > beg_date.isoformat()]
+                    clean_data = raw_data[raw_data.date > beg_date]
 
                 # Only keep data that is after the latest existing data point
                 else:
-                    clean_data = raw_data[raw_data.date > last_date.isoformat()]
+                    clean_data = raw_data[raw_data.date > last_date]
             except Exception as e:
                 print('Failed to determine what data is new for %s in extractor'
                       % tsid)
@@ -1325,8 +1331,10 @@ class CSIDataExtractor(object):
             #   specified update range. If so, ensure that data looks
             #   reasonable, and then delete the existing data.
 
-            beg_date_obj = datetime.now() - timedelta(days=self.redownload_time)
-            if existing_data.loc[0, 'updated_date'] < beg_date_obj.isoformat():
+            beg_date_obj = (datetime.now(timezone.utc) -
+                            timedelta(days=self.redownload_time))
+
+            if existing_data.loc[0, 'updated_date'] < beg_date_obj:
 
                 # Download the latest data
                 print('Downloading the CSI Data factsheet for %s' %
@@ -1391,7 +1399,7 @@ class CSIDataExtractor(object):
             with conn:
                 # Add new CSI Data tables to this if block
                 if self.data_type == 'stock':
-                    df = pd.read_sql("SELECT CsiNumber, updated_date "
+                    df = pd.read_sql("SELECT csi_number, updated_date "
                                      "FROM csidata_stock_factsheet", conn)
                 else:
                     print('No table exists for the CSI Data %s factsheet. Once '

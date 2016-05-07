@@ -977,7 +977,8 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
                            'PreSwitchCf': 'pre_switch_cf',
                            'LastVolume': 'last_volume', 'Type': 'type',
                            'ChildExchange': 'child_exchange',
-                           'Currency': 'currency'})
+                           'Currency': 'currency'},
+                  inplace=True)
 
         if data_type == 'stock':
             df['start_date'] = df.apply(datetime_to_iso, axis=1,
@@ -988,11 +989,12 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
                                             args=('switch_cf_date',))
 
     except Exception as e:
-        print('Flag: Error occurred when processing CSI %s data' % data_type)
+        print('Error occurred when processing CSI %s data in '
+              'download_csidata_factsheet' % data_type)
         print(e)
         return pd.DataFrame()
 
-    df.insert(len(df.columns), 'symbology_source', 'CSI_Data')
+    # df.insert(len(df.columns), 'symbology_source', 'CSI_Data')
     df.insert(len(df.columns), 'created_date', datetime.now().isoformat())
     df.insert(len(df.columns), 'updated_date', datetime.now().isoformat())
 
