@@ -346,8 +346,8 @@ if __name__ == '__main__':
     #   dictionaries containing all relevant variables for the specific source
     test_download_list = [
         {'source': 'quandl', 'selection': 'wiki', 'interval': 'daily',
-         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
-         'replace_days_back': 50000},
+         'redownload_time': 60 * 60 * 24, 'data_process': 'replace',
+         'replace_days_back': 60},
         {'source': 'quandl', 'selection': 'goog_us_main_no_end_date',
          'interval': 'daily', 'redownload_time': 60 * 60 * 12,
          'data_process': 'replace', 'replace_days_back': 60},

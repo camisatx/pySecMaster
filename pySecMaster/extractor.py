@@ -8,7 +8,8 @@ import time
 from download import QuandlDownload, download_google_data, \
     download_yahoo_data, download_csidata_factsheet
 from utilities.database_queries import df_to_sql, delete_sql_table_rows, \
-    retrieve_data_vendor_id, query_codes, query_last_price, query_q_codes
+    retrieve_data_vendor_id, query_codes, query_csi_stock_start_date,\
+    query_last_price, query_q_codes
 from utilities.date_conversions import dt_from_iso
 from utilities.multithread import multithread
 
@@ -496,7 +497,7 @@ class QuandlDataExtraction(object):
             beg_date_ob_wo_data = (datetime.now(timezone.utc) -
                                    timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
-                                                beg_date_ob_wo_data]
+                                                beg_date_ob_wo_data.isoformat()]
             # Change DF to a list of only the q_codes
             list_to_exclude = exclude_codes_df['q_code'].values.flatten()
             # Create a temp DF from q_codes_df with only the codes to exclude
@@ -567,9 +568,14 @@ class QuandlDataExtraction(object):
         # The ticker has no prior price; add all the downloaded data
         if tsid not in self.latest_prices.index:
 
-            # ToDo: Use the start date from CSI within this function for stocks
+            # Retrieve the stock's start date from the csi table, and use it
+            #   as the beg_date when downloading the Quandl data
+            start_date = query_csi_stock_start_date(
+                database=self.database, user=self.user, password=self.password,
+                host=self.host, port=self.port, tsid=tsid)
+
             clean_data = quandl_download.download_quandl_data(
-                q_code=q_code, csv_out=self.csv_wo_data)
+                q_code=q_code, csv_out=self.csv_wo_data, beg_date=start_date)
 
             # There is not new data, so do nothing to the database
             if len(clean_data.index) == 0:
@@ -774,7 +780,7 @@ class GoogleFinanceDataExtraction(object):
             beg_date_ob_wo_data = (datetime.now(timezone.utc) -
                                    timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
-                                                beg_date_ob_wo_data]
+                                                beg_date_ob_wo_data.isoformat()]
             # Change DF to a list of only the codes
             list_to_exclude = exclude_codes_df['tsid'].values.flatten()
             # Create a temp DF from codes_df with only the codes to exclude
@@ -1075,7 +1081,7 @@ class YahooFinanceDataExtraction(object):
             beg_date_ob_wo_data = (datetime.now(timezone.utc) -
                                    timedelta(days=15))
             exclude_codes_df = codes_wo_data_df[codes_wo_data_df['date_tried'] >
-                                                beg_date_ob_wo_data]
+                                                beg_date_ob_wo_data.isoformat()]
             # Change DF to a list of only the codes
             list_to_exclude = exclude_codes_df['tsid'].values.flatten()
             # Create a temp DF from codes_df with only the codes to exclude

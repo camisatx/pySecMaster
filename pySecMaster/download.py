@@ -179,26 +179,42 @@ class QuandlDownload(object):
             return pd.DataFrame()
 
         if file:
+            # Create a DataFrame from the file object
             raw_df = pd.read_csv(file, index_col=False, names=column_names,
                                  encoding='utf-8')
 
+            # Remove all adjusted value columns
+            raw_df.drop(columns_to_remove, axis=1, inplace=True)
+
             # Data successfully downloaded; check to see if code was on the list
-            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-            if len(codes_wo_data_df.
-                    loc[codes_wo_data_df['q_code'] == q_code]) > 0:
-                # This q_code now has data whereas it didn't on that last run.
-                #   Remove the code from the DataFrame
-                wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != q_code]
-                # Remove any duplicates (keeping the latest) and save to a CSV
-                clean_wo_data_df = wo_data_df.drop_duplicates(subset='q_code',
-                                                              keep='last')
-                clean_wo_data_df.to_csv(csv_out, index=False)
-                if verbose:
-                    print('%s was removed from the wo_data CSV file since data '
-                          'was available for download.' % (q_code,))
+            try:
+                codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+                if len(codes_wo_data_df.
+                        loc[codes_wo_data_df['q_code'] == q_code]) > 0:
+                    # This q_code now has data whereas it didn't on that last
+                    #   run. Remove the code from the DataFrame
+                    wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code !=
+                                                  q_code]
+                    # Remove any duplicates (keeping the latest) and save to CSV
+                    clean_wo_data_df = \
+                        wo_data_df.drop_duplicates(subset='q_code', keep='last')
+                    clean_wo_data_df.to_csv(csv_out, index=False)
+                    if verbose:
+                        print('%s was removed from the wo_data CSV file since '
+                              'data was available for download.' % (q_code,))
+            except ValueError:
+                # The CSV file wasn't able to be read, so skip it for now
+                pass
+
         else:
             # There is no minute data for this code so add it to the CSV file
-            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+
+            try:
+                codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+            except ValueError:
+                # The CSV file wasn't able to be read, so skip it for now
+                return pd.DataFrame()
+
             cur_date = datetime.now().isoformat()
             if len(codes_wo_data_df.
                     loc[codes_wo_data_df['q_code'] == q_code]) > 0:
@@ -226,8 +242,9 @@ class QuandlDownload(object):
             # Return an empty DF; QuandlDataExtractor will be able to handle it
             return pd.DataFrame()
 
-        if len(raw_df.index) == 0:
-            return raw_df
+        if len(raw_df) in [0, 1]:
+            # The raw data has no values
+            return pd.DataFrame()
 
         raw_df = raw_df[1:]     # Removes the column headers from data download
         raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
@@ -235,8 +252,11 @@ class QuandlDownload(object):
         raw_df.insert(len(raw_df.columns), 'updated_date',
                       datetime.now().isoformat())
 
-        # Remove all adjusted value columns
-        raw_df.drop(columns_to_remove, inplace=True)
+        # Fill all NA values with -1 to indicate no data
+        raw_df['volume'].fillna(-1.0, inplace=True)
+        # Is not able to handle blank, text or NA values
+        raw_df['volume'] = (pd.to_numeric(raw_df['volume'], errors='coerce').
+                            astype(int))
 
         return raw_df
 

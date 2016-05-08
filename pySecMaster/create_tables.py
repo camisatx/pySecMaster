@@ -143,8 +143,8 @@ def main_tables(database='pysecmaster', user='pysecmaster',
 
             def data_vendor(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
-                (data_vendor_id     INTEGER     PRIMARY KEY,
-                name                TEXT        UNIQUE,
+                (data_vendor_id     INTEGER                     PRIMARY KEY,
+                name                TEXT                        UNIQUE,
                 url                 TEXT,
                 support_email       TEXT,
                 api                 TEXT,
@@ -154,12 +154,12 @@ def main_tables(database='pysecmaster', user='pysecmaster',
 
             def exchanges(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS exchanges
-                 (exchange_id       SMALLINT        PRIMARY KEY,
-                 symbol             TEXT            UNIQUE NOT NULL,
+                 (exchange_id       SMALLINT                    PRIMARY KEY,
+                 symbol             TEXT                        UNIQUE NOT NULL,
                  goog_symbol        TEXT,
                  yahoo_symbol       TEXT,
                  csi_symbol         TEXT,
-                 tsid_symbol        TEXT            NOT NULL,
+                 tsid_symbol        TEXT                        NOT NULL,
                  name               TEXT,
                  country            TEXT,
                  city               TEXT,
@@ -308,8 +308,8 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)''')
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_identifiers
-                    ON daily_prices(source_id, data_vendor_id, date,
-                        updated_date)""")
+                    ON daily_prices(source_id, data_vendor_id,
+                        date DESC NULLS LAST, updated_date)""")
 
             def finra_data(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS finra_data
@@ -362,24 +362,8 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)''')
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_identifiers
-                    ON minute_prices(source_id, data_vendor_id, date,
-                    updated_date)""")
-
-            def option_contracts(c):
-                c.execute("""CREATE TABLE IF NOT EXISTS option_contracts
-                (contract_id    SERIAL                      PRIMARY KEY,
-                source          TEXT                        NOT NULL,
-                source_id       TEXT                        NOT NULL,
-                symbol          TEXT,
-                exchange        TEXT,
-                currency        TEXT,
-                multiplier      SMALLINT,
-                date_updated    TIMESTAMP WITH TIME ZONE,
-                FOREIGN KEY(source, source_id)
-                    REFERENCES symbology(source, source_id)
-                    ON UPDATE CASCADE)""")
-                c.execute("""CREATE INDEX IF NOT EXISTS idx_option_contracts_id
-                    ON option_contracts(source_id)""")
+                    ON minute_prices(source_id, data_vendor_id,
+                    date DESC NULLS LAST, updated_date)""")
 
             def option_chains(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS option_chains
@@ -438,7 +422,7 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_tick_values
-                            ON tick_prices(source_id, date)""")
+                            ON tick_prices(source_id, date DESC NULLS LAST)""")
 
             def tick_stream(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS tick_prices_stream
@@ -452,13 +436,13 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_tick_stream_values
-                            ON tick_prices_stream(source_id, date, field)""")
+                            ON tick_prices_stream(source_id,
+                            date DESC NULLS LAST, field)""")
 
             daily_prices(cur)
             finra_data(cur)
             fundamental_data(cur)
             minute_prices(cur)
-            # option_contracts(cur)
             option_chains(cur)
             tick(cur)
             tick_stream(cur)

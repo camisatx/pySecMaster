@@ -182,18 +182,31 @@ def query_all_active_tsids(database, user, password, host, port, table,
     #   2. Select all unique codes from the prices table. Might take longer
     #       to query the initial data, but it is accurate
 
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
     try:
-        conn = psycopg2.connect(database=database, user=user, password=password,
-                                host=host, port=port)
         with conn:
             cur = conn.cursor()
 
             if period:
                 beg_date = datetime.today() - timedelta(days=period)
-                query = ("""SELECT source_id as tsid
-                            FROM %s
-                            WHERE date>'%s'
-                            GROUP BY source_id""" % (table, beg_date))
+                # query = ("""SELECT DISTINCT ON (source_id)
+                #                 source_id as tsid
+                #          FROM %s
+                #          WHERE date>='%s'
+                #          ORDER BY source_id DESC NULLS LAST""" %
+                #          (table, beg_date))
+                query = ("""SELECT sym.source_id AS tsid
+                         FROM symbology AS sym,
+                         LATERAL (
+                             SELECT source_id
+                             FROM %s
+                             WHERE source_id = sym.source_id
+                             AND date>='%s'
+                             ORDER BY source_id DESC NULLS LAST
+                             LIMIT 1) AS prices""" %
+                         (table, beg_date))
             else:
                 # Option 1:
                 # query = ("""SELECT source_id
@@ -201,9 +214,21 @@ def query_all_active_tsids(database, user, password, host, port, table,
                 #             WHERE source='tsid' AND type='stock'""")
 
                 # Option 2:
-                query = ("""SELECT source_id as tsid
-                            FROM %s
-                            GROUP BY source_id""" % (table,))
+                # query = ("""SELECT DISTINCT ON (source_id)
+                #              source_id as tsid
+                #          FROM %s
+                #          ORDER BY source_id DESC NULLS LAST""" % (table,))
+
+                # Option 3:
+                query = ("""SELECT sym.source_id AS tsid
+                         FROM symbology AS sym
+                         LATERAL (
+                             SELECT source_id
+                             FROM %s
+                             WHERE source_id = sym.source_id
+                             ORDER BY source_id DESC NULLS LAST
+                             LIMIT 1) AS prices""" %
+                         (table,))
 
             cur.execute(query)
             data = cur.fetchall()
@@ -218,6 +243,14 @@ def query_all_active_tsids(database, user, password, host, port, table,
         print(e)
         raise TypeError('Error when trying to connect to the %s database '
                         'in query_all_active_tsids' % database)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_all_active_tsids. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'query_all_active_tsids')
 
 
 def query_all_tsid_prices(database, user, password, host, port, table, tsid):
@@ -240,8 +273,8 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
             cur = conn.cursor()
             query = ("""SELECT data_vendor_id, date, open, high, low, close,
                         volume
-                        FROM %s
-                        WHERE source_id='%s'""" % (table, tsid))
+                     FROM %s
+                     WHERE source_id='%s'""" % (table, tsid))
             cur.execute(query)
             data = cur.fetchall()
             if data:
@@ -250,7 +283,7 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
                 df = pd.DataFrame(data, columns=columns)
 
                 # Convert the ISO date to a datetime object
-                df['date'] = pd.to_datetime(df['date'])
+                df['date'] = pd.to_datetime(df['date'], utc=True)
                 # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
 
                 # Drop duplicate rows based on only the tsid and date columns
@@ -292,9 +325,10 @@ def query_codes(database, user, password, host, port, download_selection):
     :return: DataFrame with the the specified tsid values
     """
 
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
     try:
-        conn = psycopg2.connect(database=database, user=user, password=password,
-                                host=host, port=port)
         with conn:
             cur = conn.cursor()
 
@@ -309,13 +343,13 @@ def query_codes(database, user, password, host, port, download_selection):
                 # Retrieve tsid tickers that trade only on main US exchanges
                 #   and that have been active within the prior two years.
                 beg_date = (datetime.now() - timedelta(days=730))
-                cur.execute("""SELECT source_id
+                cur.execute("""SELECT DISTINCT ON (source_id) source_id
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
                                    SELECT csi_number
                                    FROM csidata_stock_factsheet
-                                   WHERE end_date > %s
+                                   WHERE end_date>=%s
                                    AND (exchange IN ('AMEX', 'NYSE')
                                    OR child_exchange IN ('AMEX',
                                        'BATS Global Markets',
@@ -324,11 +358,11 @@ def query_codes(database, user, password, host, port, download_selection):
                                        'Nasdaq Global Select',
                                        'NYSE', 'NYSE ARCA')))
                                AND type='stock'
-                               GROUP BY source_id""",
+                               ORDER BY source_id DESC NULLS LAST""",
                             (beg_date.isoformat(),))
             elif download_selection == 'us_main_no_end_date':
                 # Retrieve tsid tickers that trade only on main US exchanges
-                cur.execute("""SELECT source_id
+                cur.execute("""SELECT DISTINCT ON (source_id) source_id
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
@@ -342,19 +376,19 @@ def query_codes(database, user, password, host, port, download_selection):
                                        'Nasdaq Global Select',
                                        'NYSE', 'NYSE ARCA')))
                                AND type='stock'
-                               GROUP BY source_id""")
+                               ORDER BY source_id DESC NULLS LAST""")
             elif download_selection == 'us_canada_london':
                 # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
                 #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
                 #   active within the prior two years.
                 beg_date = (datetime.now() - timedelta(days=730))
-                cur.execute("""SELECT source_id
+                cur.execute("""SELECT DISTINCT ON (source_id) source_id
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
                                    SELECT csi_number
                                    FROM csidata_stock_factsheet
-                                   WHERE end_date > %s
+                                   WHERE end_date>=%s
                                    AND (exchange IN ('AMEX', 'LSE', 'NYSE',
                                    'TSX', 'VSE')
                                    OR child_exchange IN ('AMEX',
@@ -365,7 +399,7 @@ def query_codes(database, user, password, host, port, download_selection):
                                        'NYSE', 'NYSE ARCA',
                                        'OTC Markets Pink Sheets')))
                                AND type='stock'
-                               GROUP BY source_id""",
+                               ORDER BY source_id DESC NULLS LAST""",
                             (beg_date.isoformat(),))
             else:
                 raise TypeError('Improper download_selection was '
@@ -389,6 +423,13 @@ def query_codes(database, user, password, host, port, download_selection):
         print(e)
         raise TypeError('Error when trying to connect to the %s database '
                         'in query_codes' % database)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_codes. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_codes')
 
 
 def query_csi_stocks(database, user, password, host, port, query='all'):
@@ -444,7 +485,8 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                        'NYSE', 'NYSE ARCA',
                                        'OTC Markets Pink Sheets'))
                                    AND symbol IS NOT NULL
-                                   ORDER BY is_active DESC) AS csi""")
+                                   ORDER BY is_active DESC NULLS LAST)
+                                   AS csi""")
                 rows = cur.fetchall()
                 if rows:
                     csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
@@ -469,7 +511,7 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                FROM (SELECT csi_number, symbol, exchange,
                                    child_exchange, is_active
                                    FROM csidata_stock_factsheet
-                                   WHERE end_date > %s
+                                   WHERE end_date>=%s
                                    AND (exchange IN ('AMEX', 'NYSE')
                                    OR child_exchange IN ('AMEX',
                                        'BATS Global Markets',
@@ -478,7 +520,8 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                        'Nasdaq Global Select',
                                        'NYSE', 'NYSE ARCA'))
                                    AND symbol IS NOT NULL
-                                   ORDER BY is_active DESC) AS csi""",
+                                   ORDER BY is_active DESC NULLS LAST)
+                                   AS csi""",
                             (beg_date.isoformat(),))
                 rows = cur.fetchall()
                 if rows:
@@ -506,6 +549,55 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
     except Exception as e:
         print(e)
         raise SystemError('Error: Unknown issue occurred in query_csi_stocks')
+
+
+def query_csi_stock_start_date(database, user, password, host, port, tsid):
+    """ Query the start date for the provided stock based on the start date
+    in the csi data stock table.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param tsid: String of which tsid to check
+    :return: Datetime object representing the start date
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT start_date
+                        FROM csidata_stock_factsheet
+                        WHERE csi_number=(
+                            SELECT csi.source_id
+                            FROM symbology csi
+                            INNER JOIN symbology tsid
+                            ON csi.symbol_id=tsid.symbol_id
+                            WHERE csi.source='csi_data'
+                            AND tsid.source='tsid'
+                            AND tsid.source_id=(%s))""", (tsid,))
+            row = cur.fetchone()
+            if row:
+                start_date_obj = row[0]
+                start_date = start_date_obj.strftime('%Y-%m-%d')
+            else:
+                start_date = None
+            return start_date
+    except psycopg2.Error as e:
+        print(e)
+        raise SystemError('Failed to query the start date for %s within '
+                          'query_csi_stock_start_date' % tsid)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_csi_stock_start_date. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'query_csi_stock_start_date')
 
 
 def query_existing_sid(database, user, password, host, port, source):
@@ -584,6 +676,13 @@ def query_last_price(database, user, password, host, port, table, vendor_id):
     """ Queries the pricing database to find the latest dates for each item
     in the database, regardless of whether it is in the tsid list.
 
+    - DISTINCT ON answer
+    http://stackoverflow.com/a/16920077
+    - Optimize Groupwise maximum query
+    http://stackoverflow.com/a/24377356
+    - Performance optimization for many rows
+    http://stackoverflow.com/a/25536748
+
     :param database: String of the database name
     :param user: String of the username used to login to the database
     :param password: String of the password used to login to the database
@@ -599,33 +698,88 @@ def query_last_price(database, user, password, host, port, table, vendor_id):
     if type(vendor_id) == list:
         vendor_id = ', '.join(["'" + str(vendor) + "'" for vendor in vendor_id])
     elif type(vendor_id) == int:
-        vendor_id = "'" + str(vendor_id) + "'"
+        vendor_id = str(vendor_id)
     else:
         # Should never occur
         raise TypeError('%s is an invalid type provided for the vendor_id '
                         'variable in query_last_price.' % type(vendor_id))
 
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
     try:
-        conn = psycopg2.connect(database=database, user=user, password=password,
-                                host=host, port=port)
         with conn:
-            query = """SELECT source_id AS tsid, MAX(date) AS date, updated_date
-                    FROM %s
-                    WHERE data_vendor_id IN (%s)
-                    GROUP BY source_id""" % (table, vendor_id)
-            df = pd.read_sql(query, conn, index_col='tsid')
+            cur = conn.cursor()
+            if table == 'daily_prices':
+                # DISTINCT ON query - Good for small tables
+                # cur.execute("""SELECT DISTINCT ON (source_id)
+                #                 source_id AS tsid, date, updated_date
+                #             FROM daily_prices
+                #             WHERE data_vendor_id IN (%s)
+                #             ORDER BY source_id, date DESC NULLS LAST""",
+                #             (vendor_id,))
+                # LATERAL join query - Good for very large tables
+                #   Query from 2a in http://stackoverflow.com/a/25536748
+                cur.execute("""SELECT sym.source_id, prices.date,
+                                prices.updated_date
+                            FROM symbology AS sym,
+                            LATERAL (
+                                SELECT date, updated_date
+                                FROM daily_prices
+                                WHERE source_id = sym.source_id
+                                AND source = sym.source
+                                AND data_vendor_id IN (%s)
+                                ORDER BY source_id, date DESC NULLS LAST
+                                LIMIT 1) AS prices""",
+                            (vendor_id,))
+            elif table == 'minute_prices':
+                # DISTINCT ON query - Good for small tables
+                # cur.execute("""SELECT DISTINCT ON (source_id)
+                #                 source_id AS tsid, date, updated_date
+                #             FROM minute_prices
+                #             WHERE data_vendor_id IN (%s)
+                #             ORDER BY source_id, date DESC NULLS LAST""",
+                #             (vendor_id,))
+                # LATERAL join query - Good for very large tables
+                #   Query from 2a in http://stackoverflow.com/a/25536748
+                cur.execute("""SELECT sym.source_id, prices.date,
+                                prices.updated_date
+                            FROM symbology AS sym,
+                            LATERAL (
+                                SELECT date, updated_date
+                                FROM minute_prices
+                                WHERE source_id = sym.source_id
+                                AND source = sym.source
+                                AND data_vendor_id IN (%s)
+                                ORDER BY source_id, date DESC NULLS LAST
+                                LIMIT 1) AS prices""",
+                            (vendor_id,))
+            else:
+                raise NotImplementedError('%s is not implemented in '
+                                          'query_last_price' % table)
+
+            rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=['tsid', 'date', 'updated_date'])
+            df.set_index(['tsid'], inplace=True)
+
             if len(df.index) == 0:
                 return df
 
             # Convert the ISO dates to datetime objects
-            df['date'] = pd.to_datetime(df['date'])
-            df['updated_date'] = pd.to_datetime(df['updated_date'])
+            df['date'] = pd.to_datetime(df['date'], utc=True)
+            df['updated_date'] = pd.to_datetime(df['updated_date'], utc=True)
             # df.to_csv('query_last_price.csv')
             return df
     except psycopg2.Error as e:
         print(e)
         raise TypeError('Error when trying to connect to the %s database '
                         'in query_last_price.' % database)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_last_price. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_last_price')
 
 
 def query_load_table(database, user, password, host, port, table):
@@ -700,111 +854,117 @@ def query_q_codes(database, user, password, host, port, download_selection):
     :return: DataFrame with two columns (tsid, q_code)
     """
 
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
     try:
-        conn = psycopg2.connect(database=database, user=user, password=password,
-                                host=host, port=port)
         with conn:
             cur = conn.cursor()
 
             # ToDo: Will need to create queries for additional items
 
             if download_selection == 'wiki':
-                cur.execute("""SELECT tsid.source_id, wiki.source_id
-                               FROM symbology tsid
-                               INNER JOIN symbology wiki
-                               ON tsid.symbol_id = wiki.symbol_id
-                               WHERE tsid.source='tsid'
-                               AND wiki.source='quandl_wiki'
-                               GROUP BY wiki.source_id""")
+                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
+                                tsid.source_id, wiki.source_id
+                            FROM symbology tsid
+                            INNER JOIN symbology wiki
+                            ON tsid.symbol_id = wiki.symbol_id
+                            WHERE tsid.source='tsid'
+                            AND wiki.source='quandl_wiki'
+                            ORDER BY wiki.source_id ASC NULLS LAST""")
             elif download_selection == 'goog':
-                cur.execute("""SELECT tsid.source_id, wiki.source_id
-                               FROM symbology tsid
-                               INNER JOIN symbology wiki
-                               ON tsid.symbol_id = wiki.symbol_id
-                               WHERE tsid.source='tsid'
-                               AND wiki.source='quandl_goog'
-                               GROUP BY wiki.source_id""")
+                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
+                               tsid.source_id, wiki.source_id
+                            FROM symbology tsid
+                            INNER JOIN symbology wiki
+                            ON tsid.symbol_id = wiki.symbol_id
+                            WHERE tsid.source='tsid'
+                            AND wiki.source='quandl_goog'
+                            ORDER BY wiki.source_id ASC NULLS LAST""")
             elif download_selection == 'goog_us_main':
                 # Retrieve tsid tickers that trade only on main US exchanges
                 #   and that have been active within the prior two years.
                 beg_date = (datetime.now() - timedelta(days=730))
-                cur.execute("""SELECT tsid.source_id, wiki.source_id
-                               FROM symbology tsid
-                               INNER JOIN symbology wiki
-                               ON tsid.symbol_id = wiki.symbol_id
-                               WHERE tsid.source='tsid'
-                               AND wiki.source='quandl_goog'
-                               AND wiki.symbol_id IN (
-                                   SELECT CsiNumber
-                                   FROM csidata_stock_factsheet
-                                   WHERE EndDate > %s
-                                   AND (Exchange IN ('AMEX', 'NYSE')
-                                   OR ChildExchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA')))
-                               GROUP BY wiki.source_id""",
+                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
+                                tsid.source_id, wiki.source_id
+                            FROM symbology tsid
+                            INNER JOIN symbology wiki
+                            ON tsid.symbol_id = wiki.symbol_id
+                            WHERE tsid.source='tsid'
+                            AND wiki.source='quandl_goog'
+                            AND wiki.symbol_id IN (
+                                SELECT csi_number
+                                FROM csidata_stock_factsheet
+                                WHERE end_date>=%s
+                                AND (exchange IN ('AMEX', 'NYSE')
+                                OR child_exchange IN ('AMEX',
+                                    'BATS Global Markets',
+                                    'Nasdaq Capital Market',
+                                    'Nasdaq Global Market',
+                                    'Nasdaq Global Select',
+                                    'NYSE', 'NYSE ARCA')))
+                            ORDER BY wiki.source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
             elif download_selection == 'goog_us_main_no_end_date':
                 # Retrieve tsid tickers that trade only on main US exchanges
-                cur.execute("""SELECT tsid.source_id, wiki.source_id
-                               FROM symbology tsid
-                               INNER JOIN symbology wiki
-                               ON tsid.symbol_id = wiki.symbol_id
-                               WHERE tsid.source='tsid'
-                               AND wiki.source='quandl_goog'
-                               AND wiki.symbol_id IN (
-                                   SELECT CsiNumber
-                                   FROM csidata_stock_factsheet
-                                   WHERE (Exchange IN ('AMEX', 'NYSE')
-                                   OR ChildExchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA')))
-                               GROUP BY wiki.source_id""")
+                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
+                                tsid.source_id, wiki.source_id
+                            FROM symbology tsid
+                            INNER JOIN symbology wiki
+                            ON tsid.symbol_id = wiki.symbol_id
+                            WHERE tsid.source='tsid'
+                            AND wiki.source='quandl_goog'
+                            AND wiki.symbol_id IN (
+                                SELECT csi_number
+                                FROM csidata_stock_factsheet
+                                WHERE (exchange IN ('AMEX', 'NYSE')
+                                OR child_exchange IN ('AMEX',
+                                    'BATS Global Markets',
+                                    'Nasdaq Capital Market',
+                                    'Nasdaq Global Market',
+                                    'Nasdaq Global Select',
+                                    'NYSE', 'NYSE ARCA')))
+                            ORDER BY wiki.source_id ASC NULLS LAST""")
             elif download_selection == 'goog_us_canada_london':
                 # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
                 #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
                 #   active within the prior two years.
                 beg_date = (datetime.now() - timedelta(days=730))
-                cur.execute("""SELECT tsid.source_id, wiki.source_id
-                                   FROM symbology tsid
-                                   INNER JOIN symbology wiki
-                                   ON tsid.symbol_id = wiki.symbol_id
-                                   WHERE tsid.source='tsid'
-                                   AND wiki.source='quandl_goog'
-                                   AND wiki.symbol_id IN (
-                                       SELECT CsiNumber
-                                       FROM csidata_stock_factsheet
-                                       WHERE EndDate > %s
-                                       AND (Exchange IN ('AMEX', 'LSE', 'NYSE',
-                                       'TSX', 'VSE')
-                                       OR ChildExchange IN ('AMEX',
-                                           'BATS Global Markets',
-                                           'Nasdaq Capital Market',
-                                           'Nasdaq Global Market',
-                                           'Nasdaq Global Select',
-                                           'NYSE', 'NYSE ARCA',
-                                           'OTC Markets Pink Sheets')))
-                                   GROUP BY wiki.source_id""",
+                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
+                                tsid.source_id, wiki.source_id
+                            FROM symbology tsid
+                            INNER JOIN symbology wiki
+                            ON tsid.symbol_id = wiki.symbol_id
+                            WHERE tsid.source='tsid'
+                            AND wiki.source='quandl_goog'
+                            AND wiki.symbol_id IN (
+                                SELECT csi_number
+                                FROM csidata_stock_factsheet
+                                WHERE end_date>=%s
+                                AND (exchange IN ('AMEX', 'LSE', 'NYSE',
+                                    'TSX', 'VSE')
+                                OR child_exchange IN ('AMEX',
+                                    'BATS Global Markets',
+                                    'Nasdaq Capital Market',
+                                    'Nasdaq Global Market',
+                                    'Nasdaq Global Select',
+                                    'NYSE', 'NYSE ARCA',
+                                    'OTC Markets Pink Sheets')))
+                            ORDER BY wiki.source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
             elif download_selection == 'goog_etf':
-                cur.execute("""SELECT tsid.source_id, wiki.source_id
-                               FROM symbology tsid
-                               INNER JOIN symbology wiki
-                               ON tsid.symbol_id = wiki.symbol_id
-                               WHERE tsid.source='tsid'
-                               AND wiki.source='quandl_goog'
-                               AND wiki.symbol_id IN (
-                                   SELECT CsiNumber
-                                   FROM csidata_stock_factsheet
-                                   WHERE Type='Exchange-Traded Fund')
-                               GROUP BY wiki.source_id
-                               """)
+                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
+                                tsid.source_id, wiki.source_id
+                            FROM symbology tsid
+                            INNER JOIN symbology wiki
+                            ON tsid.symbol_id = wiki.symbol_id
+                            WHERE tsid.source='tsid'
+                            AND wiki.source='quandl_goog'
+                            AND wiki.symbol_id IN (
+                                SELECT csi_number
+                                FROM csidata_stock_factsheet
+                                WHERE Type='Exchange-Traded Fund')
+                            ORDER BY wiki.source_id ASC NULLS LAST""")
             else:
                 raise SystemError('Improper download_selection was provided '
                                   'in query_codes. If this is a new query, '
@@ -828,6 +988,13 @@ def query_q_codes(database, user, password, host, port, download_selection):
         print(e)
         raise SystemError('Error when trying to connect to the %s database '
                           'in query_q_codes' % database)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_q_codes. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_q_codes')
 
 
 def query_source_weights(database, user, password, host, port):
@@ -841,9 +1008,10 @@ def query_source_weights(database, user, password, host, port):
     :return: DataFrame of all data sources
     """
 
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
     try:
-        conn = psycopg2.connect(database=database, user=user, password=password,
-                                host=host, port=port)
         with conn:
             cur = conn.cursor()
             query = ("""SELECT data_vendor_id, consensus_weight
@@ -862,6 +1030,14 @@ def query_source_weights(database, user, password, host, port):
         print(e)
         raise TypeError('Error when trying to connect to the %s database '
                         'in query_source_weights' % database)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_source_weights. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'query_source_weights')
 
 
 def retrieve_data_vendor_id(database, user, password, host, port, name):
@@ -881,9 +1057,10 @@ def retrieve_data_vendor_id(database, user, password, host, port, name):
         return 'Unknown'.
     """
 
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
     try:
-        conn = psycopg2.connect(database=database, user=user, password=password,
-                                host=host, port=port)
         with conn:
             cur = conn.cursor()
             query = """SELECT data_vendor_id
@@ -908,6 +1085,14 @@ def retrieve_data_vendor_id(database, user, password, host, port, name):
         print('Error when trying to retrieve data from the %s database in '
               'retrieve_data_vendor_id' % database)
         print(e)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'retrieve_data_vendor_id. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'retrieve_data_vendor_id')
 
 
 def update_load_table(database, user, password, host, port, values_df, table,
