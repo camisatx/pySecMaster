@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from functools import wraps
+import numpy as np
 import pandas as pd
+from scipy import stats
 import time
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
@@ -67,6 +69,17 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
             return ret
         return rate_limit_func
     return rate_decorator
+
+
+def csv_load_converter(input):
+
+    try:
+        return int(input)
+    except ValueError:
+        try:
+            return float(input)
+        except ValueError:
+            return -1
 
 
 class QuandlDownload(object):
@@ -181,7 +194,12 @@ class QuandlDownload(object):
         if file:
             # Create a DataFrame from the file object
             raw_df = pd.read_csv(file, index_col=False, names=column_names,
-                                 encoding='utf-8')
+                                 encoding='utf-8',
+                                 converters={'open': csv_load_converter,
+                                             'high': csv_load_converter,
+                                             'low': csv_load_converter,
+                                             'close': csv_load_converter,
+                                             'volume': csv_load_converter})
 
             # Remove all adjusted value columns
             raw_df.drop(columns_to_remove, axis=1, inplace=True)
@@ -248,15 +266,41 @@ class QuandlDownload(object):
 
         raw_df = raw_df[1:]     # Removes the column headers from data download
         raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
-        # raw_df.insert(0, 'q_code', q_code)
         raw_df.insert(len(raw_df.columns), 'updated_date',
                       datetime.now().isoformat())
 
-        # Fill all NA values with -1 to indicate no data
-        raw_df['volume'].fillna(-1.0, inplace=True)
-        # Is not able to handle blank, text or NA values
-        raw_df['volume'] = (pd.to_numeric(raw_df['volume'], errors='coerce').
-                            astype(int))
+        # Convert all DataFrame values to a number, ignoring NaN values
+        raw_df = pd.to_numeric(raw_df, errors='coerce')
+
+        # Fill all NaN values with -1 to indicate no data
+        raw_df.fillna(-1.0, inplace=True)
+
+        raw_df['open'] = raw_df[pd.DataFrame.abs(raw_df['open']) > 1000000] = -1
+        raw_df['high'] = raw_df[pd.DataFrame.abs(raw_df['high']) > 1000000] = -1
+        raw_df['low'] = raw_df[pd.DataFrame.abs(raw_df['low']) > 1000000] = -1
+        raw_df['close'] = raw_df[pd.DataFrame.abs(raw_df['close']) >
+                                 1000000] = -1
+
+        # Remove all rows that have a value larger than 3 deviations from mean
+        # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+        #           all(axis=1)])
+        # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+        #                 (3*raw_df.std())]
+
+        # Round all data values to their appropriate levels
+        if q_code[:4] == 'WIKI':
+            raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
+                          'volume': 0, 'ex_dividend': 3, 'split_ratio': 4})
+        elif q_code[:4] == 'GOOG':
+            raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
+                          'volume': 0})
+        elif q_code[:5] == 'YAHOO':
+            raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
+                          'volume': 0})
+        else:
+            print('The data source for %s is not implemented in the price '
+                  'extractor. Please define the columns in '
+                  'QuandlDownload.download_quandl_data.' % q_code)
 
         return raw_df
 
@@ -640,6 +684,27 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     raw_df.insert(len(raw_df.columns), 'updated_date',
                   datetime.now().isoformat())
 
+    # Convert all DataFrame values to a number, ignoring NaN values
+    raw_df = pd.to_numeric(raw_df, errors='coerce')
+
+    # Fill all NaN values with -1 to indicate no data
+    raw_df.fillna(-1.0, inplace=True)
+
+    raw_df['open'] = raw_df[pd.DataFrame.abs(raw_df['open']) > 1000000] = -1
+    raw_df['high'] = raw_df[pd.DataFrame.abs(raw_df['high']) > 1000000] = -1
+    raw_df['low'] = raw_df[pd.DataFrame.abs(raw_df['low']) > 1000000] = -1
+    raw_df['close'] = raw_df[pd.DataFrame.abs(raw_df['close']) >
+                             1000000] = -1
+
+    # Remove all rows that have a value larger than 3 deviations from mean
+    # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+    #           all(axis=1)])
+    # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+    #                 (3*raw_df.std())]
+
+    # Round all data values to their appropriate levels
+    raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4, 'volume': 0})
+
     return raw_df
 
 
@@ -785,7 +850,12 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     try:
         raw_df = pd.read_csv(url_obj, index_col=False, names=column_names,
-                             encoding='utf-8')
+                             encoding='utf-8',
+                             converters={'open': csv_load_converter,
+                                         'high': csv_load_converter,
+                                         'low': csv_load_converter,
+                                         'close': csv_load_converter,
+                                         'volume': csv_load_converter})
     except IndexError:
         raw_df = pd.DataFrame()
     except OSError:
@@ -850,6 +920,27 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     # Remove the adjusted close column since this is calculated manually
     raw_df.drop('adj_close', axis=1, inplace=True)
+
+    # Convert all DataFrame values to a number, ignoring NaN values
+    raw_df = pd.to_numeric(raw_df, errors='coerce')
+
+    # Fill all NaN values with -1 to indicate no data
+    raw_df.fillna(-1.0, inplace=True)
+
+    raw_df['open'] = raw_df[pd.DataFrame.abs(raw_df['open']) > 1000000] = -1
+    raw_df['high'] = raw_df[pd.DataFrame.abs(raw_df['high']) > 1000000] = -1
+    raw_df['low'] = raw_df[pd.DataFrame.abs(raw_df['low']) > 1000000] = -1
+    raw_df['close'] = raw_df[pd.DataFrame.abs(raw_df['close']) >
+                             1000000] = -1
+
+    # Remove all rows that have a value larger than 3 deviations from mean
+    # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+    #           all(axis=1)])
+    # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+    #                 (3*raw_df.std())]
+
+    # Round all data values to their appropriate levels
+    raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4, 'volume': 0})
 
     return raw_df
 

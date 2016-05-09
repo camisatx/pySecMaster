@@ -195,7 +195,7 @@ def query_all_active_tsids(database, user, password, host, port, table,
                 #                 source_id as tsid
                 #          FROM %s
                 #          WHERE date>='%s'
-                #          ORDER BY source_id DESC NULLS LAST""" %
+                #          ORDER BY source_id ASC NULLS LAST""" %
                 #          (table, beg_date))
                 query = ("""SELECT sym.source_id AS tsid
                          FROM symbology AS sym,
@@ -204,7 +204,7 @@ def query_all_active_tsids(database, user, password, host, port, table,
                              FROM %s
                              WHERE source_id = sym.source_id
                              AND date>='%s'
-                             ORDER BY source_id DESC NULLS LAST
+                             ORDER BY source_id ASC NULLS LAST
                              LIMIT 1) AS prices""" %
                          (table, beg_date))
             else:
@@ -217,16 +217,16 @@ def query_all_active_tsids(database, user, password, host, port, table,
                 # query = ("""SELECT DISTINCT ON (source_id)
                 #              source_id as tsid
                 #          FROM %s
-                #          ORDER BY source_id DESC NULLS LAST""" % (table,))
+                #          ORDER BY source_id ASC NULLS LAST""" % (table,))
 
                 # Option 3:
                 query = ("""SELECT sym.source_id AS tsid
-                         FROM symbology AS sym
+                         FROM symbology AS sym,
                          LATERAL (
                              SELECT source_id
                              FROM %s
                              WHERE source_id = sym.source_id
-                             ORDER BY source_id DESC NULLS LAST
+                             ORDER BY source_id ASC NULLS LAST
                              LIMIT 1) AS prices""" %
                          (table,))
 
@@ -347,18 +347,22 @@ def query_codes(database, user, password, host, port, download_selection):
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
-                                   SELECT csi_number
-                                   FROM csidata_stock_factsheet
-                                   WHERE end_date>=%s
-                                   AND (exchange IN ('AMEX', 'NYSE')
-                                   OR child_exchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA')))
+                                   SELECT symbol_id
+                                   FROM symbology
+                                   WHERE source='csi_data'
+                                   AND source_id IN (
+                                       SELECT csi_number
+                                       FROM csidata_stock_factsheet
+                                       WHERE end_date>=%s
+                                       AND (exchange IN ('AMEX', 'NYSE')
+                                       OR child_exchange IN ('AMEX',
+                                           'BATS Global Markets',
+                                           'Nasdaq Capital Market',
+                                           'Nasdaq Global Market',
+                                           'Nasdaq Global Select',
+                                           'NYSE', 'NYSE ARCA'))))
                                AND type='stock'
-                               ORDER BY source_id DESC NULLS LAST""",
+                               ORDER BY source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
             elif download_selection == 'us_main_no_end_date':
                 # Retrieve tsid tickers that trade only on main US exchanges
@@ -366,17 +370,21 @@ def query_codes(database, user, password, host, port, download_selection):
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
-                                   SELECT csi_number
-                                   FROM csidata_stock_factsheet
-                                   WHERE (exchange IN ('AMEX', 'NYSE')
-                                   OR child_exchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA')))
+                                   SELECT symbol_id
+                                   FROM symbology
+                                   WHERE source='csi_data'
+                                   AND source_id IN (
+                                       SELECT csi_number
+                                       FROM csidata_stock_factsheet
+                                       WHERE (exchange IN ('AMEX', 'NYSE')
+                                       OR child_exchange IN ('AMEX',
+                                           'BATS Global Markets',
+                                           'Nasdaq Capital Market',
+                                           'Nasdaq Global Market',
+                                           'Nasdaq Global Select',
+                                           'NYSE', 'NYSE ARCA'))))
                                AND type='stock'
-                               ORDER BY source_id DESC NULLS LAST""")
+                               ORDER BY source_id ASC NULLS LAST""")
             elif download_selection == 'us_canada_london':
                 # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
                 #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
@@ -386,20 +394,24 @@ def query_codes(database, user, password, host, port, download_selection):
                                FROM symbology
                                WHERE source='tsid'
                                AND symbol_id IN (
-                                   SELECT csi_number
-                                   FROM csidata_stock_factsheet
-                                   WHERE end_date>=%s
-                                   AND (exchange IN ('AMEX', 'LSE', 'NYSE',
-                                   'TSX', 'VSE')
-                                   OR child_exchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA',
-                                       'OTC Markets Pink Sheets')))
+                                   SELECT symbol_id
+                                   FROM symbology
+                                   WHERE source='csi_data'
+                                   AND source_id IN (
+                                       SELECT csi_number
+                                       FROM csidata_stock_factsheet
+                                       WHERE end_date>=%s
+                                       AND (exchange IN ('AMEX', 'LSE', 'NYSE',
+                                       'TSX', 'VSE')
+                                       OR child_exchange IN ('AMEX',
+                                           'BATS Global Markets',
+                                           'Nasdaq Capital Market',
+                                           'Nasdaq Global Market',
+                                           'Nasdaq Global Select',
+                                           'NYSE', 'NYSE ARCA',
+                                           'OTC Markets Pink Sheets'))))
                                AND type='stock'
-                               ORDER BY source_id DESC NULLS LAST""",
+                               ORDER BY source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
             else:
                 raise TypeError('Improper download_selection was '
@@ -864,107 +876,123 @@ def query_q_codes(database, user, password, host, port, download_selection):
             # ToDo: Will need to create queries for additional items
 
             if download_selection == 'wiki':
-                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
-                                tsid.source_id, wiki.source_id
+                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
+                                tsid.source_id, qcode.source_id
                             FROM symbology tsid
-                            INNER JOIN symbology wiki
-                            ON tsid.symbol_id = wiki.symbol_id
+                            INNER JOIN symbology qcode
+                            ON tsid.symbol_id = qcode.symbol_id
                             WHERE tsid.source='tsid'
-                            AND wiki.source='quandl_wiki'
-                            ORDER BY wiki.source_id ASC NULLS LAST""")
+                            AND qcode.source='quandl_wiki'
+                            ORDER BY qcode.source_id ASC NULLS LAST""")
             elif download_selection == 'goog':
-                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
-                               tsid.source_id, wiki.source_id
+                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
+                               tsid.source_id, qcode.source_id
                             FROM symbology tsid
-                            INNER JOIN symbology wiki
-                            ON tsid.symbol_id = wiki.symbol_id
+                            INNER JOIN symbology qcode
+                            ON tsid.symbol_id = qcode.symbol_id
                             WHERE tsid.source='tsid'
-                            AND wiki.source='quandl_goog'
-                            ORDER BY wiki.source_id ASC NULLS LAST""")
+                            AND qcode.source='quandl_goog'
+                            ORDER BY qcode.source_id ASC NULLS LAST""")
             elif download_selection == 'goog_us_main':
                 # Retrieve tsid tickers that trade only on main US exchanges
                 #   and that have been active within the prior two years.
                 beg_date = (datetime.now() - timedelta(days=730))
-                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
-                                tsid.source_id, wiki.source_id
+                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
+                                tsid.source_id, qcode.source_id
                             FROM symbology tsid
-                            INNER JOIN symbology wiki
-                            ON tsid.symbol_id = wiki.symbol_id
+                            INNER JOIN symbology qcode
+                            ON tsid.symbol_id = qcode.symbol_id
                             WHERE tsid.source='tsid'
-                            AND wiki.source='quandl_goog'
-                            AND wiki.symbol_id IN (
-                                SELECT csi_number
-                                FROM csidata_stock_factsheet
-                                WHERE end_date>=%s
-                                AND (exchange IN ('AMEX', 'NYSE')
-                                OR child_exchange IN ('AMEX',
-                                    'BATS Global Markets',
-                                    'Nasdaq Capital Market',
-                                    'Nasdaq Global Market',
-                                    'Nasdaq Global Select',
-                                    'NYSE', 'NYSE ARCA')))
-                            ORDER BY wiki.source_id ASC NULLS LAST""",
+                            AND qcode.source='quandl_goog'
+                            AND qcode.symbol_id IN (
+                                SELECT symbol_id
+                                FROM symbology
+                                WHERE source='csi_data'
+                                AND source_id IN (
+                                    SELECT csi_number
+                                    FROM csidata_stock_factsheet
+                                    WHERE end_date>=%s
+                                    AND (exchange IN ('AMEX', 'NYSE')
+                                    OR child_exchange IN ('AMEX',
+                                        'BATS Global Markets',
+                                        'Nasdaq Capital Market',
+                                        'Nasdaq Global Market',
+                                        'Nasdaq Global Select',
+                                        'NYSE', 'NYSE ARCA'))))
+                            ORDER BY qcode.source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
             elif download_selection == 'goog_us_main_no_end_date':
                 # Retrieve tsid tickers that trade only on main US exchanges
-                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
-                                tsid.source_id, wiki.source_id
+                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
+                                tsid.source_id, qcode.source_id
                             FROM symbology tsid
-                            INNER JOIN symbology wiki
-                            ON tsid.symbol_id = wiki.symbol_id
+                            INNER JOIN symbology qcode
+                            ON tsid.symbol_id = qcode.symbol_id
                             WHERE tsid.source='tsid'
-                            AND wiki.source='quandl_goog'
-                            AND wiki.symbol_id IN (
-                                SELECT csi_number
-                                FROM csidata_stock_factsheet
-                                WHERE (exchange IN ('AMEX', 'NYSE')
-                                OR child_exchange IN ('AMEX',
-                                    'BATS Global Markets',
-                                    'Nasdaq Capital Market',
-                                    'Nasdaq Global Market',
-                                    'Nasdaq Global Select',
-                                    'NYSE', 'NYSE ARCA')))
-                            ORDER BY wiki.source_id ASC NULLS LAST""")
+                            AND qcode.source='quandl_goog'
+                            AND qcode.symbol_id IN (
+                                SELECT symbol_id
+                                FROM symbology
+                                WHERE source='csi_data'
+                                AND source_id IN (
+                                    SELECT csi_number
+                                    FROM csidata_stock_factsheet
+                                    WHERE (exchange IN ('AMEX', 'NYSE')
+                                    OR child_exchange IN ('AMEX',
+                                        'BATS Global Markets',
+                                        'Nasdaq Capital Market',
+                                        'Nasdaq Global Market',
+                                        'Nasdaq Global Select',
+                                        'NYSE', 'NYSE ARCA'))))
+                            ORDER BY qcode.source_id ASC NULLS LAST""")
             elif download_selection == 'goog_us_canada_london':
                 # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
                 #   NASDAQ, TSX, VSE and PINK exchanges, and that have been
                 #   active within the prior two years.
                 beg_date = (datetime.now() - timedelta(days=730))
-                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
-                                tsid.source_id, wiki.source_id
+                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
+                                tsid.source_id, qcode.source_id
                             FROM symbology tsid
-                            INNER JOIN symbology wiki
-                            ON tsid.symbol_id = wiki.symbol_id
+                            INNER JOIN symbology qcode
+                            ON tsid.symbol_id = qcode.symbol_id
                             WHERE tsid.source='tsid'
-                            AND wiki.source='quandl_goog'
-                            AND wiki.symbol_id IN (
-                                SELECT csi_number
-                                FROM csidata_stock_factsheet
-                                WHERE end_date>=%s
-                                AND (exchange IN ('AMEX', 'LSE', 'NYSE',
-                                    'TSX', 'VSE')
-                                OR child_exchange IN ('AMEX',
-                                    'BATS Global Markets',
-                                    'Nasdaq Capital Market',
-                                    'Nasdaq Global Market',
-                                    'Nasdaq Global Select',
-                                    'NYSE', 'NYSE ARCA',
-                                    'OTC Markets Pink Sheets')))
-                            ORDER BY wiki.source_id ASC NULLS LAST""",
+                            AND qcode.source='quandl_goog'
+                            AND qcode.symbol_id IN (
+                                SELECT symbol_id
+                                FROM symbology
+                                WHERE source='csi_data'
+                                AND source_id IN (
+                                    SELECT csi_number
+                                    FROM csidata_stock_factsheet
+                                    WHERE end_date>=%s
+                                    AND (exchange IN ('AMEX', 'LSE', 'NYSE',
+                                        'TSX', 'VSE')
+                                    OR child_exchange IN ('AMEX',
+                                        'BATS Global Markets',
+                                        'Nasdaq Capital Market',
+                                        'Nasdaq Global Market',
+                                        'Nasdaq Global Select',
+                                        'NYSE', 'NYSE ARCA',
+                                        'OTC Markets Pink Sheets'))))
+                            ORDER BY qcode.source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
             elif download_selection == 'goog_etf':
-                cur.execute("""SELECT DISTINCT ON (wiki.source_id)
-                                tsid.source_id, wiki.source_id
+                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
+                                tsid.source_id, qcode.source_id
                             FROM symbology tsid
-                            INNER JOIN symbology wiki
-                            ON tsid.symbol_id = wiki.symbol_id
+                            INNER JOIN symbology qcode
+                            ON tsid.symbol_id = qcode.symbol_id
                             WHERE tsid.source='tsid'
-                            AND wiki.source='quandl_goog'
-                            AND wiki.symbol_id IN (
-                                SELECT csi_number
-                                FROM csidata_stock_factsheet
-                                WHERE Type='Exchange-Traded Fund')
-                            ORDER BY wiki.source_id ASC NULLS LAST""")
+                            AND qcode.source='quandl_goog'
+                            AND qcode.symbol_id IN (
+                                SELECT symbol_id
+                                FROM symbology
+                                WHERE source='csi_data'
+                                AND source_id IN (
+                                    SELECT csi_number
+                                    FROM csidata_stock_factsheet
+                                    WHERE Type='Exchange-Traded Fund'))
+                            ORDER BY qcode.source_id ASC NULLS LAST""")
             else:
                 raise SystemError('Improper download_selection was provided '
                                   'in query_codes. If this is a new query, '

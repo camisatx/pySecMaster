@@ -843,10 +843,12 @@ class GoogleFinanceDataExtraction(object):
         try:
             with conn:
                 cur = conn.cursor()
-                cur.execute("""SELECT symbol, goog_symbol, tsid_symbol
+                cur.execute("""SELECT DISTINCT ON (tsid_symbol)
+                                symbol, goog_symbol, tsid_symbol
                             FROM exchange
-                            WHERE goog_symbol NOT NULL
-                            GROUP BY tsid_symbol""")
+                            WHERE goog_symbol IS NOT NULL
+                            AND goog_symbol != 'NaN'
+                            ORDER BY tsid_symbol ASC NULLS LAST""")
                 rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=['symbol', 'goog_symbol',
                                                  'tsid_symbol'])
@@ -1144,10 +1146,12 @@ class YahooFinanceDataExtraction(object):
         try:
             with conn:
                 cur = conn.cursor()
-                cur.execute("""SELECT symbol, yahoo_symbol, tsid_symbol
-                            FROM exchange
-                            WHERE yahoo_symbol NOT NULL
-                            GROUP BY tsid_symbol""")
+                cur.execute("""SELECT DISTINCT ON (tsid_symbol)
+                                symbol, yahoo_symbol, tsid_symbol
+                            FROM exchanges
+                            WHERE yahoo_symbol IS NOT NULL
+                            AND yahoo_symbol != 'NaN'
+                            ORDER BY tsid_symbol ASC NULLS LAST""")
                 rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=['symbol', 'yahoo_symbol',
                                                  'tsid_symbol'])
