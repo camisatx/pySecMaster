@@ -204,9 +204,6 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                 updated_date        TIMESTAMP WITH TIME ZONE,
                 FOREIGN KEY(data_vendor)
                     REFERENCES data_vendor(name)
-                    ON UPDATE CASCADE,
-                FOREIGN KEY(symbology_source, q_code)
-                    REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)''')
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_qc_data
                             ON quandl_codes(data)""")

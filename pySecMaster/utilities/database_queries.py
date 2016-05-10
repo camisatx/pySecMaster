@@ -271,20 +271,42 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
                                 host=host, port=port)
         with conn:
             cur = conn.cursor()
-            query = ("""SELECT data_vendor_id, date, open, high, low, close,
-                        volume
-                     FROM %s
-                     WHERE source_id='%s'""" % (table, tsid))
-            cur.execute(query)
-            data = cur.fetchall()
-            if data:
+            if table == 'daily_prices':
+                cur.execute("""SELECT data_vendor_id, date, open, high, low,
+                                close, volume, ex_dividend, split_ratio
+                            FROM daily_prices
+                            WHERE source_id=%s""", (tsid,))
+                columns = ['data_vendor_id', 'date', 'open', 'high', 'low',
+                           'close', 'volume', 'ex_dividend', 'split_ratio']
+            elif table == 'minute_prices':
+                cur.execute("""SELECT data_vendor_id, date, open, high, low,
+                                close, volume
+                            FROM minute_prices
+                            WHERE source_id=%s""", (tsid,))
                 columns = ['data_vendor_id', 'date', 'open', 'high', 'low',
                            'close', 'volume']
+            else:
+                raise NotImplementedError('Table %s is not implemented '
+                                          'within query_all_tsid_prices in'
+                                          'database_queries.py' % table)
+
+            data = cur.fetchall()
+            if data:
                 df = pd.DataFrame(data, columns=columns)
 
                 # Convert the ISO date to a datetime object
-                df['date'] = pd.to_datetime(df['date'], utc=True)
-                # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
+                if table == 'daily_prices':
+                    # df['date'] = pd.to_datetime(df['date'], utc=True)
+                    print(df['date'])
+                    df['date'] = pd.to_datetime(df['date'], utc=True,
+                                                format='%Y-%m-%d')
+                    print(df['date'])
+                elif table == 'minute_prices':
+                    df['date'] = pd.to_datetime(df['date'], utc=True)
+                else:
+                    raise NotImplementedError('Table %s is not implemented '
+                                              'within query_all_tsid_prices in'
+                                              'database_queries.py' % table)
 
                 # Drop duplicate rows based on only the tsid and date columns
                 df.drop_duplicates(subset=['data_vendor_id', 'date'],
@@ -496,9 +518,10 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                        'Nasdaq Global Select',
                                        'NYSE', 'NYSE ARCA',
                                        'OTC Markets Pink Sheets'))
-                                   AND symbol IS NOT NULL
-                                   ORDER BY is_active DESC NULLS LAST)
-                                   AS csi""")
+                                   AND symbol IS NOT NULL)
+                                   AS csi
+                               ORDER BY symbol, exchange, is_active DESC
+                                   NULLS LAST""")
                 rows = cur.fetchall()
                 if rows:
                     csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
@@ -531,9 +554,10 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                        'Nasdaq Global Market',
                                        'Nasdaq Global Select',
                                        'NYSE', 'NYSE ARCA'))
-                                   AND symbol IS NOT NULL
-                                   ORDER BY is_active DESC NULLS LAST)
-                                   AS csi""",
+                                   AND symbol IS NOT NULL)
+                                   AS csi
+                               ORDER BY symbol, exchange, is_active DESC
+                                   NULLS LAST""",
                             (beg_date.isoformat(),))
                 rows = cur.fetchall()
                 if rows:
@@ -610,6 +634,61 @@ def query_csi_stock_start_date(database, user, password, host, port, tsid):
         print(e)
         raise SystemError('Error: Unknown issue occurred in '
                           'query_csi_stock_start_date')
+
+
+def query_data_vendor_id(database, user, password, host, port, name):
+    """ Takes the name provided and tries to find data vendor(s) from the
+    data_vendor table in the database. If nothing is returned in the
+    query, then 'Unknown' is used.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param name: String that has the database name, or a special SQL string
+        to retrieve extra ids (i.e. 'Quandl_%' to retrieve all Quandl ids)
+    :return: If one vendor id is queried, return a int of the data vendor's id.
+        If multiple ids are queried, return a list of all the ids. Otherwise,
+        return 'Unknown'.
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
+    try:
+        with conn:
+            cur = conn.cursor()
+            query = """SELECT data_vendor_id
+                    FROM data_vendor
+                    WHERE name LIKE '%s'""" % name
+            cur.execute(query)
+            data = cur.fetchall()
+            if data:  # A vendor was found
+                if len(data) == 1:
+                    # Only one vendor id returned, so only return that value
+                    data = data[0][0]
+                else:
+                    # Multiple vendor ids were returned; return a list of them
+                    df = pd.DataFrame(data, columns=['data_vendor_id'])
+                    data = df['data_vendor_id'].values.tolist()
+            else:
+                data = 'Unknown'
+                print('Not able to determine the data_vendor_id for %s'
+                      % name)
+            return data
+    except psycopg2.Error as e:
+        print('Error when trying to retrieve data from the %s database in '
+              'retrieve_data_vendor_id' % database)
+        print(e)
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'retrieve_data_vendor_id. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'retrieve_data_vendor_id')
 
 
 def query_existing_sid(database, user, password, host, port, source):
@@ -1066,61 +1145,6 @@ def query_source_weights(database, user, password, host, port):
         print(e)
         raise SystemError('Error: Unknown issue occurred in '
                           'query_source_weights')
-
-
-def retrieve_data_vendor_id(database, user, password, host, port, name):
-    """ Takes the name provided and tries to find data vendor(s) from the
-    data_vendor table in the database. If nothing is returned in the
-    query, then 'Unknown' is used.
-
-    :param database: String of the database name
-    :param user: String of the username used to login to the database
-    :param password: String of the password used to login to the database
-    :param host: String of the database address (localhost, url, ip, etc.)
-    :param port: Integer of the database port number (5432)
-    :param name: String that has the database name, or a special SQL string
-        to retrieve extra ids (i.e. 'Quandl_%' to retrieve all Quandl ids)
-    :return: If one vendor id is queried, return a int of the data vendor's id.
-        If multiple ids are queried, return a list of all the ids. Otherwise,
-        return 'Unknown'.
-    """
-
-    conn = psycopg2.connect(database=database, user=user, password=password,
-                            host=host, port=port)
-
-    try:
-        with conn:
-            cur = conn.cursor()
-            query = """SELECT data_vendor_id
-                    FROM data_vendor
-                    WHERE name LIKE '%s'""" % name
-            cur.execute(query)
-            data = cur.fetchall()
-            if data:  # A vendor was found
-                if len(data) == 1:
-                    # Only one vendor id returned, so only return that value
-                    data = data[0][0]
-                else:
-                    # Multiple vendor ids were returned; return a list of them
-                    df = pd.DataFrame(data, columns=['data_vendor_id'])
-                    data = df['data_vendor_id'].values.tolist()
-            else:
-                data = 'Unknown'
-                print('Not able to determine the data_vendor_id for %s'
-                      % name)
-            return data
-    except psycopg2.Error as e:
-        print('Error when trying to retrieve data from the %s database in '
-              'retrieve_data_vendor_id' % database)
-        print(e)
-    except conn.OperationalError:
-        raise SystemError('Unable to connect to the %s database in '
-                          'retrieve_data_vendor_id. Make sure the database '
-                          'address/name are correct.' % database)
-    except Exception as e:
-        print(e)
-        raise SystemError('Error: Unknown issue occurred in '
-                          'retrieve_data_vendor_id')
 
 
 def update_load_table(database, user, password, host, port, values_df, table,

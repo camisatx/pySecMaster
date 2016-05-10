@@ -275,11 +275,17 @@ class QuandlDownload(object):
         # Fill all NaN values with -1 to indicate no data
         raw_df.fillna(-1.0, inplace=True)
 
-        raw_df['open'] = raw_df[pd.DataFrame.abs(raw_df['open']) > 1000000] = -1
-        raw_df['high'] = raw_df[pd.DataFrame.abs(raw_df['high']) > 1000000] = -1
-        raw_df['low'] = raw_df[pd.DataFrame.abs(raw_df['low']) > 1000000] = -1
-        raw_df['close'] = raw_df[pd.DataFrame.abs(raw_df['close']) >
-                                 1000000] = -1
+        # Check each price column for outliers
+        columns_to_check = ['open', 'high', 'low', 'close']
+        for column in columns_to_check:
+            # Check column for values over 1M, creating a DF for all outliers
+            outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
+
+            if len(outliers_df):
+                # If there is an outlier, replace the value for the row with -1
+                for index, row in outliers_df.iterrows():
+                    # The index from the outlier_df is the index from the raw_df
+                    raw_df.set_value(index, column, -1)
 
         # Remove all rows that have a value larger than 3 deviations from mean
         # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
@@ -614,7 +620,7 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                         date_obj = (data[-1][0] +
                                     timedelta(seconds=unix_sec_diff*interval))
                 data.append(tuple((date_obj, float(close), float(high),
-                                   float(low), float(open_), float(volume))))
+                                   float(low), float(open_), int(volume))))
 
         column_names = ['date', 'close', 'high', 'low', 'open', 'volume']
         processed_df = pd.DataFrame(data, columns=column_names)
@@ -690,11 +696,18 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     # Fill all NaN values with -1 to indicate no data
     raw_df.fillna(-1.0, inplace=True)
 
-    raw_df['open'] = raw_df[pd.DataFrame.abs(raw_df['open']) > 1000000] = -1
-    raw_df['high'] = raw_df[pd.DataFrame.abs(raw_df['high']) > 1000000] = -1
-    raw_df['low'] = raw_df[pd.DataFrame.abs(raw_df['low']) > 1000000] = -1
-    raw_df['close'] = raw_df[pd.DataFrame.abs(raw_df['close']) >
-                             1000000] = -1
+    # Check each price column for outliers
+    columns_to_check = ['open', 'high', 'low', 'close']
+    for column in columns_to_check:
+        # Check column for values over 1M, creating a DF for all outliers
+        outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
+
+        if len(outliers_df):
+            print(outliers_df)
+            # If there is an outlier, replace the value for the row with -1
+            for index, row in outliers_df.iterrows():
+                # The index from the outlier_df is the index from the raw_df
+                raw_df.set_value(index, column, -1)
 
     # Remove all rows that have a value larger than 3 deviations from mean
     # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
@@ -927,11 +940,17 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     # Fill all NaN values with -1 to indicate no data
     raw_df.fillna(-1.0, inplace=True)
 
-    raw_df['open'] = raw_df[pd.DataFrame.abs(raw_df['open']) > 1000000] = -1
-    raw_df['high'] = raw_df[pd.DataFrame.abs(raw_df['high']) > 1000000] = -1
-    raw_df['low'] = raw_df[pd.DataFrame.abs(raw_df['low']) > 1000000] = -1
-    raw_df['close'] = raw_df[pd.DataFrame.abs(raw_df['close']) >
-                             1000000] = -1
+    # Check each price column for outliers
+    columns_to_check = ['open', 'high', 'low', 'close']
+    for column in columns_to_check:
+        # Check column for values over 1M, creating a DF for all outliers
+        outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
+
+        if len(outliers_df):
+            # If there is an outlier, replace the value for the row with -1
+            for index, row in outliers_df.iterrows():
+                # The index from the outlier_df is the index from the raw_df
+                raw_df.set_value(index, column, -1)
 
     # Remove all rows that have a value larger than 3 deviations from mean
     # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).

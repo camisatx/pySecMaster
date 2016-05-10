@@ -285,34 +285,41 @@ def post_download_maintenance(download_list, period=None, verbose=False):
     :param verbose: Boolean of whether debugging prints should occur.
     """
 
-    table = None
+    intervals = {}
     for source in download_list:
         if source['interval'] == 'daily':
-            table = 'daily_prices'
+            intervals['daily_prices'] = True
         elif source['interval'] == 'minute':
-            table = 'minute_prices'
+            intervals['minute_prices'] = True
         else:
             raise SystemError('No interval was provided for %s in '
                               'data_download in pySecMaster.py' %
                               source['interval'])
 
-    tsids_df = query_all_active_tsids(
-        database=userdir['postgresql']['pysecmaster_db'],
-        user=userdir['postgresql']['pysecmaster_user'],
-        password=userdir['postgresql']['pysecmaster_password'],
-        host=userdir['postgresql']['pysecmaster_host'],
-        port=userdir['postgresql']['pysecmaster_port'],
-        table=table,
-        period=period)
-    tsid_list = tsids_df['tsid'].values
+    for key, value in intervals.items():
+        # The key is the table name to process
+        table = key
 
-    CrossValidate(
-        database=userdir['postgresql']['pysecmaster_db'],
-        user=userdir['postgresql']['pysecmaster_user'],
-        password=userdir['postgresql']['pysecmaster_password'],
-        host=userdir['postgresql']['pysecmaster_host'],
-        port=userdir['postgresql']['pysecmaster_port'],
-        table=table, tsid_list=tsid_list, period=period, verbose=verbose)
+        if verbose:
+            print('Starting cross validator for %s' % table)
+
+        tsids_df = query_all_active_tsids(
+            database=userdir['postgresql']['pysecmaster_db'],
+            user=userdir['postgresql']['pysecmaster_user'],
+            password=userdir['postgresql']['pysecmaster_password'],
+            host=userdir['postgresql']['pysecmaster_host'],
+            port=userdir['postgresql']['pysecmaster_port'],
+            table=table,
+            period=period)
+        tsid_list = tsids_df['tsid'].values
+
+        CrossValidate(
+            database=userdir['postgresql']['pysecmaster_db'],
+            user=userdir['postgresql']['pysecmaster_user'],
+            password=userdir['postgresql']['pysecmaster_password'],
+            host=userdir['postgresql']['pysecmaster_host'],
+            port=userdir['postgresql']['pysecmaster_port'],
+            table=table, tsid_list=tsid_list, period=period, verbose=verbose)
 
 
 if __name__ == '__main__':
@@ -344,18 +351,19 @@ if __name__ == '__main__':
 
     # Example download list: should be a list of dictionaries, with the
     #   dictionaries containing all relevant variables for the specific source
+    # daily prices (Quandl WIKI, Yahoo) - 10 GB
     test_download_list = [
+        # Quandl WIKI with wiki - x seconds
         {'source': 'quandl', 'selection': 'wiki', 'interval': 'daily',
-         'redownload_time': 60 * 60 * 24, 'data_process': 'replace',
+         'redownload_time': 60 * 60 * 48, 'data_process': 'replace',
          'replace_days_back': 60},
-        {'source': 'quandl', 'selection': 'goog_us_main_no_end_date',
-         'interval': 'daily', 'redownload_time': 60 * 60 * 12,
-         'data_process': 'replace', 'replace_days_back': 60},
+        # # Google with us_main_no_end_date - x seconds
         # {'source': 'google', 'selection': 'us_main_no_end_date',
         #  'interval': 'daily', 'period': 60, 'redownload_time': 60 * 60 * 12,
         #  'data_process': 'replace', 'replace_days_back': 60},
+        # Yahoo with us_main - 9300 seconds (2.58 hours)
         {'source': 'yahoo', 'selection': 'us_main', 'interval': 'daily',
-         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
+         'redownload_time': 60 * 60 * 48, 'data_process': 'replace',
          'replace_days_back': 60}
     ]
     # test_download_list = [
@@ -390,18 +398,19 @@ if __name__ == '__main__':
     #   function is run
     ############################################################################
 
-    maintenance(quandl_ticker_source=quandl_ticker_source,
-                database_list=database_list,
-                threads=8,
-                quandl_update_range=quandl_update_range,
-                csidata_update_range=csidata_update_range,
-                symbology_sources=symbology_sources)
+    # maintenance(quandl_ticker_source=quandl_ticker_source,
+    #             database_list=database_list,
+    #             threads=8,
+    #             quandl_update_range=quandl_update_range,
+    #             csidata_update_range=csidata_update_range,
+    #             symbology_sources=symbology_sources)
 
-    data_download(download_list=test_download_list,
-                  threads=8,    # 3 for replace; 8 for append
-                  verbose=True)
+    # data_download(download_list=test_download_list,
+    #               threads=8,
+    #               verbose=True)
 
-    # post_download_maintenance(download_list=test_download_list,
-    #                           # period=60,
-    #                           verbose=True)
-    # print(datetime.now())
+    # 15 hours for complete build; adds ~6 GB
+    post_download_maintenance(download_list=test_download_list,
+                              period=60,      # Comment out to replace all
+                              verbose=True)
+    print(datetime.now())

@@ -5,7 +5,7 @@ import time
 
 from utilities.database_queries import delete_sql_table_rows, df_to_sql,\
     query_all_active_tsids, query_all_tsid_prices, query_source_weights,\
-    retrieve_data_vendor_id
+    query_data_vendor_id
 from utilities.multithread import multithread
 
 __author__ = 'Josh Schertz'
@@ -76,7 +76,7 @@ class CrossValidate:
 
         self.source_id_exclude_list = []
         for source in self.source_exclude_list:
-            source_id = retrieve_data_vendor_id(
+            source_id = query_data_vendor_id(
                 database=self.database, user=self.user, password=self.password,
                 host=self.host, port=self.port, name=source)
             self.source_id_exclude_list.append(source_id)
@@ -130,8 +130,17 @@ class CrossValidate:
             unique_dates = unique_dates[unique_dates > beg_date]
 
         # The consensus_price_df contains the prices from weighted consensus
-        consensus_price_df = pd.DataFrame(columns=['date', 'open', 'high',
-                                                   'low', 'close', 'volume'])
+        if self.table == 'daily_prices':
+            consensus_price_df = pd.DataFrame(
+                columns=['date', 'open', 'high', 'low', 'close', 'volume',
+                         'ex_dividend', 'split_ratio'])
+        elif self.table == 'minute_prices':
+            consensus_price_df = pd.DataFrame(
+                columns=['date', 'open', 'high', 'low', 'close', 'volume'])
+        else:
+            raise NotImplementedError('Table %s is not implemented within '
+                                      'CrossValidate.validator' % self.table)
+
         # Set the date as the index
         consensus_price_df.set_index(['date'], inplace=True)
 
@@ -209,8 +218,12 @@ class CrossValidate:
                     # Insert the highest consensus value for this period into
                     #   the consensus_price_df (the dictionary key (price) with
                     #   the largest value (consensus sum).
-                    consensus_value = max(field_consensus.items(),
-                                          key=operator.itemgetter(1))[0]
+                    try:
+                        consensus_value = max(field_consensus.items(),
+                                              key=operator.itemgetter(1))[0]
+                    except ValueError:
+                        # None of the sources had any values, thus use -1
+                        consensus_value = -1
                     consensus_price_df.ix[date, field_index] = consensus_value
 
         def datetime_to_iso(row, column):
@@ -224,7 +237,7 @@ class CrossValidate:
                                                               args=('date',))
 
         # Add the vendor id of the pySecMaster_Consensus as a column
-        validator_id = retrieve_data_vendor_id(
+        validator_id = query_data_vendor_id(
             database=self.database, user=self.user, password=self.password,
             host=self.host, port=self.port, name='pySecMaster_Consensus')
 
@@ -285,6 +298,8 @@ class CrossValidate:
                       password=self.password, host=self.host, port=self.port,
                       df=consensus_price_df, sql_table=self.table,
                       exists='append', item=tsid)
+
+        time.sleep(1.5)
 
         if self.verbose:
             print('%s data cross-validation took %0.2f seconds to complete.' %

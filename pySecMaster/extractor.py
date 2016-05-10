@@ -3,14 +3,14 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 import psycopg2
 import re
+from sqlalchemy import create_engine
 import time
 
 from download import QuandlDownload, download_google_data, \
     download_yahoo_data, download_csidata_factsheet
 from utilities.database_queries import df_to_sql, delete_sql_table_rows, \
-    retrieve_data_vendor_id, query_codes, query_csi_stock_start_date,\
+    query_data_vendor_id, query_codes, query_csi_stock_start_date,\
     query_last_price, query_q_codes
-from utilities.date_conversions import dt_from_iso
 from utilities.multithread import multithread
 
 __author__ = 'Josh Schertz'
@@ -80,28 +80,23 @@ class QuandlCodeExtract(object):
 
             print('Finished downloading Quandl Codes from the %i databases, '
                   'taking %0.1f seconds' %
-                  # '{:,}'.format(len(q_code_df.index))
                   (len(self.db_list), time.time() - extractor_start))
 
-        # Codes already exists in the quandl_codes table, so this will determine
-        #   whether the codes need to be updated or if the download was
-        #   incomplete.
+        # Codes already exists in the quandl_codes table; this will determine
+        #   if the codes need to be updated or if the download was incomplete.
         else:
-
-            data_sets['updated_date'] = data_sets.apply(dt_from_iso, axis=1,
-                                                        args=('updated_date',))
 
             # This for loop only provides program info; doesn't format anything
             for row in range(len(data_sets)):
                 existing_vendor = data_sets.loc[row, 'data_vendor']
                 # existing_page_num = data_sets.loc[row, 'page_num']
                 existing_updated_date = data_sets.loc[row, 'updated_date']
-                if existing_vendor not in self.db_list:
+                if (existing_vendor[existing_vendor.find('_')+1] not in
+                        self.db_list):
                     print('FLAG: Did not update the %s data set because it was '
                           'not included in the database_list variable. The '
                           'last update was on %s' %
-                          (existing_vendor,
-                           existing_updated_date.strftime('%Y-%m-%d')))
+                          (existing_vendor, existing_updated_date))
 
             for data_vendor in self.db_list:
 
@@ -165,20 +160,23 @@ class QuandlCodeExtract(object):
         :return: A DataFrame with the Quandl data set and the max page_num.
         """
 
+        engine = create_engine('postgresql://%s:%s@%s:%s/%s' %
+                               (self.user, self.password, self.host, self.port,
+                                self.database))
+        conn = engine.connect()
+
         try:
-            conn = psycopg2.connect(database=self.database, user=self.user,
-                                    password=self.password, host=self.host,
-                                    port=self.port)
             with conn:
-                df = pd.read_sql("SELECT data_vendor, "
-                                 "MAX(page_num) AS page_num, updated_date "
-                                 "FROM quandl_codes "
-                                 "GROUP BY data_vendor ", conn)
+                df = pd.read_sql("""SELECT DISTINCT ON (data_vendor)
+                                     data_vendor, page_num, updated_date
+                                 FROM quandl_codes
+                                 ORDER BY data_vendor, page_num DESC
+                                     NULLS LAST""", conn)
                 return df
-        except psycopg2.Error as e:
-            print('Error when trying to connect to the %s database '
-                  'quandl_codes table in query_latest_codes in '
-                  'QuandlCodeExtract.query_last_download_pg' % self.database)
+        except Exception as e:
+            print('Error when querying the quandl code download page from the '
+                  '%s database inQuandlCodeExtract.query_last_download_pg' %
+                  self.database)
             print(e)
 
     def extractor(self, db_name, page_num=1):
@@ -192,7 +190,6 @@ class QuandlCodeExtract(object):
         start on. If no page_num is provided, it is assumed that the entire
         data set needs to be downloaded. Otherwise, it is assumed that the
         data set download was interrupted and will continue downloading codes.
-        :return: Nothing. All data is saved to the SQL quandl_codes table.
         """
 
         dl_csv_start_time = time.time()
@@ -213,6 +210,7 @@ class QuandlCodeExtract(object):
                     db_pg_df.insert(1, 'data', 'Unknown')
                     db_pg_df.insert(2, 'component', 'Unknown')
                     db_pg_df.insert(3, 'period', 'Unknown')
+                    db_pg_df.insert(4, 'symbology_source', 'Unknown')
                 except Exception as e:
                     print('The columns for component, period, document and '
                           'data_vendor are already created.')
@@ -224,6 +222,10 @@ class QuandlCodeExtract(object):
                     clean_df = self.process_2_item_q_codes(db_pg_df)
                 else:       # 'WIKI', 'EIA', 'ZEP', 'EOD', 'CURRFX'
                     clean_df = self.process_1_item_q_codes(db_pg_df)
+
+                # Find and add the source_name and source_id to the clean_df
+                clean_df['data_vendor'] = 'Quandl_' + db_name
+                clean_df['symbology_source'] = 'quandl_' + db_name.lower()
 
                 df_to_sql(database=self.database, user=self.user,
                           password=self.password, host=self.host,
@@ -242,11 +244,11 @@ class QuandlCodeExtract(object):
         try:
             with conn:
                 cur = conn.cursor()
-                cur.execute("""DELETE FROM quandl_codes
-                               WHERE rowid NOT IN
-                               (SELECT min(rowid)
-                               FROM quandl_codes
-                               GROUP BY q_code)""")
+                cur.execute("""DELETE FROM quandl_codes qc1
+                            USING quandl_codes qc2
+                            WHERE qc1.q_code = qc2.q_code
+                            AND qc1.q_code_id < qc2.q_code_id""")
+                conn.commit()
                 print('Successfully removed all duplicate q_codes from '
                       'quandl_codes')
         except psycopg2.Error as e:
@@ -261,6 +263,7 @@ class QuandlCodeExtract(object):
             print('Error: An unknown issue occurred when removing all '
                   'duplicate q_codes in the %s data set.' % (db_name,))
             print(e)
+        conn.close()
 
         # Change the data set page_num variable to -2, indicating it finished
         conn = psycopg2.connect(database=self.database, user=self.user,
@@ -271,7 +274,8 @@ class QuandlCodeExtract(object):
                 cur = conn.cursor()
                 cur.execute("""UPDATE quandl_codes
                                SET page_num=-2
-                               WHERE data_vendor=%s""", (db_name,))
+                               WHERE data_vendor=%s""", ('Quandl_' + db_name,))
+                conn.commit()
                 print('Successfully updated %s codes with final page_num '
                       'variable.' % (db_name,))
         except psycopg2.Error as e:
@@ -286,6 +290,7 @@ class QuandlCodeExtract(object):
             print('Error: An unknown issue occurred when changing the page_num'
                   'rows for codes in the %s data set.' % (db_name,))
             print(e)
+        conn.close()
 
         print('The %s database took %0.1f seconds to download'
               % (db_name, time.time() - dl_csv_start_time))
@@ -299,9 +304,7 @@ class QuandlCodeExtract(object):
 
         def strip_q_code(row, column):
             q_code = row['q_code']
-            if column == 'data_vendor':
-                return q_code[:q_code.find('/')]
-            elif column == 'data':
+            if column == 'data':
                 # ToDo: Find a way to include items with an underscore in name
                 # Example: 'EIA/AEO_2014_{Component}_A' --> 'AEO_2014'
                 # If block handles 1 item codes that are in 3 item data sets
@@ -325,8 +328,6 @@ class QuandlCodeExtract(object):
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_3_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code,
-                                     axis=1, args=('data_vendor',))
         df['data'] = df.apply(strip_q_code, axis=1, args=('data',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         df['period'] = df.apply(strip_q_code, axis=1, args=('period',))
@@ -337,9 +338,7 @@ class QuandlCodeExtract(object):
 
         def strip_q_code(row, column):
             q_code = row['q_code']
-            if column == 'data_vendor':
-                return q_code[:q_code.find('/')]
-            elif column == 'data':
+            if column == 'data':
                 # data -> exchange
                 # If block handles 1 item codes that are in 2 item data sets
                 if q_code.find('_') != -1:
@@ -357,8 +356,6 @@ class QuandlCodeExtract(object):
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_2_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code,
-                                     axis=1, args=('data_vendor',))
         df['data'] = df.apply(strip_q_code, axis=1, args=('data',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         return df
@@ -368,16 +365,12 @@ class QuandlCodeExtract(object):
 
         def strip_q_code(row, column):
             q_code = row['q_code']
-            if column == 'data_vendor':
-                return q_code[:q_code.find('/')]
-            elif column == 'component':
+            if column == 'component':
                 return q_code[q_code.find('/') + 1:]
             else:
                 print('Error: Unknown column [%s] passed in to strip_q_code in '
                       'process_1_item_q_codes' % (column,))
 
-        df['data_vendor'] = df.apply(strip_q_code, axis=1,
-                                     args=('data_vendor',))
         df['component'] = df.apply(strip_q_code, axis=1, args=('component',))
         return df
 
@@ -441,11 +434,11 @@ class QuandlDataExtraction(object):
         #     database=self.database, user=self.user, password=self.password,
         #     host=self.host, port=self.port, name='Quandl_%')
         if self.download_selection[:4] == 'wiki':
-            self.vendor_id = retrieve_data_vendor_id(
+            self.vendor_id = query_data_vendor_id(
                 database=self.database, user=self.user, password=self.password,
                 host=self.host, port=self.port, name='Quandl_WIKI')
         elif self.download_selection[:4] == 'goog':
-            self.vendor_id = retrieve_data_vendor_id(
+            self.vendor_id = query_data_vendor_id(
                 database=self.database, user=self.user, password=self.password,
                 host=self.host, port=self.port, name='Quandl_GOOG')
         else:
@@ -732,7 +725,7 @@ class GoogleFinanceDataExtraction(object):
         period_sec = 60
         self.min_interval = float((period_sec/rate)*threads)
 
-        self.vendor_id = retrieve_data_vendor_id(
+        self.vendor_id = query_data_vendor_id(
             database=self.database, user=self.user, password=self.password,
             host=self.host, port=self.port, name='Google_Finance')
 
@@ -845,7 +838,7 @@ class GoogleFinanceDataExtraction(object):
                 cur = conn.cursor()
                 cur.execute("""SELECT DISTINCT ON (tsid_symbol)
                                 symbol, goog_symbol, tsid_symbol
-                            FROM exchange
+                            FROM exchanges
                             WHERE goog_symbol IS NOT NULL
                             AND goog_symbol != 'NaN'
                             ORDER BY tsid_symbol ASC NULLS LAST""")
@@ -1035,7 +1028,7 @@ class YahooFinanceDataExtraction(object):
         period_sec = 60
         self.min_interval = float((period_sec / rate) * threads)
 
-        self.vendor_id = retrieve_data_vendor_id(
+        self.vendor_id = query_data_vendor_id(
             database=self.database, user=self.user, password=self.password,
             host=self.host, port=self.port, name='Yahoo_Finance')
 
