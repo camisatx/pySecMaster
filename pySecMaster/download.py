@@ -73,13 +73,13 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
 
 def csv_load_converter(input):
 
+    # try:
+    #     return int(input)
+    # except ValueError:
     try:
-        return int(input)
+        return float(input)
     except ValueError:
-        try:
-            return float(input)
-        except ValueError:
-            return -1
+        return -1
 
 
 class QuandlDownload(object):
@@ -276,37 +276,56 @@ class QuandlDownload(object):
         raw_df.fillna(-1.0, inplace=True)
 
         # Check each price column for outliers
-        columns_to_check = ['open', 'high', 'low', 'close']
-        for column in columns_to_check:
-            # Check column for values over 1M, creating a DF for all outliers
-            outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
+        for column in raw_df.columns:
 
-            if len(outliers_df):
-                # If there is an outlier, replace the value for the row with -1
-                for index, row in outliers_df.iterrows():
-                    # The index from the outlier_df is the index from the raw_df
-                    raw_df.set_value(index, column, -1)
+            try:
+                # Remove all rows that have values larger than 3 deviations mean
+                # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+                #           all(axis=1)])
+                # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+                #                 (3*raw_df.std())]
 
-        # Remove all rows that have a value larger than 3 deviations from mean
-        # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
-        #           all(axis=1)])
-        # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
-        #                 (3*raw_df.std())]
+                if column in ['open', 'high', 'low', 'close']:
+                    # Check column for values over 1M, create DF for outliers
+                    outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) >
+                                         1000000]
 
-        # Round all data values to their appropriate levels
-        if q_code[:4] == 'WIKI':
-            raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
-                          'volume': 0, 'ex_dividend': 3, 'split_ratio': 4})
-        elif q_code[:4] == 'GOOG':
-            raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
-                          'volume': 0})
-        elif q_code[:5] == 'YAHOO':
-            raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
-                          'volume': 0})
-        else:
-            print('The data source for %s is not implemented in the price '
-                  'extractor. Please define the columns in '
-                  'QuandlDownload.download_quandl_data.' % q_code)
+                    if len(outliers_df):
+                        print(outliers_df)
+                        # If outlier, replace the value for the row with -1
+                        for index, row in outliers_df.iterrows():
+                            # Index from the outlier_df is the index
+                            #   from the raw_df
+                            raw_df.set_value(index, column, -1.0)
+
+                    # Round all data values to their appropriate levels
+                    raw_df[column] = np.round(raw_df[column], decimals=4)
+
+                # elif column in ['ex_dividend']:
+                #     # Round all data values to their appropriate levels
+                #     raw_df[column] = np.round(raw_df[column], decimals=3)
+
+                elif column in ['volume']:
+                    # Round all data values to their appropriate levels
+                    raw_df[column] = np.round(raw_df[column], decimals=0)
+
+            except TypeError:
+                pass
+
+        # # Round all data values to their appropriate levels
+        # if q_code[:4] == 'WIKI':
+        #     raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
+        #                   'volume': 0, 'ex_dividend': 3, 'split_ratio': 4})
+        # elif q_code[:4] == 'GOOG':
+        #     raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
+        #                   'volume': 0})
+        # elif q_code[:5] == 'YAHOO':
+        #     raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
+        #                   'volume': 0})
+        # else:
+        #     print('The data source for %s is not implemented in the price '
+        #           'extractor. Please define the columns in '
+        #           'QuandlDownload.download_quandl_data.' % q_code)
 
         return raw_df
 
@@ -697,26 +716,37 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     raw_df.fillna(-1.0, inplace=True)
 
     # Check each price column for outliers
-    columns_to_check = ['open', 'high', 'low', 'close']
-    for column in columns_to_check:
-        # Check column for values over 1M, creating a DF for all outliers
-        outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
+    for column in raw_df.columns:
+        try:
+            # Remove all rows that have values larger than 3 deviations mean
+            # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+            #           all(axis=1)])
+            # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+            #                 (3*raw_df.std())]
 
-        if len(outliers_df):
-            print(outliers_df)
-            # If there is an outlier, replace the value for the row with -1
-            for index, row in outliers_df.iterrows():
-                # The index from the outlier_df is the index from the raw_df
-                raw_df.set_value(index, column, -1)
+            if column in ['open', 'high', 'low', 'close']:
+                # Check column for values over 1M, creating DF for all outliers
+                outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
 
-    # Remove all rows that have a value larger than 3 deviations from mean
-    # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
-    #           all(axis=1)])
-    # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
-    #                 (3*raw_df.std())]
+                if len(outliers_df):
+                    print(outliers_df)
+                    # If there is outlier, replace the value for the row with -1
+                    for index, row in outliers_df.iterrows():
+                        # Index from the outlier_df is the index from the raw_df
+                        raw_df.set_value(index, column, -1.0)
 
-    # Round all data values to their appropriate levels
-    raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4, 'volume': 0})
+                # Round all data values to their appropriate levels
+                raw_df[column] = np.round(raw_df[column], decimals=4)
+
+            elif column in ['volume']:
+                # Round all data values to their appropriate levels
+                raw_df[column] = np.round(raw_df[column], decimals=0)
+
+        except TypeError:
+            pass
+
+    # # Round all data values to their appropriate levels
+    # raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4, 'volume': 0})
 
     return raw_df
 
@@ -941,25 +971,38 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     raw_df.fillna(-1.0, inplace=True)
 
     # Check each price column for outliers
-    columns_to_check = ['open', 'high', 'low', 'close']
-    for column in columns_to_check:
-        # Check column for values over 1M, creating a DF for all outliers
-        outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
+    for column in raw_df.columns:
 
-        if len(outliers_df):
-            # If there is an outlier, replace the value for the row with -1
-            for index, row in outliers_df.iterrows():
-                # The index from the outlier_df is the index from the raw_df
-                raw_df.set_value(index, column, -1)
+        try:
+            # Remove all rows that have values larger than 3 deviations mean
+            # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+            #           all(axis=1)])
+            # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+            #                 (3*raw_df.std())]
 
-    # Remove all rows that have a value larger than 3 deviations from mean
-    # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
-    #           all(axis=1)])
-    # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
-    #                 (3*raw_df.std())]
+            if column in ['open', 'high', 'low', 'close']:
+                # Check column for values over 1M, creating DF for all outliers
+                outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
 
-    # Round all data values to their appropriate levels
-    raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4, 'volume': 0})
+                if len(outliers_df):
+                    print(outliers_df)
+                    # If there is outlier, replace the value for the row with -1
+                    for index, row in outliers_df.iterrows():
+                        # Index from the outlier_df is the index from the raw_df
+                        raw_df.set_value(index, column, -1.0)
+
+                # Round all data values to their appropriate levels
+                raw_df[column] = np.round(raw_df[column], decimals=4)
+
+            elif column in ['volume']:
+                # Round all data values to their appropriate levels
+                raw_df[column] = np.round(raw_df[column], decimals=0)
+
+        except TypeError:
+            pass
+
+    # # Round all data values to their appropriate levels
+    # raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4, 'volume': 0})
 
     return raw_df
 

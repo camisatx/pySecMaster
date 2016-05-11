@@ -398,16 +398,16 @@ if __name__ == '__main__':
     #   function is run
     ############################################################################
 
-    # maintenance(quandl_ticker_source=quandl_ticker_source,
-    #             database_list=database_list,
-    #             threads=8,
-    #             quandl_update_range=quandl_update_range,
-    #             csidata_update_range=csidata_update_range,
-    #             symbology_sources=symbology_sources)
+    maintenance(quandl_ticker_source=quandl_ticker_source,
+                database_list=database_list,
+                threads=8,
+                quandl_update_range=quandl_update_range,
+                csidata_update_range=csidata_update_range,
+                symbology_sources=symbology_sources)
 
-    # data_download(download_list=test_download_list,
-    #               threads=8,
-    #               verbose=True)
+    data_download(download_list=test_download_list,
+                  threads=8,
+                  verbose=True)
 
     # 15 hours for complete build; adds ~6 GB
     post_download_maintenance(download_list=test_download_list,

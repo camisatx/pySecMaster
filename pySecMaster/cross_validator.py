@@ -102,7 +102,7 @@ class CrossValidate:
         """No multiprocessing"""
         # [self.validator(tsid=tsid) for tsid in self.tsid_list]
         """Multiprocessing using 4 threads"""
-        multithread(self.validator, self.tsid_list, threads=4)
+        multithread(self.validator, self.tsid_list, threads=5)
 
         if self.verbose:
             print('%i tsids have had their sources cross validated taking '
@@ -299,7 +299,9 @@ class CrossValidate:
                       df=consensus_price_df, sql_table=self.table,
                       exists='append', item=tsid)
 
-        time.sleep(1.5)
+        # For period updates, slow down the process to allow postgre to catch up
+        if self.period:
+            time.sleep(1.5)
 
         if self.verbose:
             print('%s data cross-validation took %0.2f seconds to complete.' %
