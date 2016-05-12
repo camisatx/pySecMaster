@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from functools import wraps
 import numpy as np
 import pandas as pd
-from scipy import stats
 import time
 from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
@@ -18,7 +17,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.2'
+__version__ = '1.4.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
