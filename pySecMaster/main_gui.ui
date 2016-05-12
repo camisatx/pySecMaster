@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>337</width>
-    <height>583</height>
+    <height>638</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -25,104 +25,20 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="7" column="1" colspan="2">
-     <widget class="QLineEdit" name="lineedit_quandlkey">
+    <item row="15" column="0" colspan="3">
+     <widget class="QProgressBar" name="progressBar">
       <property name="toolTip">
-       <string>Quandl API key only required if downloading data or tickers from Quandl</string>
+       <string>Download progresss</string>
       </property>
-      <property name="statusTip">
-       <string>Optional Quandl API key</string>
-      </property>
-      <property name="placeholderText">
-       <string>Get a free API key at quandl.com</string>
-      </property>
-     </widget>
-    </item>
-    <item row="5" column="2">
-     <widget class="QToolButton" name="toolbtn_dbdir">
-      <property name="toolTip">
-       <string>Navigate to the file directory where the database should be</string>
-      </property>
-      <property name="statusTip">
-       <string>Select the directory</string>
-      </property>
-      <property name="text">
-       <string>...</string>
-      </property>
-      <property name="icon">
-       <iconset resource="icons.qrc">
-        <normaloff>:/icons/open_folder_240px.png</normaloff>:/icons/open_folder_240px.png</iconset>
-      </property>
-     </widget>
-    </item>
-    <item row="8" column="0" colspan="3">
-     <spacer name="verticalSpacer_2">
-      <property name="orientation">
-       <enum>Qt::Vertical</enum>
-      </property>
-      <property name="sizeType">
-       <enum>QSizePolicy::Fixed</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>20</width>
-        <height>5</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-    <item row="0" column="0" colspan="3">
-     <widget class="QLabel" name="lbl_title">
-      <property name="font">
-       <font>
-        <pointsize>18</pointsize>
-       </font>
-      </property>
-      <property name="text">
-       <string>pySecMaster</string>
+      <property name="value">
+       <number>24</number>
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
       </property>
      </widget>
     </item>
-    <item row="4" column="1" colspan="2">
-     <widget class="QLineEdit" name="lineedit_dbname">
-      <property name="toolTip">
-       <string>Name of the database you want to build or update</string>
-      </property>
-      <property name="statusTip">
-       <string>Required database name</string>
-      </property>
-      <property name="text">
-       <string>pySecMaster.db</string>
-      </property>
-     </widget>
-    </item>
-    <item row="12" column="1">
-     <spacer name="verticalSpacer">
-      <property name="orientation">
-       <enum>Qt::Vertical</enum>
-      </property>
-      <property name="sizeType">
-       <enum>QSizePolicy::Fixed</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>20</width>
-        <height>30</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-    <item row="4" column="0">
-     <widget class="QLabel" name="lbl_dbname">
-      <property name="text">
-       <string>Database Name</string>
-      </property>
-     </widget>
-    </item>
-    <item row="14" column="0" colspan="3">
+    <item row="18" column="0" colspan="3">
      <widget class="QDialogButtonBox" name="btnbox_action">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -149,24 +65,7 @@
       </property>
      </widget>
     </item>
-    <item row="13" column="0" colspan="3">
-     <widget class="QTextBrowser" name="txtbrwsr_details">
-      <property name="enabled">
-       <bool>true</bool>
-      </property>
-      <property name="txtbrwsr_details.hide()" stdset="0">
-       <bool>true</bool>
-      </property>
-     </widget>
-    </item>
-    <item row="5" column="0">
-     <widget class="QLabel" name="lbl_dbdir">
-      <property name="text">
-       <string>Database Directory</string>
-      </property>
-     </widget>
-    </item>
-    <item row="12" column="0">
+    <item row="16" column="0">
      <widget class="QToolButton" name="toolbtn_details">
       <property name="toolTip">
        <string>View the code output</string>
@@ -188,36 +87,13 @@
       </property>
      </widget>
     </item>
-    <item row="5" column="1">
-     <widget class="QLineEdit" name="lineedit_dbdir">
-      <property name="toolTip">
-       <string>File directory where the database is (or should be) located</string>
-      </property>
-      <property name="statusTip">
-       <string>Required folder location for the database</string>
-      </property>
-      <property name="placeholderText">
-       <string>C:\Users\###\Desktop\</string>
-      </property>
-     </widget>
-    </item>
-    <item row="11" column="0" colspan="3">
-     <widget class="QProgressBar" name="progressBar">
-      <property name="toolTip">
-       <string>Download progresss</string>
-      </property>
-      <property name="value">
-       <number>24</number>
+    <item row="9" column="0">
+     <widget class="QLabel" name="lbl_port">
+      <property name="text">
+       <string>Port</string>
       </property>
       <property name="alignment">
-       <set>Qt::AlignCenter</set>
-      </property>
-     </widget>
-    </item>
-    <item row="6" column="0" colspan="3">
-     <widget class="Line" name="line_2">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
       </property>
      </widget>
     </item>
@@ -228,6 +104,52 @@
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="0" colspan="3">
+     <widget class="Line" name="line">
+      <property name="frameShadow">
+       <enum>QFrame::Sunken</enum>
+      </property>
+      <property name="lineWidth">
+       <number>1</number>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="14" column="0" colspan="3">
+     <spacer name="verticalSpacer_3">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Fixed</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>10</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item row="17" column="0" colspan="3">
+     <widget class="QTextBrowser" name="txtbrwsr_details">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="txtbrwsr_details.hide()" stdset="0">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item row="10" column="0" colspan="3">
+     <widget class="Line" name="line_2">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </item>
@@ -247,28 +169,31 @@
       </property>
      </spacer>
     </item>
-    <item row="3" column="0" colspan="3">
-     <widget class="Line" name="line">
-      <property name="frameShadow">
-       <enum>QFrame::Sunken</enum>
+    <item row="6" column="1">
+     <widget class="QLineEdit" name="lineedit_user">
+      <property name="toolTip">
+       <string>Recommended to create a special PostgreSQL user for pySecMaster</string>
       </property>
-      <property name="lineWidth">
-       <number>1</number>
+      <property name="statusTip">
+       <string>Required database user</string>
       </property>
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
+      <property name="text">
+       <string>pysecmaster</string>
       </property>
      </widget>
     </item>
     <item row="7" column="0">
-     <widget class="QLabel" name="lbl_quandlkey">
+     <widget class="QLabel" name="lbl_password">
       <property name="text">
-       <string>Quandl API Key</string>
+       <string>Password</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
       </property>
      </widget>
     </item>
-    <item row="10" column="0" colspan="3">
-     <spacer name="verticalSpacer_3">
+    <item row="12" column="0" colspan="3">
+     <spacer name="verticalSpacer_2">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
@@ -278,12 +203,172 @@
       <property name="sizeHint" stdset="0">
        <size>
         <width>20</width>
-        <height>10</height>
+        <height>5</height>
        </size>
       </property>
      </spacer>
     </item>
-    <item row="9" column="0" colspan="3">
+    <item row="16" column="1">
+     <spacer name="verticalSpacer">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Fixed</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>30</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item row="0" column="0" colspan="3">
+     <widget class="QLabel" name="lbl_title">
+      <property name="font">
+       <font>
+        <pointsize>18</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>pySecMaster</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="9" column="1">
+     <widget class="QLineEdit" name="lineedit_port">
+      <property name="toolTip">
+       <string>Port number used to access the database on the host</string>
+      </property>
+      <property name="statusTip">
+       <string>Required database port number</string>
+      </property>
+      <property name="text">
+       <string>5432</string>
+      </property>
+      <property name="placeholderText">
+       <string>C:\Users\###\Desktop\</string>
+      </property>
+     </widget>
+    </item>
+    <item row="7" column="1">
+     <widget class="QLineEdit" name="lineedit_password">
+      <property name="statusTip">
+       <string>Required database password for the specified user</string>
+      </property>
+      <property name="inputMethodHints">
+       <set>Qt::ImhNoAutoUppercase|Qt::ImhNoPredictiveText</set>
+      </property>
+      <property name="text">
+       <string>pysecmaster</string>
+      </property>
+      <property name="echoMode">
+       <enum>QLineEdit::Password</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="0">
+     <widget class="QLabel" name="lbl_host">
+      <property name="text">
+       <string>Host</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="0">
+     <widget class="QLabel" name="lbl_user">
+      <property name="text">
+       <string>User</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="4" column="0" colspan="2">
+     <widget class="QLabel" name="lbl_db_title">
+      <property name="font">
+       <font>
+        <pointsize>10</pointsize>
+        <weight>75</weight>
+        <italic>false</italic>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="text">
+       <string>PostgreSQL Database Options</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignBottom|Qt::AlignHCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="11" column="0">
+     <widget class="QLabel" name="lbl_quandlkey">
+      <property name="text">
+       <string>Quandl API Key</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="11" column="1">
+     <widget class="QLineEdit" name="lineedit_quandlkey">
+      <property name="toolTip">
+       <string>Quandl API key only required if downloading data or tickers from Quandl</string>
+      </property>
+      <property name="statusTip">
+       <string>Optional Quandl API key</string>
+      </property>
+      <property name="placeholderText">
+       <string>Get a free API key at quandl.com</string>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="1">
+     <widget class="QLineEdit" name="lineedit_host">
+      <property name="toolTip">
+       <string>Specify a local or remote host</string>
+      </property>
+      <property name="statusTip">
+       <string>Required database host address</string>
+      </property>
+      <property name="text">
+       <string>localhost</string>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="1">
+     <widget class="QLineEdit" name="lineedit_name">
+      <property name="toolTip">
+       <string>Database name within the Postgre server</string>
+      </property>
+      <property name="statusTip">
+       <string>Required database name</string>
+      </property>
+      <property name="text">
+       <string>pysecmaster</string>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="0">
+     <widget class="QLabel" name="lbl_name">
+      <property name="text">
+       <string>Name</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="13" column="0" colspan="3">
      <widget class="QTabWidget" name="tab_main">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -340,13 +425,6 @@
           </item>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="lbl_data_selection">
-          <property name="text">
-           <string>Selection</string>
-          </property>
-         </widget>
-        </item>
         <item row="1" column="1">
          <widget class="QComboBox" name="cmb_data_selection">
           <property name="toolTip">
@@ -354,6 +432,13 @@
           </property>
           <property name="statusTip">
            <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="lbl_data_interval">
+          <property name="text">
+           <string>Interval</string>
           </property>
          </widget>
         </item>
@@ -372,10 +457,10 @@
           </item>
          </widget>
         </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="lbl_data_interval">
+        <item row="1" column="0">
+         <widget class="QLabel" name="lbl_data_selection">
           <property name="text">
-           <string>Interval</string>
+           <string>Selection</string>
           </property>
          </widget>
         </item>
@@ -592,6 +677,9 @@
     <addaction name="actionGoogle_Finance"/>
     <addaction name="actionQuandl"/>
     <addaction name="separator"/>
+    <addaction name="actionInstall_PostgreSQL"/>
+    <addaction name="actionInstall_Psycopg"/>
+    <addaction name="separator"/>
     <addaction name="actionJosh_Schertz"/>
    </widget>
    <addaction name="menuFile"/>
@@ -696,6 +784,10 @@
    </property>
   </action>
   <action name="actionLoad_Settings">
+   <property name="icon">
+    <iconset resource="icons.qrc">
+     <normaloff>:/icons/open_folder_240px.png</normaloff>:/icons/open_folder_240px.png</iconset>
+   </property>
    <property name="text">
     <string>Load Settings</string>
    </property>
@@ -709,11 +801,26 @@
     <string>Ctrl+O</string>
    </property>
   </action>
+  <action name="actionInstall_PostgreSQL">
+   <property name="text">
+    <string>Install PostgreSQL</string>
+   </property>
+   <property name="statusTip">
+    <string>Go to the PostgreSQL download page</string>
+   </property>
+  </action>
+  <action name="actionInstall_Psycopg">
+   <property name="text">
+    <string>Install Psycopg</string>
+   </property>
+   <property name="statusTip">
+    <string>Go to the Psycopg install page</string>
+   </property>
+  </action>
  </widget>
  <tabstops>
-  <tabstop>lineedit_dbname</tabstop>
-  <tabstop>lineedit_dbdir</tabstop>
-  <tabstop>toolbtn_dbdir</tabstop>
+  <tabstop>lineedit_name</tabstop>
+  <tabstop>lineedit_port</tabstop>
   <tabstop>lineedit_quandlkey</tabstop>
   <tabstop>tab_main</tabstop>
   <tabstop>toolbtn_details</tabstop>

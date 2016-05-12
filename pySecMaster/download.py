@@ -192,14 +192,25 @@ class QuandlDownload(object):
             return pd.DataFrame()
 
         if file:
-            # Create a DataFrame from the file object
-            raw_df = pd.read_csv(file, index_col=False, names=column_names,
-                                 encoding='utf-8',
-                                 converters={'open': csv_load_converter,
-                                             'high': csv_load_converter,
-                                             'low': csv_load_converter,
-                                             'close': csv_load_converter,
-                                             'volume': csv_load_converter})
+            try:
+                # Create a DataFrame from the file object
+                raw_df = pd.read_csv(file, index_col=False, names=column_names,
+                                     encoding='utf-8',
+                                     converters={'open': csv_load_converter,
+                                                 'high': csv_load_converter,
+                                                 'low': csv_load_converter,
+                                                 'close': csv_load_converter,
+                                                 'volume': csv_load_converter})
+            except IndexError:
+                return pd.DataFrame()
+            except OSError:
+                # Occurs when url_obj is None, meaning url returned a 404 error
+                return pd.DataFrame()
+            except Exception as e:
+                print('Unknown error occurred when reading Quandl CSV for %s' %
+                      q_code)
+                print(e)
+                return pd.DataFrame()
 
             # Remove all adjusted value columns
             raw_df.drop(columns_to_remove, axis=1, inplace=True)
@@ -650,7 +661,12 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     try:
         raw_df = google_data_processing(url_obj)
     except IndexError:
-        raw_df = pd.DataFrame()
+        return pd.DataFrame()
+    except Exception as e:
+        print('Unknown error occurred when processing Google raw data for %s' %
+              tsid)
+        print(e)
+        return pd.DataFrame()
 
     if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list
@@ -900,10 +916,14 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                          'close': csv_load_converter,
                                          'volume': csv_load_converter})
     except IndexError:
-        raw_df = pd.DataFrame()
+        return pd.DataFrame()
     except OSError:
         # Occurs when the url_obj is None, meaning the url returned a 404 error
-        raw_df = pd.DataFrame()
+        return pd.DataFrame()
+    except Exception as e:
+        print('Unknown error occurred when reading Yahoo CSV for %s' % tsid)
+        print(e)
+        return pd.DataFrame()
 
     if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list

@@ -100,73 +100,92 @@ yahoo_fin_url = {'root': 'http://real-chart.finance.yahoo.com/table.csv?',
 ###############################################################################
 
 
-def maintenance(quandl_ticker_source, database_list, threads,
-                quandl_update_range, csidata_update_range, symbology_sources):
+def maintenance(database_options, quandl_key, quandl_ticker_source,
+                database_list, threads, quandl_update_range,
+                csidata_update_range, symbology_sources):
+    """
+    :param database_options: Dictionary of the postgres database options
+    :param quandl_key: Optional string of the Quandl API key
+    :param quandl_ticker_source: String of which source the Quandl data should
+        use when determining which codes to download (csidata, quandl)
+    :param database_list: List of strings indicating which Quandl databases
+        should have their codes downloaded (WIKI, GOOG, YAHOO)
+    :param threads: Integer of the threads to run when downloading Quandl codes
+    :param quandl_update_range: Integer of the number of days before the
+        Quandl codes should be updated
+    :param csidata_update_range: Integer of the number of days before the CSI
+        Data factsheet should be updated
+    :param symbology_sources: List of strings of which symbology sources
+        should be created (csi_data, tsid, quandl_wiki)
+    """
 
     print('Starting Security Master table maintenance function. This can take '
           'some time to finish if large databases are used. If this fails, '
           'rerun it after a few minutes.')
 
     # Create the SQL tables if they don't already exist
-    create_database(database=userdir['postgresql']['pysecmaster_db'],
-                    user=userdir['postgresql']['pysecmaster_user'])
-    main_tables(database=userdir['postgresql']['pysecmaster_db'],
-                user=userdir['postgresql']['pysecmaster_user'],
-                password=userdir['postgresql']['pysecmaster_password'],
-                host=userdir['postgresql']['pysecmaster_host'],
-                port=userdir['postgresql']['pysecmaster_port'])
-    data_tables(database=userdir['postgresql']['pysecmaster_db'],
-                user=userdir['postgresql']['pysecmaster_user'],
-                password=userdir['postgresql']['pysecmaster_password'],
-                host=userdir['postgresql']['pysecmaster_host'],
-                port=userdir['postgresql']['pysecmaster_port'])
-    events_tables(database=userdir['postgresql']['pysecmaster_db'],
-                  user=userdir['postgresql']['pysecmaster_user'],
-                  password=userdir['postgresql']['pysecmaster_password'],
-                  host=userdir['postgresql']['pysecmaster_host'],
-                  port=userdir['postgresql']['pysecmaster_port'])
+    create_database(database=database_options['database'],
+                    user=database_options['user'])
+    main_tables(database=database_options['database'],
+                user=database_options['user'],
+                password=database_options['password'],
+                host=database_options['host'],
+                port=database_options['port'],)
+    data_tables(database=database_options['database'],
+                user=database_options['user'],
+                password=database_options['password'],
+                host=database_options['host'],
+                port=database_options['port'])
+    events_tables(database=database_options['database'],
+                  user=database_options['user'],
+                  password=database_options['password'],
+                  host=database_options['host'],
+                  port=database_options['port'])
 
-    LoadTables(database=userdir['postgresql']['pysecmaster_db'],
-               user=userdir['postgresql']['pysecmaster_user'],
-               password=userdir['postgresql']['pysecmaster_password'],
-               host=userdir['postgresql']['pysecmaster_host'],
-               port=userdir['postgresql']['pysecmaster_port'],
+    LoadTables(database=database_options['database'],
+               user=database_options['user'],
+               password=database_options['password'],
+               host=database_options['host'],
+               port=database_options['port'],
                tables_to_load=tables_to_load)
 
     # Always extract CSI values, as they are used for the symbology table
-    CSIDataExtractor(database=userdir['postgresql']['pysecmaster_db'],
-                     user=userdir['postgresql']['pysecmaster_user'],
-                     password=userdir['postgresql']['pysecmaster_password'],
-                     host=userdir['postgresql']['pysecmaster_host'],
-                     port=userdir['postgresql']['pysecmaster_port'],
+    CSIDataExtractor(database=database_options['database'],
+                     user=database_options['user'],
+                     password=database_options['password'],
+                     host=database_options['host'],
+                     port=database_options['port'],
                      db_url=csidata_url,
                      data_type=csidata_type,
                      redownload_time=csidata_update_range)
 
     if quandl_ticker_source == 'quandl':
-        QuandlCodeExtract(database=userdir['postgresql']['pysecmaster_db'],
-                          user=userdir['postgresql']['pysecmaster_user'],
-                          password=userdir['postgresql']['pysecmaster_password'],
-                          host=userdir['postgresql']['pysecmaster_host'],
-                          port=userdir['postgresql']['pysecmaster_port'],
-                          quandl_token=userdir['quandl']['quandl_token'],
+        QuandlCodeExtract(database=database_options['database'],
+                          user=database_options['user'],
+                          password=database_options['password'],
+                          host=database_options['host'],
+                          port=database_options['port'],
+                          quandl_token=quandl_key,
                           database_list=database_list,
                           database_url=database_url,
                           update_range=quandl_update_range,
                           threads=threads)
 
-    create_symbology(database=userdir['postgresql']['pysecmaster_db'],
-                     user=userdir['postgresql']['pysecmaster_user'],
-                     password=userdir['postgresql']['pysecmaster_password'],
-                     host=userdir['postgresql']['pysecmaster_host'],
-                     port=userdir['postgresql']['pysecmaster_port'],
+    create_symbology(database=database_options['database'],
+                     user=database_options['user'],
+                     password=database_options['password'],
+                     host=database_options['host'],
+                     port=database_options['port'],
                      source_list=symbology_sources)
 
 
-def data_download(download_list, threads=4, verbose=False):
+def data_download(database_options, quandl_key, download_list, threads=4,
+                  verbose=False):
     """ Loops through all provided data sources in download_list, and runs
     the associated data extractor using the provided source variables.
 
+    :param database_options: Dictionary of the postgres database options
+    :param quandl_key: Optional string of the Quandl API key
     :param download_list: List of dictionaries, with each dictionary containing
         all of the relevant variables for the specific source
     :param threads: Integer indicating how many threads should be used to
@@ -193,7 +212,6 @@ def data_download(download_list, threads=4, verbose=False):
                               source['interval'])
 
         if source['source'] == 'quandl':
-            quandl_key = userdir['quandl']['quandl_token']
             if quandl_key:
                 # Download data for selected Quandl codes
                 print('\nDownloading all Quandl fields for: %s'
@@ -201,11 +219,11 @@ def data_download(download_list, threads=4, verbose=False):
                       (source['selection'], source['data_process'],
                        source['replace_days_back']))
                 QuandlDataExtraction(
-                    database=userdir['postgresql']['pysecmaster_db'],
-                    user=userdir['postgresql']['pysecmaster_user'],
-                    password=userdir['postgresql']['pysecmaster_password'],
-                    host=userdir['postgresql']['pysecmaster_host'],
-                    port=userdir['postgresql']['pysecmaster_port'],
+                    database=database_options['database'],
+                    user=database_options['user'],
+                    password=database_options['password'],
+                    host=database_options['host'],
+                    port=database_options['port'],
                     quandl_token=quandl_key,
                     db_url=quandl_data_url,
                     download_selection=source['selection'],
@@ -229,11 +247,11 @@ def data_download(download_list, threads=4, verbose=False):
 
             google_fin_url['period'] = 'p=' + str(source['period']) + 'd'
             GoogleFinanceDataExtraction(
-                database=userdir['postgresql']['pysecmaster_db'],
-                user=userdir['postgresql']['pysecmaster_user'],
-                password=userdir['postgresql']['pysecmaster_password'],
-                host=userdir['postgresql']['pysecmaster_host'],
-                port=userdir['postgresql']['pysecmaster_port'],
+                database=database_options['database'],
+                user=database_options['user'],
+                password=database_options['password'],
+                host=database_options['host'],
+                port=database_options['port'],
                 db_url=google_fin_url,
                 download_selection=source['selection'],
                 redownload_time=source['redownload_time'],
@@ -251,11 +269,11 @@ def data_download(download_list, threads=4, verbose=False):
                    source['replace_days_back']))
 
             YahooFinanceDataExtraction(
-                database=userdir['postgresql']['pysecmaster_db'],
-                user=userdir['postgresql']['pysecmaster_user'],
-                password=userdir['postgresql']['pysecmaster_password'],
-                host=userdir['postgresql']['pysecmaster_host'],
-                port=userdir['postgresql']['pysecmaster_port'],
+                database=database_options['database'],
+                user=database_options['user'],
+                password=database_options['password'],
+                host=database_options['host'],
+                port=database_options['port'],
                 db_url=yahoo_fin_url,
                 download_selection=source['selection'],
                 redownload_time=source['redownload_time'],
@@ -273,10 +291,12 @@ def data_download(download_list, threads=4, verbose=False):
           download_list)
 
 
-def post_download_maintenance(download_list, period=None, verbose=False):
+def post_download_maintenance(database_options, download_list, period=None,
+                              verbose=False):
     """ Perform tasks that require all data to be downloaded first, such as the
     source cross validator function.
 
+    :param database_options: Dictionary of the postgres database options
     :param download_list: List of dictionaries, with each dictionary containing
         all of the relevant variables for the specific source
     :param period: Optional integer indicating the prior number of days whose
@@ -290,7 +310,13 @@ def post_download_maintenance(download_list, period=None, verbose=False):
         if source['interval'] == 'daily':
             intervals['daily_prices'] = True
         elif source['interval'] == 'minute':
-            intervals['minute_prices'] = True
+            print('The cross validator for minute prices is disabled because '
+                  'there is currently only one source (Google Finance). Thus, '
+                  'it does not make sense to run it. When you add a second '
+                  'source you can re-enable it by un-commenting out the line '
+                  'below this message in post_download_maintenance within '
+                  'pySecMaster.py')
+            # intervals['minute_prices'] = True
         else:
             raise SystemError('No interval was provided for %s in '
                               'data_download in pySecMaster.py' %
@@ -304,21 +330,21 @@ def post_download_maintenance(download_list, period=None, verbose=False):
             print('Starting cross validator for %s' % table)
 
         tsids_df = query_all_active_tsids(
-            database=userdir['postgresql']['pysecmaster_db'],
-            user=userdir['postgresql']['pysecmaster_user'],
-            password=userdir['postgresql']['pysecmaster_password'],
-            host=userdir['postgresql']['pysecmaster_host'],
-            port=userdir['postgresql']['pysecmaster_port'],
+            database=database_options['database'],
+            user=database_options['user'],
+            password=database_options['password'],
+            host=database_options['host'],
+            port=database_options['port'],
             table=table,
             period=period)
         tsid_list = tsids_df['tsid'].values
 
         CrossValidate(
-            database=userdir['postgresql']['pysecmaster_db'],
-            user=userdir['postgresql']['pysecmaster_user'],
-            password=userdir['postgresql']['pysecmaster_password'],
-            host=userdir['postgresql']['pysecmaster_host'],
-            port=userdir['postgresql']['pysecmaster_port'],
+            database=database_options['database'],
+            user=database_options['user'],
+            password=database_options['password'],
+            host=database_options['host'],
+            port=database_options['port'],
             table=table, tsid_list=tsid_list, period=period, verbose=verbose)
 
 
@@ -326,6 +352,16 @@ if __name__ == '__main__':
 
     ############################################################################
     # Database maintenance options:
+
+    test_database_options = {
+        'database': userdir['postgresql']['pysecmaster_db'],
+        'user': userdir['postgresql']['pysecmaster_user'],
+        'password': userdir['postgresql']['pysecmaster_password'],
+        'host': userdir['postgresql']['pysecmaster_host'],
+        'port': userdir['postgresql']['pysecmaster_port'],
+    }
+
+    test_quandl_key = userdir['quandl']['quandl_token']
 
     # These are the Quandl Databases that will have all their codes downloaded
     # Examples: 'GOOG', 'WIKI', 'YAHOO', 'SEC', 'EIA', 'JODI', 'CURRFX', 'FINRA'
@@ -398,19 +434,24 @@ if __name__ == '__main__':
     #   function is run
     ############################################################################
 
-    maintenance(quandl_ticker_source=quandl_ticker_source,
+    maintenance(database_options=test_database_options,
+                quandl_key=test_quandl_key,
+                quandl_ticker_source=quandl_ticker_source,
                 database_list=database_list,
                 threads=8,
                 quandl_update_range=quandl_update_range,
                 csidata_update_range=csidata_update_range,
                 symbology_sources=symbology_sources)
 
-    data_download(download_list=test_download_list,
+    data_download(database_options=test_database_options,
+                  quandl_key=test_quandl_key,
+                  download_list=test_download_list,
                   threads=8,
                   verbose=True)
 
     # 15 hours for complete build; adds ~6 GB
-    post_download_maintenance(download_list=test_download_list,
-                              period=60,      # Comment out to replace all
+    post_download_maintenance(database_options=test_database_options,
+                              download_list=test_download_list,
+                              # period=60,      # Comment out to replace all
                               verbose=True)
     print(datetime.now())

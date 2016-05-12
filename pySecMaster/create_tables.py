@@ -29,7 +29,6 @@ __version__ = '1.3.2'
 '''
 
 # Future table additions:
-#   corporate_actions
 #   fundamentals    (company, energy, economic)
 #   futures_prices
 
