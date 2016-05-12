@@ -3,9 +3,28 @@ An automated framework to store and maintain financial data.
 
 [![AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](http://opensource.org/licenses/AGPL-3.0)
 
-The goal of the system is to have a central repository of interrelated finance data that can be used for strategy backtests.
+The goal of the system is to have a central repository of interrelated finance data that can be used for strategy backtests and live trading systems.
 
+[Data types](#data-types) that can be stored includes historical and live stock prices (daily, minute, tick), option chains, corporate actions, economic events, IPO pricings and financial statements.
+
+Contents:
+ - [Database](#database)
+ - [TSID](#tsid)
+ - [Symbology](#symbology)
+ - [Data Types](#data-types)
+ - [Cross Validator](#cross-validator)
+ - [Quick Start Guides](#quick-start-guides)
+ - [System Requirements](#system-requirements)
+ - [Future Goals](#future-goals)
+ - [Notes](#notes)
+ - [Disclaimer](#disclaimer)
+ - [License](#license-gnu-agplv3))
+
+## Database
 This system utilizes PostgreSQL for the database engine. Postgres provides an extremely flexible yet powerful database experience. Furthermore, Postgres allows the database to be stored on a remote server, accessible by multiple users.
+
+Currently, there are 21 tables that make up the pySecMaster database. You can view the database table structure [here](#../master/table_structure.md).
+
 
 ## TSID
 All of the data tables utilize a custom symbol ID (called a **'tsid'**; 'trading system ID'). This allows for consistent data nomenclature across the system.
@@ -157,7 +176,7 @@ This can be multi-processed based on tsids. By default, 5 threads are used. This
   
   11. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
 
-### Retrieve PostgreSQL Data
+## Retrieve Database Values
   1. To retrieve the data from the PostgreSQL database, open **query_data.py** in a code editor (IDE, PyCharm, Sublime, etc.)
 
   2. Navigate to the query options (lines 128 - 134): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQL query. By default the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
@@ -168,7 +187,7 @@ This can be multi-processed based on tsids. By default, 5 threads are used. This
   - Python 3.4+
   - Pandas 0.16.2+
   - PyQt 4.11+
-  - PostgreSQL
+  - PostgreSQL 9.5+
   - Psycopg2 2.6.1+
   - More than 20GB of storage space (daily Quandl WIKI data is about 4 GB, while a year's worth of Google Finance minute data can become 50+ GB)
 
