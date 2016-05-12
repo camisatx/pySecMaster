@@ -268,7 +268,9 @@ class MainWindow(QtGui.QMainWindow):
         """
 
         # Determine if any of the postgres database options were not provided
-        if (self.lineedit_name.text() or self.lineedit_user.text() or
+        if (self.lineedit_admin_user.text() or
+                self.lineedit_admin_password.text() or
+                self.lineedit_name.text() or self.lineedit_user.text() or
                 self.lineedit_password.text() or self.lineedit_host.text() or
                 self.lineedit_port.text()) == '':
             raise ValueError('One or multiple database options were not '
@@ -286,7 +288,9 @@ class MainWindow(QtGui.QMainWindow):
         #                                        self.lineedit_dbname.text()))
 
         # PostgreSQL database options
-        database_options = {'database': self.lineedit_name.text(),
+        database_options = {'admin_user': self.lineedit_admin_user.text(),
+                            'admin_password': self.lineedit_admin_password.text(),
+                            'database': self.lineedit_name.text(),
                             'user': self.lineedit_user.text(),
                             'password': self.lineedit_password.text(),
                             'host': self.lineedit_host.text(),

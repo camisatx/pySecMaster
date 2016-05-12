@@ -124,7 +124,9 @@ def maintenance(database_options, quandl_key, quandl_ticker_source,
           'rerun it after a few minutes.')
 
     # Create the SQL tables if they don't already exist
-    create_database(database=database_options['database'],
+    create_database(admin_user=database_options['admin_user'],
+                    admin_password=database_options['admin_password'],
+                    database=database_options['database'],
                     user=database_options['user'])
     main_tables(database=database_options['database'],
                 user=database_options['user'],
@@ -354,6 +356,8 @@ if __name__ == '__main__':
     # Database maintenance options:
 
     test_database_options = {
+        'admin_user': userdir['postgresql']['main_user'],
+        'admin_password': userdir['postgresql']['main_password'],
         'database': userdir['postgresql']['pysecmaster_db'],
         'user': userdir['postgresql']['pysecmaster_user'],
         'password': userdir['postgresql']['pysecmaster_password'],

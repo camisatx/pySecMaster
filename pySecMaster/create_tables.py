@@ -33,7 +33,8 @@ __version__ = '1.3.2'
 #   futures_prices
 
 
-def create_database(database='pysecmaster', user='postgres'):
+def create_database(admin_user='postgres', admin_password='postgres',
+                    database='pysecmaster', user='postgres'):
     """ Determine if the provided database exists within the postgres server.
     If the database doesn't exist, create it using the provided user as the
     owner. This requires connecting to the default database before psycopg2 is
@@ -42,6 +43,8 @@ def create_database(database='pysecmaster', user='postgres'):
     NOTE: The provided user must have a valid login role within postgres before
     they are able to log into the server and create databases.
 
+    :param admin_user: String of the database admin user
+    :param admin_password: String of the database admin password
     :param database: String of the database to create
     :param user: String of the user who should own the database
     """
@@ -49,8 +52,8 @@ def create_database(database='pysecmaster', user='postgres'):
     userdir = user_dir()['postgresql']
 
     conn = psycopg2.connect(database=userdir['main_db'],
-                            user=userdir['main_user'],
-                            password=userdir['main_password'],
+                            user=admin_user,
+                            password=admin_password,
                             host=userdir['main_host'],
                             port=userdir['main_port'])
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
