@@ -7,7 +7,7 @@ The goal of the system is to have a central repository of interrelated finance d
 
 [Data types](#data-types) that can be stored includes historical and live stock prices (daily, minute, tick), option chains, corporate actions, economic events, IPO pricings and financial statements.
 
-Contents:
+**Contents**:
  - [Database](#database)
  - [TSID](#tsid)
  - [Symbology](#symbology)
@@ -21,9 +21,9 @@ Contents:
  - [License](#license-gnu-agplv3))
 
 ## Database
-This system utilizes PostgreSQL for the database engine. Postgres provides an extremely flexible yet powerful database experience. Furthermore, Postgres allows the database to be stored on a remote server, accessible by multiple users.
+This system utilizes [PostgreSQL](http://www.postgresql.org/) for the database engine. [Postgres](https://en.wikipedia.org/wiki/PostgreSQL) provides an extremely flexible yet powerful database experience. Furthermore, Postgres allows the database to be stored on a remote server, accessible by multiple users.
 
-Currently, there are 21 tables that make up the pySecMaster database. You can view the database table structure [here](#../master/table_structure.md).
+Currently, there are 21 tables that make up the pySecMaster database. You can view the database table structure [here](../master/table_structure.md).
 
 
 ## TSID
