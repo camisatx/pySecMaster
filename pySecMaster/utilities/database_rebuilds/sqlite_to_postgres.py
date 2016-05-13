@@ -302,10 +302,9 @@ def main(verbose=False):
     table = 'minute_prices'
 
     # Get a list of unique tsids from the sqlite database's table
-    # tsid_list = query_all_tsids_from_table(database=sqlite_database,
-    #                                        table=table)
+    tsid_list = query_all_tsids_from_table(database=sqlite_database,
+                                           table=table)
 
-    tsid_list = ['AAPL.Q.0', 'TSLA.Q.0', 'NFLX.Q.0', 'GE.N.0']
     # Iterate through each tsid from the unique list
     for tsid in tsid_list:
 

@@ -322,21 +322,6 @@ class QuandlDownload(object):
             except TypeError:
                 pass
 
-        # # Round all data values to their appropriate levels
-        # if q_code[:4] == 'WIKI':
-        #     raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
-        #                   'volume': 0, 'ex_dividend': 3, 'split_ratio': 4})
-        # elif q_code[:4] == 'GOOG':
-        #     raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
-        #                   'volume': 0})
-        # elif q_code[:5] == 'YAHOO':
-        #     raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4,
-        #                   'volume': 0})
-        # else:
-        #     print('The data source for %s is not implemented in the price '
-        #           'extractor. Please define the columns in '
-        #           'QuandlDownload.download_quandl_data.' % q_code)
-
         return raw_df
 
     def download_data(self, name, page_num=None, beg_date=None, download_try=0):
@@ -760,9 +745,6 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         except TypeError:
             pass
 
-    # # Round all data values to their appropriate levels
-    # raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4, 'volume': 0})
-
     return raw_df
 
 
@@ -1019,9 +1001,6 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
         except TypeError:
             pass
-
-    # # Round all data values to their appropriate levels
-    # raw_df.round({'open': 4, 'high': 4, 'low': 4, 'close': 4, 'volume': 0})
 
     return raw_df
 
