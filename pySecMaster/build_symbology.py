@@ -1,11 +1,13 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
-import sqlite3
 import time
 
-from create_tables import main_tables, data_tables, events_tables
+from create_tables import create_database, main_tables, data_tables, \
+    events_tables
 from load_aux_tables import LoadTables
 from extractor import CSIDataExtractor, QuandlCodeExtract
+from utilities.database_queries import df_to_sql, query_csi_stocks, \
+    query_existing_sid, query_exchanges, update_symbology_values
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -15,7 +17,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.2'
+__version__ = '1.4.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -33,214 +35,36 @@ __version__ = '1.3.2'
 '''
 
 
-def df_to_sql(df, db_location, sql_table, exists, item):
+def altered_values(existing_df, new_df):
+    """ Compare the two provided DataFrames, returning a new DataFrame that only
+    includes rows from the new_df that are different from the existing_df.
 
-    # print('Entering the data for %s into the SQL database.' % (item,))
-    conn = sqlite3.connect(db_location)
+    :param existing_df: DataFrame of the existing values
+    :param new_df: DataFrame of the next values
+    :return: DataFrame with the altered/new values
+    """
 
-    # Try and except block writes the new data to the SQL Database.
-    try:
-        # if_exists options: append new df rows, replace all table values
-        df.to_sql(sql_table, conn, if_exists=exists, index=False)
-        conn.execute("PRAGMA journal_mode = MEMORY")
-        conn.execute("PRAGMA busy_timeout = 60000")
-        # print('Successfully entered %s into the SQL Database' % item)
-    except conn.Error:
-        conn.rollback()
-        print("Failed to insert the DataFrame into the Database for %s" %
-              (item,))
-    except conn.OperationalError:
-        raise ValueError('Unable to connect to the SQL Database in df_to_sql. '
-                         'Make sure the database address/name are correct.')
-    except Exception as e:
-        print('Error: Unknown issue when adding DF to SQL for %s' % (item,))
-        print(e)
+    # Convert both DataFrames to all string objects. Normally, the symbol_id
+    #   column of the existing_df is an int64 object, messing up the merge
+    if len(existing_df.index) > 0:
+        existing_df = existing_df.applymap(str)
+    new_df = new_df.applymap(str)
 
+    # DataFrame with the similar values from both the existing_df and the
+    #   new_df. The comparison is based on the symbol_id/sid and
+    #   source_id/ticker columns.
+    combined_df = pd.merge(left=existing_df, right=new_df, how='inner',
+                           left_on=['symbol_id', 'source_id'],
+                           right_on=['sid', 'ticker'])
 
-def query_existing_sid(db_location):
+    # In a new DataFrame, only keep the new_df rows that did NOT have a match
+    #   to the existing_df
+    altered_df = new_df[~new_df['sid'].isin(combined_df['sid'])]
 
-    conn = sqlite3.connect(db_location)
-    try:
-        with conn:
-            cur = conn.cursor()
-            cur.execute("""SELECT symbol_id, source, source_id, type,
-                        created_date, updated_date
-                        FROM symbology""")
-            rows = cur.fetchall()
-            sid_df = pd.DataFrame(rows, columns=['symbol_id', 'source',
-                                                   'source_id', 'type',
-                                                   'created_date',
-                                                   'updated_date'])
-            return sid_df
-    except sqlite3.Error as e:
-        print(e)
-        raise SystemError('Failed to query the data from the symbology table '
-                          'within query_existing_sid')
-    except conn.OperationalError:
-        raise SystemError('Unable to connect to the SQL Database in '
-                          'query_existing_sid. Make sure the database '
-                          'address/name are correct.')
-    except Exception as e:
-        print(e)
-        raise SystemError('Error: Unknown issue occurred in query_existing_sid')
+    return altered_df
 
 
-def query_csi_stocks(db_location, query='all'):
-
-    conn = sqlite3.connect(db_location)
-    try:
-        with conn:
-            cur = conn.cursor()
-
-            if query == 'all':
-                cur.execute("""SELECT CsiNumber, Symbol, Exchange, ChildExchange
-                               FROM csidata_stock_factsheet""")
-                rows = cur.fetchall()
-                csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
-                                                     'exchange',
-                                                     'childexchange'])
-                csi_df.sort_values('sid', axis=0, inplace=True)
-                csi_df.reset_index(drop=True, inplace=True)
-
-            elif query == 'exchanges_only':
-                # Restricts tickers to those that are traded on exchanges only
-                #   (AMEX, LSE, MSE, NYSE, OTC (NASDAQ, BATS), TSX, VSE). For
-                #   the few duplicate tickers, choose the active one over the
-                #   non-active one (same company but different start and end
-                #   dates, with one being active).
-                cur.execute("""SELECT CsiNumber, Symbol, Exchange, ChildExchange
-                               FROM (SELECT CsiNumber, Symbol, Exchange,
-                                   ChildExchange, IsActive
-                                   FROM csidata_stock_factsheet
-                                   WHERE (Exchange IN ('AMEX', 'LSE', 'NYSE',
-                                       'TSX', 'VSE')
-                                   OR ChildExchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA',
-                                       'OTC Markets Pink Sheets'))
-                                   AND Symbol IS NOT NULL
-                                   ORDER BY IsActive ASC)
-                               GROUP BY Symbol, Exchange, ChildExchange""")
-                rows = cur.fetchall()
-                if rows:
-                    csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
-                                                         'exchange',
-                                                         'childexchange'])
-                else:
-                    raise SystemExit('Not able to retrieve any tickers after '
-                                     'querying %s in query_csi_stocks'
-                                     % (query,))
-
-            elif query == 'main_us':
-                # Restricts tickers to those that have been active within the
-                #   prior two years. For the few duplicate tickers, choose the
-                #   active one over the non-active one (same company but
-                #   different start and end dates, with one being active).
-                beg_date = (datetime.utcnow() - timedelta(days=730))
-                cur.execute("""SELECT CsiNumber, Symbol, Exchange, ChildExchange
-                               FROM (SELECT CsiNumber, Symbol, Exchange,
-                                   ChildExchange, IsActive
-                                   FROM csidata_stock_factsheet
-                                   WHERE EndDate > ?
-                                   AND (Exchange IN ('AMEX', 'NYSE')
-                                   OR ChildExchange IN ('AMEX',
-                                       'BATS Global Markets',
-                                       'Nasdaq Capital Market',
-                                       'Nasdaq Global Market',
-                                       'Nasdaq Global Select',
-                                       'NYSE', 'NYSE ARCA'))
-                                   AND Symbol IS NOT NULL
-                                   ORDER BY IsActive ASC)
-                               GROUP BY Symbol, Exchange, ChildExchange""",
-                            (beg_date.isoformat(),))
-                rows = cur.fetchall()
-                if rows:
-                    csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
-                                                         'exchange',
-                                                         'childexchange'])
-                else:
-                    raise SystemExit('Not able to retrieve any tickers after '
-                                     'querying %s in query_csi_stocks'
-                                     % (query,))
-            else:
-                raise SystemExit('%s query does not exist within '
-                                 'query_csi_stocks. Valid queries '
-                                 'include: all, main_us, exchanges_only' %
-                                 (query,))
-            return csi_df
-    except sqlite3.Error as e:
-        print(e)
-        raise SystemError('Failed to query the data into the symbology table '
-                          'within query_csi_stocks')
-    except conn.OperationalError:
-        raise SystemError('Unable to connect to the SQL Database in '
-                          'query_csi_stocks. Make sure the database '
-                          'address/name are correct.')
-    except Exception as e:
-        print(e)
-        raise SystemError('Error: Unknown issue occurred in query_csi_stocks')
-
-
-def query_exchanges(db_location):
-
-    conn = sqlite3.connect(db_location)
-    try:
-        with conn:
-            cur = conn.cursor()
-            cur.execute("""SELECT symbol, name, goog_symbol, yahoo_symbol,
-                        csi_symbol, tsid_symbol
-                        FROM exchange""")
-            rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=['symbol', 'name', 'goog_symbol',
-                                             'yahoo_symbol', 'csi_symbol',
-                                             'tsid_symbol'])
-            return df
-    except sqlite3.Error as e:
-        print(e)
-        raise SystemError('Failed to query the data from the exchange table '
-                          'within query_exchanges')
-    except conn.OperationalError:
-        raise SystemError('Unable to connect to the SQL Database in '
-                          'query_exchanges. Make sure the database '
-                          'address/name are correct.')
-    except Exception as e:
-        print(e)
-        raise SystemError('Error: Unknown issue occurred in query_exchanges')
-
-
-def insert_csi_data(db_location, df, source):
-
-    conn = sqlite3.connect(db_location)
-    try:
-        with conn:
-            for index, row in df.iterrows():
-                symbol_id = int(row['symbol_id'])
-
-                cur_time = datetime.utcnow().isoformat()
-                cur = conn.cursor()
-                cur.execute("""INSERT INTO symbology (symbol_id, source,
-                            source_id, type, created_date, updated_date)
-                            VALUES (?,?,?,?,?,?)""",
-                            (symbol_id, source, symbol_id, 'stock',
-                             cur_time, cur_time))
-                conn.commit()
-    except sqlite3.Error as e:
-        conn.rollback()
-        print('Failed to insert the data into the symbology table within '
-              'insert_csi_data.')
-        print(e)
-    except conn.OperationalError:
-        print('Unable to connect to the SQL Database in insert_csi_data. Make '
-              'sure the database address/name are correct.')
-    except Exception as e:
-        print(e)
-        print('Error: Unknown issue occurred in insert_csi_data')
-
-
-def create_symbology(db_location, source_list):
+def create_symbology(database, user, password, host, port, source_list):
     """
     Create the symbology table. Use the CSI numbers as the unique symbol
     identifiers. See if they already exist within the symbology table, and if
@@ -260,48 +84,53 @@ def create_symbology(db_location, source_list):
         done yet
     3. Map Quandl codes to a unique ID
 
-    :param db_location: String of the database directory location
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
     :param source_list: List of strings with the symbology sources to use
     """
 
-    exch_df = query_exchanges(db_location=db_location)
+    exch_df = query_exchanges(database=database, user=user, password=password,
+                              host=host, port=port)
+
+    # ToDo: Add economic_events codes
 
     for source in source_list:
         source_start = time.time()
 
         # Retrieve any existing ID values from the symbology table
-        symbology_df = query_existing_sid(db_location=db_location)
+        existing_symbology_df = query_existing_sid(database=database, user=user,
+                                                   password=password, host=host,
+                                                   port=port, source=source)
 
-        # A DF of all the values except the current source, which will be
-        #   rebuilt and appended to this DF before being added to the database
-        other_symbology_df = symbology_df[symbology_df['source'] != source]
-
-        cur_time = datetime.utcnow().isoformat()
         if source == 'csi_data':
-            csi_stock_df = query_csi_stocks(db_location=db_location,
-                                            query='all')
+            csi_stock_df = query_csi_stocks(database=database, user=user,
+                                            password=password, host=host,
+                                            port=port, query='all')
 
-            source_sym_df = pd.DataFrame()
-            source_sym_df.insert(0, 'symbol_id', csi_stock_df['sid'])
-            source_sym_df.insert(1, 'source', source)
-            source_sym_df.insert(2, 'source_id', csi_stock_df['sid'])
-            source_sym_df.insert(3, 'type', 'stock')
-            source_sym_df.insert(len(source_sym_df.columns), 'created_date',
-                                 cur_time)
-            source_sym_df.insert(len(source_sym_df.columns), 'updated_date',
-                                 cur_time)
+            # csi_data is unique where the sid (csi_num) is the source_id
+            csi_stock_df['ticker'] = csi_stock_df['sid']
 
-            # Append this new DF to the non-changing sources DF
-            new_symbology_df = other_symbology_df.append(source_sym_df,
-                                                         ignore_index=True)
-            df_to_sql(df=new_symbology_df, db_location=db_location,
-                      sql_table='symbology', exists='replace', item=source)
+            # Find the values that are different between the two DataFrames
+            altered_values_df = altered_values(
+                existing_df=existing_symbology_df, new_df=csi_stock_df)
+
+            # Prepare a new DataFrame with all relevant data for these values
+            altered_df = pd.DataFrame()
+            altered_df.insert(0, 'symbol_id', altered_values_df['sid'])
+            altered_df.insert(1, 'source', source)
+            altered_df.insert(2, 'source_id', altered_values_df['sid'])
+            altered_df.insert(3, 'type', 'stock')
+            altered_df.insert(len(altered_df.columns), 'created_date',
+                              datetime.now().isoformat())
+            altered_df.insert(len(altered_df.columns), 'updated_date',
+                              datetime.now().isoformat())
 
         elif source in ['tsid', 'quandl_wiki', 'quandl_goog', 'seeking_alpha',
                         'yahoo']:
             # These sources have a similar symbology creation process
-
-            # ToDo: Add economic_events codes
 
             if source == 'quandl_wiki':
                 # I don't trust that Quandl provides all available WIKI codes
@@ -310,8 +139,9 @@ def create_symbology(db_location, source_list):
 
                 # DataFrame of main US active tickers, their exchanges and
                 #   child exchanges
-                csi_stock_df = query_csi_stocks(db_location=db_location,
-                                                query='main_us')
+                csi_stock_df = query_csi_stocks(database=database, user=user,
+                                                password=password, host=host,
+                                                port=port, query='main_us')
 
                 # If a ticker has a ". + -", change it to an underscore
                 csi_stock_df['ticker'].replace(regex=True, inplace=True,
@@ -322,10 +152,12 @@ def create_symbology(db_location, source_list):
                 csi_stock_df['ticker'] = csi_stock_df['ticker'].\
                     apply(lambda x: 'WIKI/' + x)
 
-            if source == 'quandl_goog':
+            elif source == 'quandl_goog':
                 # Imply plausible Quandl codes for their GOOG database. Only
                 #   codes for American, Canadian and London exchanges
-                csi_stock_df = query_csi_stocks(db_location=db_location,
+                csi_stock_df = query_csi_stocks(database=database, user=user,
+                                                password=password, host=host,
+                                                port=port,
                                                 query='exchanges_only')
 
                 # If a ticker has a ". + -", change it to an underscore
@@ -337,7 +169,7 @@ def create_symbology(db_location, source_list):
                     #   GOOG/<goog exchange symbol>_<ticker>
                     ticker = row['ticker']
                     exchange = row['exchange']
-                    child_exchange = row['childexchange']
+                    child_exchange = row['child_exchange']
 
                     if child_exchange == 'NYSE ARCA':
                         # NYSE ARCA is a special situation where the child
@@ -399,8 +231,9 @@ def create_symbology(db_location, source_list):
 
             elif source == 'seeking_alpha':
                 # Use main US tickers that should have Seeking Alpha articles
-                csi_stock_df = query_csi_stocks(db_location=db_location,
-                                                query='main_us')
+                csi_stock_df = query_csi_stocks(database=database, user=user,
+                                                password=password, host=host,
+                                                port=port, query='main_us')
 
                 # If a ticker has a ". + -", change it to an underscore
                 csi_stock_df['ticker'].replace(regex=True, inplace=True,
@@ -409,7 +242,9 @@ def create_symbology(db_location, source_list):
             elif source == 'tsid':
                 # Build tsid codes (<ticker>.<exchange>.<position>), albeit
                 #   only for American, Canadian and London exchanges.
-                csi_stock_df = query_csi_stocks(db_location=db_location,
+                csi_stock_df = query_csi_stocks(database=database, user=user,
+                                                password=password, host=host,
+                                                port=port,
                                                 query='exchanges_only')
 
                 # If a ticker has a ". + -", change it to an underscore
@@ -421,7 +256,7 @@ def create_symbology(db_location, source_list):
                     #   <ticker>.<tsid exchange symbol>.<count>
                     ticker = row['ticker']
                     exchange = row['exchange']
-                    child_exchange = row['childexchange']
+                    child_exchange = row['child_exchange']
 
                     if child_exchange == 'NYSE ARCA':
                         # NYSE ARCA is a special situation where the child
@@ -482,7 +317,9 @@ def create_symbology(db_location, source_list):
             elif source == 'yahoo':
                 # Imply plausible Yahoo codes, albeit only for American,
                 #   Canadian and London exchanges.
-                csi_stock_df = query_csi_stocks(db_location=db_location,
+                csi_stock_df = query_csi_stocks(database=database, user=user,
+                                                password=password, host=host,
+                                                port=port,
                                                 query='exchanges_only')
 
                 # If a ticker has a ". + -", change it to an underscore
@@ -494,7 +331,7 @@ def create_symbology(db_location, source_list):
 
                     ticker = row['ticker']
                     exchange = row['exchange']
-                    child_exchange = row['childexchange']
+                    child_exchange = row['child_exchange']
                     us_exchanges = ['AMEX', 'BATS Global Markets',
                                     'Nasdaq Capital Market',
                                     'Nasdaq Global Market',
@@ -520,21 +357,49 @@ def create_symbology(db_location, source_list):
                 csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_yahoo,
                                                             axis=1)
 
-            source_sym_df = pd.DataFrame()
-            source_sym_df.insert(0, 'symbol_id', csi_stock_df['sid'])
-            source_sym_df.insert(1, 'source', source)
-            source_sym_df.insert(2, 'source_id', csi_stock_df['ticker'])
-            source_sym_df.insert(3, 'type', 'stock')
-            source_sym_df.insert(len(source_sym_df.columns), 'created_date',
-                                 cur_time)
-            source_sym_df.insert(len(source_sym_df.columns), 'updated_date',
-                                 cur_time)
+            else:
+                return NotImplementedError('%s is not implemented in the '
+                                           'create_symbology function of '
+                                           'build_symbology.py' % source)
 
-            # Append this new DF to the non-changing sources DF
-            new_symbology_df = other_symbology_df.append(source_sym_df,
-                                                         ignore_index=True)
-            df_to_sql(df=new_symbology_df, db_location=db_location,
-                      sql_table='symbology', exists='replace', item=source)
+            # Remove post processed duplicates to prevent database FK errors
+            csi_stock_df.drop_duplicates(subset=['ticker'], inplace=True)
+
+            # Find the values that are different between the two DataFrames
+            altered_values_df = altered_values(
+                existing_df=existing_symbology_df, new_df=csi_stock_df)
+
+            # Prepare a new DataFrame with all relevant data for these values
+            altered_df = pd.DataFrame()
+            altered_df.insert(0, 'symbol_id', altered_values_df['sid'])
+            altered_df.insert(1, 'source', source)
+            altered_df.insert(2, 'source_id', altered_values_df['ticker'])
+            altered_df.insert(3, 'type', 'stock')
+            altered_df.insert(len(altered_df.columns), 'created_date',
+                              datetime.now().isoformat())
+            altered_df.insert(len(altered_df.columns), 'updated_date',
+                              datetime.now().isoformat())
+
+        else:
+            return NotImplementedError('%s is not implemented in the '
+                                       'create_symbology function of '
+                                       'build_symbology.py' % source)
+
+        # Separate out the updated values from the altered_df
+        updated_symbols_df = (altered_df[altered_df['symbol_id'].
+                              isin(existing_symbology_df['symbol_id'])])
+        # Update all modified symbology values in the database
+        update_symbology_values(database=database, user=user, password=password,
+                                host=host, port=port,
+                                values_df=updated_symbols_df)
+
+        # Separate out the new values from the altered_df
+        new_symbols_df = (altered_df[~altered_df['symbol_id'].
+                          isin(existing_symbology_df['symbol_id'])])
+        # Append the new symbol values to the existing database table
+        df_to_sql(database=database, user=user, password=password, host=host,
+                  port=port, df=new_symbols_df, sql_table='symbology',
+                  exists='append', item=source)
 
         print('Finished processing the symbology IDs for %s taking '
               '%0.2f seconds' % (source, (time.time() - source_start)))
@@ -544,27 +409,62 @@ def create_symbology(db_location, source_list):
 
 if __name__ == '__main__':
 
-    database_location = 'C:/Users/####/Desktop/pySecMaster_test.db'
+    from utilities.user_dir import user_dir
+    userdir = user_dir()
 
-    main_tables(database_location)
-    data_tables(database_location)
-    events_tables(database_location)
+    create_database(database=userdir['postgresql']['pysecmaster_db'],
+                    user=userdir['postgresql']['pysecmaster_user'])
+    main_tables(database=userdir['postgresql']['pysecmaster_db'],
+                user=userdir['postgresql']['pysecmaster_user'],
+                password=userdir['postgresql']['pysecmaster_password'],
+                host=userdir['postgresql']['pysecmaster_host'],
+                port=userdir['postgresql']['pysecmaster_port'])
+    data_tables(database=userdir['postgresql']['pysecmaster_db'],
+                user=userdir['postgresql']['pysecmaster_user'],
+                password=userdir['postgresql']['pysecmaster_password'],
+                host=userdir['postgresql']['pysecmaster_host'],
+                port=userdir['postgresql']['pysecmaster_port'])
+    events_tables(database=userdir['postgresql']['pysecmaster_db'],
+                  user=userdir['postgresql']['pysecmaster_user'],
+                  password=userdir['postgresql']['pysecmaster_password'],
+                  host=userdir['postgresql']['pysecmaster_host'],
+                  port=userdir['postgresql']['pysecmaster_port'])
 
-    LoadTables(database_location, ['data_vendor', 'exchanges'])
+    LoadTables(database=userdir['postgresql']['pysecmaster_db'],
+               user=userdir['postgresql']['pysecmaster_user'],
+               password=userdir['postgresql']['pysecmaster_password'],
+               host=userdir['postgresql']['pysecmaster_host'],
+               port=userdir['postgresql']['pysecmaster_port'],
+               tables_to_load=['data_vendor', 'exchanges'])
 
     csidata_url = 'http://www.csidata.com/factsheets.php?'
     csidata_type = 'stock'
-    CSIDataExtractor(db_location=database_location, db_url=csidata_url,
-                     data_type=csidata_type, redownload_time=3000)
+    CSIDataExtractor(database=userdir['postgresql']['pysecmaster_db'],
+                     user=userdir['postgresql']['pysecmaster_user'],
+                     password=userdir['postgresql']['pysecmaster_password'],
+                     host=userdir['postgresql']['pysecmaster_host'],
+                     port=userdir['postgresql']['pysecmaster_port'],
+                     db_url=csidata_url, data_type=csidata_type,
+                     redownload_time=3000)
 
-    quandl_code = '##########'
     quandl_db_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
                      'source_code=', '&per_page=300&page=']
     quandl_db_list = ['WIKI']    # WIKI, GOOG, YAHOO, SEC, FINRA
-    # QuandlCodeExtract(db_location=database_location, quandl_token=quandl_code,
-    #                   database_list=quandl_db_list, database_url=quandl_db_url,
+    # QuandlCodeExtract(database=userdir['postgresql']['pysecmaster_db'],
+    #                   user=userdir['postgresql']['pysecmaster_user'],
+    #                   password=userdir['postgresql']['pysecmaster_password'],
+    #                   host=userdir['postgresql']['pysecmaster_host'],
+    #                   port=userdir['postgresql']['pysecmaster_port'],
+    #                   quandl_token=userdir['quandl']['quandl_token'],
+    #                   database_list=quandl_db_list,
+    #                   database_url=quandl_db_url,
     #                   update_range=3000, threads=4)
 
     symbology_sources = ['csi_data', 'quandl_wiki', 'seeking_alpha', 'tsid',
                          'yahoo', 'quandl_goog']
-    create_symbology(database_location, symbology_sources)
+    create_symbology(database=userdir['postgresql']['pysecmaster_db'],
+                     user=userdir['postgresql']['pysecmaster_user'],
+                     password=userdir['postgresql']['pysecmaster_password'],
+                     host=userdir['postgresql']['pysecmaster_host'],
+                     port=userdir['postgresql']['pysecmaster_port'],
+                     source_list=symbology_sources)

@@ -1,271 +1,355 @@
 # pySecMaster Table Structure
 
+These are structures for all of the tables built by pySecMaster. The three types of tables include [Main Tables](#main-tables), [Data Tables](#data-tables) and [Events Tables](#events-tables).
+ 
+ Currently, 21 tables are created within the specified PostgreSQL database when pySecMaster is run.
+
 ## Main Tables
 
 #### baskets
 
-| Column Name  | Type                | Foreign Key          | Index |
-|--------------|---------------------|----------------------|-------|
-| basket_id    | INTEGER PRIMARY KEY |                      |       |
-| basket_name  | TEXT                |                      |       |
-| tsid         | TEXT                | symbology(source_id) |       |
-| date         | FLOAT               |                      |       |
-| created_date | FLOAT               |                      |       |
-| updated_date | FLOAT               |                      |       |
+| Column Name  | Type                     | Foreign Key | Index |
+|--------------|--------------------------|-------------|-------|
+| basket_id    | SERIAL PRIMARY KEY       |             |       |
+| name         | TEXT NOT NULL            |             |       |
+| description  | TEXT                     |             |       |
+| start_date   | TIMESTAMP WITH TIME ZONE |             |       |
+| end_date     | TIMESTAMP WITH TIME ZONE |             |       |
+| created_by   | TEXT                     |             |       |
+| created_date | TIMESTAMP WITH TIME ZONE |             |       |
+| updated_date | TIMESTAMP WITH TIME ZONE |             |       |
+
+#### basket_values
+
+| Column Name   | Type                     | Foreign Key                  | Index |
+|---------------|--------------------------|------------------------------|-------|
+| basket_val_id | BIGSERIAL PRIMARY KEY    |                              |       |
+| basket_id     | INTEGER NOT NULL         | baskets(basket_id)           |       |
+| source        | TEXT NOT NULL            | symbology(source, source_id) |       |
+| source_id     | TEXT NOT NULL            | symbology(source, source_id) |       |
+| updated_date  | TIMESTAMP WITH TIME ZONE |                              |       |
 
 #### csidata_stock_factsheet
 
-| Column Name      | Type                | Foreign Key          | Index              |
-|------------------|---------------------|----------------------|--------------------|
-| CsiNumber        | INTEGER PRIMARY KEY | symbology(source_id) |                    |
-| Symbol           | TEXT                |                      | idx_csidata_symbol |
-| Name             | TEXT                |                      |                    |
-| Exchange         | TEXT                |                      |                    |
-| IsActive         | INTEGER             |                      |                    |
-| StartDate        | TEXT                |                      |                    |
-| EndDate          | TEXT                |                      |                    |
-| Sector           | TEXT                |                      |                    |
-| Industry         | TEXT                |                      |                    |
-| ConversionFactor | INTEGER             |                      |                    |
-| SwitchCfDate     | TEXT                |                      |                    |
-| PreSwitchCf      | INTEGER             |                      |                    |
-| LastVolume       | INTEGER             |                      |                    |
-| Type             | TEXT                |                      |                    |
-| ChildExchange    | TEXT                |                      |                    |
-| Currency         | TEXT                |                      |                    |
-| created_date     | FLOAT               |                      |                    |
-| updated_date     | FLOAT               |                      |                    |
+| Column Name       | Type                     | Foreign Key | Index              |
+|-------------------|--------------------------|-------------|--------------------|
+| csi_number        | TEXT PRIMARY KEY         |             |                    |
+| symbol            | TEXT                     |             | idx_csidata_symbol |
+| name              | TEXT                     |             |                    |
+| exchange          | TEXT                     |             |                    |
+| is_active         | SMALLINT                 |             |                    |
+| start_date        | DATE                     |             |                    |
+| end_date          | DATE                     |             |                    |
+| sector            | TEXT                     |             |                    |
+| industry          | TEXT                     |             |                    |
+| conversion_factor | SMALLINT                 |             |                    |
+| switch_cf_date    | DATE                     |             |                    |
+| pre_switch_cf     | SMALLINT                 |             |                    |
+| last_volume       | BIGINT                   |             |                    |
+| type              | TEXT                     |             |                    |
+| child_exchange    | TEXT                     |             |                    |
+| currency          | TEXT                     |             |                    |
+| created_date      | TIMESTAMP WITH TIME ZONE |             |                    |
+| updated_date      | TIMESTAMP WITH TIME ZONE |             |                    |
 
 #### data_vendor
 
-| Column Name      | Type                              | Foreign Key | Index |
-|------------------|-----------------------------------|-------------|-------|
-| data_vendor_id   | INTEGER PRIMARY KEY AUTOINCREMENT |             |       |
-| name             | TEXT UNIQUE                       |             |       |
-| url              | TEXT                              |             |       |
-| support_email    | TEXT                              |             |       |
-| api              | TEXT                              |             |       |
-| consensus_weight | FLOAT                             |             |       |
-| created_date     | FLOAT                             |             |       |
-| updated_date     | FLOAT                             |             |       |
+| Column Name      | Type                     | Foreign Key | Index |
+|------------------|--------------------------|-------------|-------|
+| data_vendor_id   | INTEGER PRIMARY KEY      |             |       |
+| name             | TEXT UNIQUE              |             |       |
+| url              | TEXT                     |             |       |
+| support_email    | TEXT                     |             |       |
+| api              | TEXT                     |             |       |
+| consensus_weight | SMALLINT                 |             |       |
+| created_date     | TIMESTAMP WITH TIME ZONE |             |       |
+| updated_date     | TIMESTAMP WITH TIME ZONE |             |       |
 
 #### exchange
 
-| Column Name  | Type                              | Foreign Key | Index |
-|--------------|-----------------------------------|-------------|-------|
-| exchange_id  | INTEGER PRIMARY KEY AUTOINCREMENT |             |       |
-| symbol       | TEXT UNIQUE                       |             |       |
-| goog_symbol  | TEXT                              |             |       |
-| yahoo_symbol | TEXT                              |             |       |
-| csi_symbol   | TEXT                              |             |       |
-| tsid_symbol  | TEXT                              |             |       |
-| name         | TEXT                              |             |       |
-| country      | TEXT                              |             |       |
-| city         | TEXT                              |             |       |
-| currency     | TEXT                              |             |       |
-| time_zone    | TEXT                              |             |       |
-| utc_offset   | INT                               |             |       |
-| open         | TEXT                              |             |       |
-| close        | TEXT                              |             |       |
-| lunch        | TEXT                              |             |       |
-| created_date | FLOAT                             |             |       |
-| updated_date | FLOAT                             |             |       |
+| Column Name  | Type                     | Foreign Key | Index |
+|--------------|--------------------------|-------------|-------|
+| exchange_id  | SMALLINT PRIMARY KEY     |             |       |
+| symbol       | TEXT UNIQUE NOT NULL     |             |       |
+| goog_symbol  | TEXT                     |             |       |
+| yahoo_symbol | TEXT                     |             |       |
+| csi_symbol   | TEXT                     |             |       |
+| tsid_symbol  | TEXT NOT NULL            |             |       |
+| name         | TEXT                     |             |       |
+| country      | TEXT                     |             |       |
+| city         | TEXT                     |             |       |
+| currency     | TEXT                     |             |       |
+| time_zone    | TEXT                     |             |       |
+| utc_offset   | REAL                     |             |       |
+| open         | TEXT                     |             |       |
+| close        | TEXT                     |             |       |
+| lunch        | TEXT                     |             |       |
+| created_date | TIMESTAMP WITH TIME ZONE |             |       |
+| updated_date | TIMESTAMP WITH TIME ZONE |             |       |
 
 #### indices
 
-| Column Name  | Type                | Foreign Key          | Index |
-|--------------|---------------------|----------------------|-------|
-| index_id     | INTEGER PRIMARY KEY |                      |       |
-| stock_index  | TEXT                |                      |       |
-| tsid         | TEXT                | symbology(source_id) |       |
-| as_of_date   | FLOAT               |                      |       |
-| created_date | FLOAT               |                      |       |
-| updated_date | FLOAT               |                      |       |
+| Column Name  | Type                     | Foreign Key                  | Index |
+|--------------|--------------------------|------------------------------|-------|
+| index_id     | SERIAL PRIMARY KEY       |                              |       |
+| stock_index  | TEXT NOT NULL            |                              |       |
+| source       | TEXT NOT NULL            | symbology(source, source_id) |       |
+| source_id    | TEXT NOT NULL            | symbology(source, source_id) |       |
+| as_of_date   | TIMESTAMP WITH TIME ZONE |                              |       |
+| created_date | TIMESTAMP WITH TIME ZONE |                              |       |
+| updated_date | TIMESTAMP WITH TIME ZONE |                              |       |
 
 #### quandl_codes
 
-| Column Name  | Type                              | Foreign Key          | Index       |
-|--------------|-----------------------------------|----------------------|-------------|
-| q_code_id    | INTEGER PRIMARY KEY AUTOINCREMENT | symbology(source_id) |             |
-| data_vendor  | TEXT                              | data_vendor(name)    |             |
-| data         | TEXT                              |                      | idx_qc_data |
-| component    | TEXT                              |                      |             |
-| period       | TEXT                              |                      |             |
-| q_code       | TEXT                              |                      |             |
-| name         | TEXT                              |                      |             |
-| start_date   | FLOAT                             |                      |             |
-| end_date     | FLOAT                             |                      |             |
-| frequency    | TEXT                              |                      |             |
-| last_updated | FLOAT                             |                      |             |
-| page_num     | INT                               |                      |             |
-| created_date | FLOAT                             |                      |             |
-| updated_date | FLOAT                             |                      |             |
+| Column Name      | Type                     | Foreign Key       | Index       |
+|------------------|--------------------------|-------------------|-------------|
+| q_code_id        | BIGSERIAL PRIMARY KEY    |                   |             |
+| data_vendor      | TEXT NOT NULL            | data_vendor(name) |             |
+| data             | TEXT NOT NULL            |                   | idx_qc_data |
+| component        | TEXT NOT NULL            |                   |             |
+| period           | TEXT                     |                   |             |
+| symbology_source | TEXT NOT NULL            |                   |             |
+| q_code           | TEXT NOT NULL            |                   |             |
+| name             | TEXT                     |                   |             |
+| start_date       | TIMESTAMP WITH TIME ZONE |                   |             |
+| end_date         | TIMESTAMP WITH TIME ZONE |                   |             |
+| frequency        | TEXT                     |                   |             |
+| last_updated     | TIMESTAMP WITH TIME ZONE |                   |             |
+| page_num         | INTEGER                  |                   |             |
+| created_date     | TIMESTAMP WITH TIME ZONE |                   |             |
+| updated_date     | TIMESTAMP WITH TIME ZONE |                   |             |
 
 #### symbology
 
-| Column Name  | Type  | Foreign Key | Index                   |
-|--------------|-------|-------------|-------------------------|
-| symbol_id    | INT   |             | idx_symbology_symbol_id |
-| source       | TEXT  |             |                         |
-| source_id    | TEXT  |             | idx_symbology_source_id |
-| type         | TEXT  |             |                         |
-| created_date | FLOAT |             |                         |
-| updated_date | FLOAT |             |                         |
+| Column Name  | Type                     | Foreign Key | Index                 |
+|--------------|--------------------------|-------------|-----------------------|
+| symbol_id    | BIGINT NOT NULL          |             |                       |
+| source       | TEXT NOT NULL            |             | idx_symbology_sources |
+| source_id    | TEXT NOT NULL            |             | idx_symbology_sources |
+| type         | TEXT                     |             |                       |
+| created_date | TIMESTAMP WITH TIME ZONE |             |                       |
+| updated_date | TIMESTAMP WITH TIME ZONE |             |                       |
 
 
 ## Data Tables
 
 #### daily_prices
 
-| Column Name    | Type                              | Foreign Key                 | Index                 |
-|----------------|-----------------------------------|-----------------------------|-----------------------|
-| daily_price_id | INTEGER PRIMARY KEY AUTOINCREMENT |                             |                       |
-| data_vendor_id | INT                               | data_vendor(data_vendor_id) | idx_dp_data_vendor_id |
-| tsid           | TEXT                              | symbology(source_id)        | idx_dp_tsid           |
-| date           | FLOAT                             |                             | idx_dp_date           |
-| open           | REAL                              |                             |                       |
-| high           | REAL                              |                             |                       |
-| low            | REAL                              |                             |                       |
-| close          | REAL                              |                             |                       |
-| volume         | REAL                              |                             |                       |
-| ex_dividend    | REAL                              |                             |                       |
-| split_ratio    | REAL                              |                             |                       |
-| adj_open       | REAL                              |                             |                       |
-| adj_high       | REAL                              |                             |                       |
-| adj_low        | REAL                              |                             |                       |
-| adj_close      | REAL                              |                             |                       |
-| adj_volume     | REAL                              |                             |                       |
-| updated_date   | FLOAT                             |                             | idx_dp_updated_date   |
+| Column Name    | Type                              | Foreign Key                  | Index              |
+|----------------|-----------------------------------|------------------------------|--------------------|
+| daily_price_id | BIGSERIAL PRIMARY KEY             |                              |                    |
+| data_vendor_id | SMALLINT                          | data_vendor(data_vendor_id)  | idx_dp_identifiers |
+| source         | TEXT NOT NULL                     | symbology(source, source_id) |                    |
+| source_id      | TEXT NOT NULL                     | symbology(source, source_id) | idx_dp_identifiers |
+| date           | TIMESTAMP WITH TIME ZONE NOT NULL |                              | idx_dp_identifiers |
+| open           | DECIMAL(11,4)                     |                              |                    |
+| high           | DECIMAL(11,4)                     |                              |                    |
+| low            | DECIMAL(11,4)                     |                              |                    |
+| close          | DECIMAL(11,4)                     |                              |                    |
+| volume         | BIGINT                            |                              |                    |
+| ex_dividend    | DECIMAL(6,3)                      |                              |                    |
+| split_ratio    | DECIMAL(11,4)                     |                              |                    |
+| updated_date   | TIMESTAMP WITH TIME ZONE          |                              | idx_dp_identifiers |
 
 #### finra_data
 
-| Column Name         | Type                              | Foreign Key          | Index          |
-|---------------------|-----------------------------------|----------------------|----------------|
-| finra_id            | INTEGER PRIMARY KEY AUTOINCREMENT |                      |                |
-| tsid                | TEXT                              | symbology(source_id) | idx_finra_tsid |
-| date                | TEXT                              |                      |                |
-| short_volume        | REAL                              |                      |                |
-| short_exempt_volume | REAL                              |                      |                |
-| total_volume        | REAL                              |                      |                |
-| updated_date        | FLOAT                             |                      |                |
+| Column Name         | Type                              | Foreign Key                  | Index               |
+|---------------------|-----------------------------------|------------------------------|---------------------|
+| finra_id            | SERIAL PRIMARY KEY                |                              |                     |
+| source              | TEXT NOT NULL                     | symbology(source, source_id) |                     |
+| source_id           | TEXT NOT NULL                     | symbology(source, source_id) | idx_finra_source_id |
+| date                | TIMESTAMP WITH TIME ZONE NOT NULL |                              |                     |
+| short_volume        | INTEGER                           |                              |                     |
+| short_exempt_volume | INTEGER                           |                              |                     |
+| total_volume        | INTEGER                           |                              |                     |
+| updated_date        | TIMESTAMP WITH TIME ZONE          |                              |                     |
 
 #### fundamental_data
 
-| Column Name    | Type                              | Foreign Key          | Index         |
-|----------------|-----------------------------------|----------------------|---------------|
-| fundamental_id | INTEGER PRIMARY KEY AUTOINCREMENT |                      |               |
-| tsid           | TEXT                              | symbology(source_id) | idx_fund_tsid |
-| date           | TEXT                              |                      |               |
-| value          | FLOAT                             |                      |               |
-| note           | TEXT                              |                      |               |
-| created_date   | FLOAT                             |                      |               |
-| updated_date   | FLOAT                             |                      |               |
+| Column Name    | Type                     | Foreign Key                  | Index              |
+|----------------|--------------------------|------------------------------|--------------------|
+| fundamental_id | BIGSERIAL PRIMARY KEY    |                              |                    |
+| source         | TEXT NOT NULL            | symbology(source, source_id) |                    |
+| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_fund_source_id |
+| date           | TIMESTAMP WITH TIME ZONE |                              |                    |
+| value          | DECIMAL(14,2)            |                              |                    |
+| note           | TEXT                     |                              |                    |
+| created_date   | TIMESTAMP WITH TIME ZONE |                              |                    |
+| updated_date   | TIMESTAMP WITH TIME ZONE |                              |                    |
 
 #### minute_prices
 
-| Column Name     | Type                              | Foreign Key                 | Index                 |
-|-----------------|-----------------------------------|-----------------------------|-----------------------|
-| minute_price_id | INTEGER PRIMARY KEY AUTOINCREMENT |                             |                       |
-| data_vendor_id  | INT                               | data_vendor(data_vendor_id) | idx_mp_data_vendor_id |
-| tsid            | TEXT                              | symbology(source_id)        | idx_mp_tsid           |
-| date            | TEXT                              |                             | idx_mp_date           |
-| close           | REAL                              |                             |                       |
-| high            | REAL                              |                             |                       |
-| low             | REAL                              |                             |                       |
-| open            | REAL                              |                             |                       |
-| volume          | REAL                              |                             |                       |
-| update_date     | FLOAT                             |                             | idx_mp_updated_date   |
+| Column Name     | Type                     | Foreign Key                  | Index              |
+|-----------------|--------------------------|------------------------------|--------------------|
+| minute_price_id | BIGSERIAL PRIMARY KEY    |                              |                    |
+| data_vendor_id  | SMALLINT                 | data_vendor(data_vendor_id)  | idx_mp_identifiers |
+| source          | TEXT NOT NULL            | symbology(source, source_id) |                    |
+| source_id       | TEXT NOT NULL            | symbology(source, source_id) | idx_mp_identifiers |
+| date            | TIMESTAMP WITH TIME ZONE |                              | idx_mp_identifiers |
+| close           | DECIMAL(11,4)            |                              |                    |
+| high            | DECIMAL(11,4)            |                              |                    |
+| low             | DECIMAL(11,4)            |                              |                    |
+| open            | DECIMAL(11,4)            |                              |                    |
+| volume          | BITINT                   |                              |                    |
+| update_date     | TIMESTAMP WITH TIME ZONE |                              | idx_mp_identifiers |
+
+#### option_chains
+
+| Column Name    | Type                     | Foreign Key                  | Index                    |
+|----------------|--------------------------|------------------------------|--------------------------|
+| option_id      | BIGSERIAL PRIMARY KEY    |                              |                          |
+| data_vendor_id | SMALLINT                 | data_vendor(data_vendor_id)  |                          |
+| source         | TEXT NOT NULL            | symbology(source, source_id) |                          |
+| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_option_chains_values |
+| symbol         | TEXT                     |                              |                          |
+| exchange       | TEXT                     |                              |                          |
+| currency       | TEXT                     |                              |                          |
+| multiplier     | SMALLINT                 |                              |                          |
+| leg_id         | SMALLINT                 |                              |                          |
+| contract_id    | BIGINT NOT NULL          |                              | idx_option_chains_values |
+| expiry         | DATE                     |                              | idx_option_chains_values |
+| type           | TEXT                     |                              |                          |
+| strike         | DECIMAL(8,2)             |                              | idx_option_chains_values |
+| bid            | DECIMAL(10,4)            |                              |                          |
+| bid_size       | INTEGER                  |                              |                          |
+| ask            | DECIMAL(10,4)            |                              |                          |
+| ask_size       | INTEGER                  |                              |                          |
+| close          | DECIMAL(10,4)            |                              |                          |
+| open_interest  | INTEGER                  |                              |                          |
+| volume         | INTEGER                  |                              |                          |
+| imp_volatility | DECIMAL(6,4)             |                              |                          |
+| delta          | DECIMAL(6,5)             |                              |                          |
+| gamm           | DECIMAL(6,5)             |                              |                          |
+| rho            | DECIMAL(6,5)             |                              |                          |
+| theta          | DECIMAL(6,5)             |                              |                          |
+| vega           | DECIMAL(6,5)             |                              |                          |
+| updated_date   | TIMESTAMP WITH TIME ZONE |                              |                          |
+
+#### tick_prices
+
+| Column Name | Type                     | Foreign Key                  | Index           |
+|-------------|--------------------------|------------------------------|-----------------|
+| tick_id     | BIGSERIAL PRIMARY KEY    |                              |                 |
+| source      | TEXT NOT NULL            | symbology(source, source_id) |                 |
+| source_id   | TEXT NOT NULL            | symbology(source, source_id) | idx_tick_values |
+| date        | TIMESTAMP WITH TIME ZONE |                              | idx_tick_values |
+| bid         | DECIMAL(11,4)            |                              |                 |
+| ask         | DECIMAL(11,4)            |                              |                 |
+| last        | DECIMAL(11,4)            |                              |                 |
+| high        | DECIMAL(11,4)            |                              |                 |
+| low         | DECIMAL(11,4)            |                              |                 |
+| close       | DECIMAL(11,4)            |                              |                 |
+| bid_size    | INTEGER                  |                              |                 |
+| ask_size    | INTEGER                  |                              |                 |
+| last_size   | INTEGER                  |                              |                 |
+| volume      | INTEGER                  |                              |                 |
+
+#### tick_prices_stream
+
+| Column Name | Type                     | Foreign Key                  | Index                  |
+|-------------|--------------------------|------------------------------|------------------------|
+| tick_id     | BIGSERIAL PRIMARY KEY    |                              |                        |
+| source      | TEXT NOT NULL            | symbology(source, source_id) |                        |
+| source_id   | TEXT NOT NULL            | symbology(source, source_id) | idx_tick_stream_values |
+| date        | TIMESTAMP WITH TIME ZONE |                              | idx_tick_stream_values |
+| field       | TEXT                     |                              | idx_tick_stream_values |
+| value       | DECIMAL(11,4)            |                              |                        |
 
 
 ## Events Tables
 
 #### conference_calls
 
-| Column Name  | Type                              | Foreign Key          | Index         |
-|--------------|-----------------------------------|----------------------|---------------|
-| conf_call_id | INTEGER PRIMARY KEY AUTOINCREMENT |                      |               |
-| tsid         | TEXT                              | symbology(source_id) | idx_conf_tsid |
-| symbol       | TEXT                              |                      |               |
-| date         | FLOAT                             |                      |               |
-| event_title  | TEXT                              |                      |               |
-| created_date | FLOAT                             |                      |               |
-| updated_date | FLOAT                             |                      |               |
+| Column Name  | Type                              | Foreign Key                  | Index              |
+|--------------|-----------------------------------|------------------------------|--------------------|
+| conf_call_id | SERIAL PRIMARY KEY                |                              |                    |
+| source       | TEXT NOT NULL                     | symbology(source, source_id) |                    |
+| source_id    | TEXT NOT NULL                     | symbology(source, source_id) | idx_conf_source_id |
+| symbol       | TEXT                              |                              |                    |
+| date         | TIMESTAMP WITH TIME ZONE NOT NULL |                              | idx_conf_source_id |
+| event_title  | TEXT                              |                              |                    |
+| created_date | TIMESTAMP WITH TIME ZONE          |                              |                    |
+| updated_date | TIMESTAMP WITH TIME ZONE          |                              |                    |
 
 #### dividends
 
-| Column Name       | Type                              | Foreign Key          | Index        |
-|-------------------|-----------------------------------|----------------------|--------------|
-| dividend_id       | INTEGER PRIMARY KEY AUTOINCREMENT |                      |              |
-| tsid              | TEXT                              | symbology(source_id) | idx_div_tsid |
-| symbol            | TEXT                              |                      |              |
-| company           | TEXT                              |                      |              |
-| dividend          | FLOAT                             |                      |              |
-| ex_dividend_date  | FLOAT                             |                      |              |
-| record_date       | FLOAT                             |                      |              |
-| announcement_date | FLOAT                             |                      |              |
-| payment_date      | FLOAT                             |                      |              |
-| created_date      | FLOAT                             |                      |              |
-| updated_date      | FLOAT                             |                      |              |
+| Column Name       | Type                              | Foreign Key                  | Index             |
+|-------------------|-----------------------------------|------------------------------|-------------------|
+| dividend_id       | SERIAL PRIMARY KEY                |                              |                   |
+| source            | TEXT NOT NULL                     | symbology(source, source_id) |                   |
+| source_id         | TEXT NOT NULL                     | symbology(source, source_id) | idx_div_source_id |
+| symbol            | TEXT                              |                              |                   |
+| company           | TEXT                              |                              |                   |
+| dividend          | DECIMAL(6,3)                      |                              |                   |
+| ex_dividend_date  | TIMESTAMP WITH TIME ZONE NOT NULL |                              |                   |
+| record_date       | TIMESTAMP WITH TIME ZONE          |                              |                   |
+| announcement_date | TIMESTAMP WITH TIME ZONE          |                              |                   |
+| payment_date      | TIMESTAMP WITH TIME ZONE          |                              |                   |
+| created_date      | TIMESTAMP WITH TIME ZONE          |                              |                   |
+| updated_date      | TIMESTAMP WITH TIME ZONE          |                              |                   |
 
 #### earnings
 
-| Column Name   | Type                              | Foreign Key          | Index         |
-|---------------|-----------------------------------|----------------------|---------------|
-| earnings_id   | INTEGER PRIMARY KEY AUTOINCREMENT |                      |               |
-| tsid          | TEXT                              | symbology(source_id) | idx_earn_tsid |
-| symbol        | TEXT                              |                      |               |
-| company_name  | TEXT                              |                      |               |
-| date          | FLOAT                             |                      |               |
-| reported_eps  | FLOAT                             |                      |               |
-| consensus_eps | FLOAT                             |                      |               |
-| created_date  | FLOAT                             |                      |               |
-| updated_date  | FLOAT                             |                      |               |
+| Column Name   | Type                              | Foreign Key                  | Index              |
+|---------------|-----------------------------------|------------------------------|--------------------|
+| earnings_id   | SERIAL PRIMARY KEY                |                              |                    |
+| source        | TEXT NOT NULL                     | symbology(source, source_id) |                    |
+| source_id     | TEXT NOT NULL                     | symbology(source, source_id) | idx_earn_source_id |
+| symbol        | TEXT                              |                              |                    |
+| company_name  | TEXT                              |                              |                    |
+| date          | TIMESTAMP WITH TIME ZONE NOT NULL |                              |                    |
+| reported_eps  | DECIMAL(6,3)                      |                              |                    |
+| consensus_eps | DECIMAL(6,3)                      |                              |                    |
+| created_date  | TIMESTAMP WITH TIME ZONE          |                              |                    |
+| updated_date  | TIMESTAMP WITH TIME ZONE          |                              |                    |
 
 #### economic_events
 
-| Column Name       | Type                              | Foreign Key          | Index               |
-|-------------------|-----------------------------------|----------------------|---------------------|
-| event_id          | INTEGER PRIMARY KEY AUTOINCREMENT |                      |                     |
-| tsid              | TEXT                              | symbology(source_id) | idx_econ_event_tsid |
-| event_name        | TEXT                              |                      |                     |
-| date              | FLOAT                             |                      |                     |
-| date_for          | FLOAT                             |                      |                     |
-| actual            | TEXT                              |                      |                     |
-| briefing_forecast | TEXT                              |                      |                     |
-| market_expects    | TEXT                              |                      |                     |
-| prior             | TEXT                              |                      |                     |
-| revised_from      | TEXT                              |                      |                     |
-| created_date      | FLOAT                             |                      |                     |
-| updated_date      | FLOAT                             |                      |                     |
+| Column Name       | Type                     | Foreign Key                  | Index                    |
+|-------------------|--------------------------|------------------------------|--------------------------|
+| event_id          | SERIAL PRIMARY KEY       |                              |                          |
+| source            | TEXT NOT NULL            | symbology(source, source_id) |                          |
+| source_id         | TEXT NOT NULL            | symbology(source, source_id) | idx_econ_event_source_id |
+| event_name        | TEXT                     |                              |                          |
+| date              | TIMESTAMP WITH TIME ZONE |                              |                          |
+| date_for          | TIMESTAMP WITH TIME ZONE |                              |                          |
+| actual            | TEXT                     |                              |                          |
+| briefing_forecast | TEXT                     |                              |                          |
+| market_expects    | TEXT                     |                              |                          |
+| prior             | TEXT                     |                              |                          |
+| revised_from      | TEXT                     |                              |                          |
+| created_date      | TIMESTAMP WITH TIME ZONE |                              |                          |
+| updated_date      | TIMESTAMP WITH TIME ZONE |                              |                          |
 
 #### ipo_pricings
 
-| ipo_pricings   |                                   |                      |               |
-|----------------|-----------------------------------|----------------------|---------------|
-| Column Name    | Type                              | Foreign Key          | Index         |
-| ipo_id         | INTEGER PRIMARY KEY AUTOINCREMENT |                      |               |
-| tsid           | TEXT                              | symbology(source_id) | idx_ipop_tsid |
-| symbol         | TEXT                              |                      |               |
-| company_name   | TEXT                              |                      |               |
-| offer_date     | FLOAT                             |                      |               |
-| shares_offered | TEXT                              |                      |               |
-| proposed_price | TEXT                              |                      |               |
-| initial_price  | TEXT                              |                      |               |
-| created_date   | FLOAT                             |                      |               |
-| updated_date   | FLOAT                             |                      |               |
+| Column Name    | Type                     | Foreign Key                  | Index              |
+|----------------|--------------------------|------------------------------|--------------------|
+| ipo_id         | SERIAL PRIMARY KEY       |                              |                    |
+| source         | TEXT NOT NULL            | symbology(source, source_id) |                    |
+| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_ipop_source_id |
+| symbol         | TEXT                     |                              |                    |
+| company_name   | TEXT                     |                              |                    |
+| offer_date     | TIMESTAMP WITH TIME ZONE |                              |                    |
+| shares_offered | TEXT                     |                              |                    |
+| proposed_price | TEXT                     |                              |                    |
+| initial_price  | TEXT                     |                              |                    |
+| created_date   | TIMESTAMP WITH TIME ZONE |                              |                    |
+| updated_date   | TIMESTAMP WITH TIME ZONE |                              |                    |
 
 #### splits
 
-| Column Name    | Type                              | Foreign Key          | Index           |
-|----------------|-----------------------------------|----------------------|-----------------|
-| split_id       | INTEGER PRIMARY KEY AUTOINCREMENT |                      |                 |
-| tsid           | TEXT                              | symbology(source_id) | idx_splits_tsid |
-| symbol         | TEXT                              |                      |                 |
-| company_name   | TEXT                              |                      |                 |
-| payable_date   | FLOAT                             |                      |                 |
-| ex_date        | FLOAT                             |                      |                 |
-| announced_date | FLOAT                             |                      |                 |
-| optionable     | INT                               |                      |                 |
-| ratio          | FLOAT                             |                      |                 |
-| created_date   | FLOAT                             |                      |                 |
-| updated_date   | FLOAT                             |                      |                 |
+| Column Name    | Type                     | Foreign Key                  | Index                |
+|----------------|--------------------------|------------------------------|----------------------|
+| split_id       | SERIAL PRIMARY KEY       |                              |                      |
+| source         | TEXT NOT NULL            | symbology(source, source_id) |                      |
+| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_splits_source_id |
+| symbol         | TEXT                     |                              |                      |
+| company_name   | TEXT                     |                              |                      |
+| payable_date   | TIMESTAMP WITH TIME ZONE |                              |                      |
+| ex_date        | TIMESTAMP WITH TIME ZONE |                              |                      |
+| announced_date | TIMESTAMP WITH TIME ZONE |                              |                      |
+| optionable     | INTEGER                  |                              |                      |
+| ratio          | DECIMAL(11,4)            |                              |                      |
+| created_date   | TIMESTAMP WITH TIME ZONE |                              |                      |
+| updated_date   | TIMESTAMP WITH TIME ZONE |                              |                      |

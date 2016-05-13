@@ -1,7 +1,11 @@
 import time
 from datetime import datetime
-import sqlite3
+import os
 import pandas as pd
+import psycopg2
+
+from utilities.database_queries import df_to_sql, query_load_table,\
+    update_load_table
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -11,7 +15,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.2'
+__version__ = '1.4.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -28,32 +32,43 @@ __version__ = '1.3.2'
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-# Todo: Add code to replace specified tables every x periods or upon CSV updates
-
 
 class LoadTables(object):
 
-    def __init__(self, database_location, tables_to_load,
+    def __init__(self, database, user, password, host, port, tables_to_load,
                  table_location='load_tables'):
-        self.database_location = database_location
+        self.database = database
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
         self.load_to_sql(tables_to_load, table_location)
 
     @staticmethod
-    def load_table(table_name, folder=''):
+    def altered_values(existing_df, new_df):
+        """ Compare the two provided DataFrames, returning a new DataFrame that
+        only includes rows from the new_df that are different from the
+        existing_df.
 
-        file = folder + '/%s.csv' % table_name
-        df = pd.read_csv(file, encoding='ISO-8859-1')
-        # add 'created_date' as the last column
-        df.insert(len(df.columns), 'created_date',datetime.utcnow().isoformat())
-        # add 'updated_date as the last column
-        df.insert(len(df.columns), 'updated_date',datetime.utcnow().isoformat())
-
-        # df.to_csv('%s_df.csv' % table_name)   # For testing purposes
-        return df
-
-    def find_symbol_id(self, table_df):
+        :param existing_df: DataFrame of the existing values
+        :param new_df: DataFrame of the next values
+        :return: DataFrame with the altered/new values
         """
-        This only converts the stock's ticker to it's respective symbol_id.
+
+        # DataFrame with the similar values from both the existing_df and the
+        #   new_df.
+        combined_df = pd.merge(left=existing_df, right=new_df, how='inner',
+                               on=list(new_df.columns.values))
+
+        # In a new DataFrame, only keep the new_df rows that did NOT have a
+        #   match to the existing_df
+        id_col_name = list(new_df.columns.values)[0]
+        altered_df = new_df[~new_df[id_col_name].isin(combined_df[id_col_name])]
+
+        return altered_df
+
+    def find_tsid(self, table_df):
+        """ This only converts the stock's ticker to it's respective symbol_id.
         This requires knowing the ticker, the exchange and data vendor.
 
         :param table_df: DataFrame with the ticker and index
@@ -61,26 +76,27 @@ class LoadTables(object):
         """
         
         try:
-            conn = sqlite3.connect(self.database_location)
+            conn = psycopg2.connect(database=self.database, user=self.user,
+                                    password=self.password, host=self.host,
+                                    port=self.port)
             with conn:
                 cur = conn.cursor()
                 # Determines if the quandl_codes table is empty? Stop if it is.
-                cur.execute('SELECT symbol_id FROM quandl_codes LIMIT 1')
+                cur.execute('SELECT q_code FROM quandl_codes LIMIT 1')
                 if not cur.fetchall():
                     print('The quandl_codes table is empty. Run the code to '
                           'download the Quandl Codes and then run this again.')
                 else:
                     table_df = self.find_symbol_id_process(table_df, cur)
                     return table_df
-        except sqlite3.Error as e:
-            print('Error when trying to retrieve data from database when '
-                  'working with indices table')
+        except psycopg2.Error as e:
+            print('Error when trying to retrieve data from the %s database '
+                  'in LoadTables.find_q_code')
             print(e)
 
     @staticmethod
     def find_symbol_id_process(table_df, cur):
-        """
-        Finds the ticker's symbol_id. If the table provided has an exchange
+        """ Finds the ticker's symbol_id. If the table provided has an exchange
         column, then the ticker and exchange will be used to find the
         symbol_id. The result should be a perfect match to the quandl_codes 
         table. If an exchange column doesn't exist, then only the ticker will
@@ -135,8 +151,7 @@ class LoadTables(object):
         return df
 
     def load_to_sql(self, tables_to_load, table_location):
-        """
-        The main function that processes and loads the auxiliary data into
+        """ The main function that processes and loads the auxiliary data into
         the database. For each table listed in the tables_to_load list, their
         CSV file is loaded and the data moved into the SQL database. If the
         table is for indices, the CSV data is passed to the find_symbol_id
@@ -150,46 +165,69 @@ class LoadTables(object):
         start_time = time.time()
         for table, query in tables.items():
             if table in tables_to_load:
-                conn = sqlite3.connect(self.database_location)
                 try:
-                    with conn:
-                        cur = conn.cursor()
+                    file = os.path.abspath(os.path.join(table_location,
+                                                        table + '.csv'))
+                    table_df = pd.read_csv(file, encoding='ISO-8859-1')
+                except Exception as e:
+                    print('Unable to load the %s csv load file. Skipping it' %
+                          table)
+                    print(e)
+                    continue
 
-                        try:
-                            table_df = self.load_table(table, table_location)
-                        except Exception as e:
-                            print('Unable to load %s csv load file. '
-                                  'Skipping it for now...' % (table,))
-                            print(e)
-                            continue
+                if table == 'indices' or table == 'tickers':
+                    # ToDo: Re-implement these tables; need symbol_id
+                    print('Unable to process indices and tickers table '
+                          'since there is no system to create a unique '
+                          'symbol_id for each item.')
+                    continue
+                    # # Removes the column that has the company's name
+                    # table_df.drop('ticker_name', 1, inplace=True)
+                    # # Finds the tsid for each ticker
+                    # table_df = self.find_tsid(table_df)
 
-                        if table == 'indices' or table == 'tickers':
-                            # ToDo: Re-implement these tables; need symbol_id
-                            print('Unable to process indices and tickers table '
-                                  'since there is no system to create a unique '
-                                  'symbol_id for each item.')
-                            pass
-                            # Removes the column that has the company's name
-                            table_df.drop('ticker_name', 1, inplace=True)
-                            # Finds the symbol_id for each ticker
-                            table_df = self.find_symbol_id(table_df)
+                    # if table == 'tickers':
+                    #     table_df.to_csv('load_tables/tickers_df.csv',
+                    #                     index=False)
 
-                            # if table == 'tickers':
-                            #     table_df.to_csv('load_tables/tickers_df.csv',
-                            #                     index=False)
+                # Retrieve any existing values for this table
+                existing_df = query_load_table(
+                    database=self.database, user=self.user,
+                    password=self.password, host=self.host, port=self.port,
+                    table=table)
 
-                        cur.executemany(query, table_df.to_records(index=False))
-                        conn.execute("PRAGMA journal_mode = MEMORY")
-                        conn.commit()
-                        print('Loaded %s into the Securities Master' % (table,))
-                except conn.Error as e:
-                    conn.rollback()
-                    print("Failed to insert the values for %s into the "
-                          "Database because of: %s" % (table, e))
-                except conn.OperationalError:
-                    raise ValueError('Unable to connect to the SQL Database in '
-                                     'q_code_to_sql. Make sure the database '
-                                     'address/name are correct.')
+                # Find the values that are different between the two DataFrames
+                altered_df = self.altered_values(
+                    existing_df=existing_df, new_df=table_df)
+
+                altered_df.insert(len(altered_df.columns), 'created_date',
+                                  datetime.now().isoformat())
+                altered_df.insert(len(altered_df.columns), 'updated_date',
+                                  datetime.now().isoformat())
+
+                # Get the id column for the current table (first column)
+                id_col_name = list(altered_df.columns.values)[0]
+
+                # Separate out the new and updated values from the altered_df
+                new_df = (altered_df[~altered_df[id_col_name].
+                          isin(existing_df[id_col_name])])
+                updated_df = (altered_df[altered_df[id_col_name].
+                              isin(existing_df[id_col_name])])
+
+                # Update all modified values within the database
+                update_load_table(database=self.database, user=self.user,
+                                  password=self.password, host=self.host,
+                                  port=self.port, values_df=updated_df,
+                                  table=table)
+
+                # Append all new values to the database
+                df_to_sql(database=self.database, user=self.user,
+                          password=self.password, host=self.host,
+                          port=self.port, df=new_df, sql_table=table,
+                          exists='append', item=table)
+
+                print('Loaded %s into the %s database' %
+                      (table, self.database))
 
         load_tables_excluded = [table for table in tables_to_load
                                 if table not in tables.keys()]
@@ -205,21 +243,8 @@ class LoadTables(object):
 
 # NOTE: make sure the table name (dict key) matches the csv load file name
 tables = {
-    'data_vendor': '''INSERT INTO data_vendor(
-            data_vendor_id, name, url, support_email, api, consensus_weight,
-            created_date, updated_date)
-            VALUES(NULL,?,?,?,?,?,?,?)''',
-    'exchanges': '''INSERT INTO exchange(
-            exchange_id, symbol, goog_symbol, yahoo_symbol, csi_symbol,
-            tsid_symbol, name, country, city, currency, time_zone,
-            utc_offset, open, close, lunch, created_date, updated_date)
-            VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-    'tickers': '''INSERT INTO tickers(
-            symbol_id, ticker, exchange, sector, industry, sub_industry,
-            currency, hq_country, created_date, updated_date)
-            VALUES(?,?,?,?,?,?,?,?,?,?)''',
-    'indices': '''INSERT INTO indices(
-            index_id, stock_index, symbol_id, as_of_date, created_date,
-            updated_date)
-            VALUES(NULL,?,?,?,?,?)''',
+    'data_vendor': '(%s,%s,%s,%s,%s,%s,%s,%s)',
+    'exchanges': '(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+    'tickers': '(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+    'indices': '(NULL,%s,%s,%s,%s,%s,%s)',
 }

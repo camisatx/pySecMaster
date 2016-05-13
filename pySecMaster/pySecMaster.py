@@ -1,12 +1,14 @@
 from datetime import datetime
 
-from create_tables import main_tables, data_tables, events_tables
+from create_tables import create_database, main_tables, data_tables,\
+    events_tables
 from extractor import QuandlCodeExtract, QuandlDataExtraction,\
     GoogleFinanceDataExtraction, YahooFinanceDataExtraction, CSIDataExtractor
 from load_aux_tables import LoadTables
 from build_symbology import create_symbology
 from cross_validator import CrossValidate
 from utilities.database_queries import query_all_active_tsids
+from utilities.user_dir import user_dir
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2016 Josh Schertz'
@@ -16,7 +18,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.2'
+__version__ = '1.4.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -58,6 +60,8 @@ Future expansions:
 ###############################################################################
 # Database maintenance options:
 
+userdir = user_dir()
+
 csidata_type = 'stock'      # stock, commodity
 
 # Don't change these unless you know what you are doing
@@ -96,48 +100,98 @@ yahoo_fin_url = {'root': 'http://real-chart.finance.yahoo.com/table.csv?',
 ###############################################################################
 
 
-def maintenance(database_link, quandl_ticker_source, database_list, threads,
-                quandl_key, quandl_update_range, csidata_update_range,
-                symbology_sources):
+def maintenance(database_options, quandl_key, quandl_ticker_source,
+                database_list, threads, quandl_update_range,
+                csidata_update_range, symbology_sources):
+    """
+    :param database_options: Dictionary of the postgres database options
+    :param quandl_key: Optional string of the Quandl API key
+    :param quandl_ticker_source: String of which source the Quandl data should
+        use when determining which codes to download (csidata, quandl)
+    :param database_list: List of strings indicating which Quandl databases
+        should have their codes downloaded (WIKI, GOOG, YAHOO)
+    :param threads: Integer of the threads to run when downloading Quandl codes
+    :param quandl_update_range: Integer of the number of days before the
+        Quandl codes should be updated
+    :param csidata_update_range: Integer of the number of days before the CSI
+        Data factsheet should be updated
+    :param symbology_sources: List of strings of which symbology sources
+        should be created (csi_data, tsid, quandl_wiki)
+    """
 
     print('Starting Security Master table maintenance function. This can take '
           'some time to finish if large databases are used. If this fails, '
           'rerun it after a few minutes.')
 
     # Create the SQL tables if they don't already exist
-    main_tables(database_link)
-    data_tables(database_link)
-    events_tables(database_link)
+    create_database(admin_user=database_options['admin_user'],
+                    admin_password=database_options['admin_password'],
+                    database=database_options['database'],
+                    user=database_options['user'])
+    main_tables(database=database_options['database'],
+                user=database_options['user'],
+                password=database_options['password'],
+                host=database_options['host'],
+                port=database_options['port'],)
+    data_tables(database=database_options['database'],
+                user=database_options['user'],
+                password=database_options['password'],
+                host=database_options['host'],
+                port=database_options['port'])
+    events_tables(database=database_options['database'],
+                  user=database_options['user'],
+                  password=database_options['password'],
+                  host=database_options['host'],
+                  port=database_options['port'])
 
-    LoadTables(database_location=database_link, tables_to_load=tables_to_load)
+    LoadTables(database=database_options['database'],
+               user=database_options['user'],
+               password=database_options['password'],
+               host=database_options['host'],
+               port=database_options['port'],
+               tables_to_load=tables_to_load)
 
     # Always extract CSI values, as they are used for the symbology table
-    CSIDataExtractor(db_location=database_link, db_url=csidata_url,
+    CSIDataExtractor(database=database_options['database'],
+                     user=database_options['user'],
+                     password=database_options['password'],
+                     host=database_options['host'],
+                     port=database_options['port'],
+                     db_url=csidata_url,
                      data_type=csidata_type,
                      redownload_time=csidata_update_range)
 
     if quandl_ticker_source == 'quandl':
-        QuandlCodeExtract(db_location=database_link,
+        QuandlCodeExtract(database=database_options['database'],
+                          user=database_options['user'],
+                          password=database_options['password'],
+                          host=database_options['host'],
+                          port=database_options['port'],
                           quandl_token=quandl_key,
                           database_list=database_list,
                           database_url=database_url,
                           update_range=quandl_update_range,
                           threads=threads)
 
-    create_symbology(db_location=database_link, source_list=symbology_sources)
+    create_symbology(database=database_options['database'],
+                     user=database_options['user'],
+                     password=database_options['password'],
+                     host=database_options['host'],
+                     port=database_options['port'],
+                     source_list=symbology_sources)
 
 
-def data_download(database_link, download_list, threads=4, quandl_key=None,
+def data_download(database_options, quandl_key, download_list, threads=4,
                   verbose=False):
     """ Loops through all provided data sources in download_list, and runs
     the associated data extractor using the provided source variables.
 
-    :param database_link: String of the file directory to the SQL database
+    :param database_options: Dictionary of the postgres database options
+    :param quandl_key: Optional string of the Quandl API key
     :param download_list: List of dictionaries, with each dictionary containing
         all of the relevant variables for the specific source
     :param threads: Integer indicating how many threads should be used to
         concurrently download data
-    :param quandl_key: String of the optional Quandl API key
     :param verbose: Boolean of whether debugging prints should occur.
     """
 
@@ -167,7 +221,11 @@ def data_download(database_link, download_list, threads=4, quandl_key=None,
                       (source['selection'], source['data_process'],
                        source['replace_days_back']))
                 QuandlDataExtraction(
-                    db_location=database_link,
+                    database=database_options['database'],
+                    user=database_options['user'],
+                    password=database_options['password'],
+                    host=database_options['host'],
+                    port=database_options['port'],
                     quandl_token=quandl_key,
                     db_url=quandl_data_url,
                     download_selection=source['selection'],
@@ -191,7 +249,11 @@ def data_download(database_link, download_list, threads=4, quandl_key=None,
 
             google_fin_url['period'] = 'p=' + str(source['period']) + 'd'
             GoogleFinanceDataExtraction(
-                db_location=database_link,
+                database=database_options['database'],
+                user=database_options['user'],
+                password=database_options['password'],
+                host=database_options['host'],
+                port=database_options['port'],
                 db_url=google_fin_url,
                 download_selection=source['selection'],
                 redownload_time=source['redownload_time'],
@@ -209,7 +271,11 @@ def data_download(database_link, download_list, threads=4, quandl_key=None,
                    source['replace_days_back']))
 
             YahooFinanceDataExtraction(
-                db_location=database_link,
+                database=database_options['database'],
+                user=database_options['user'],
+                password=database_options['password'],
+                host=database_options['host'],
+                port=database_options['port'],
                 db_url=yahoo_fin_url,
                 download_selection=source['selection'],
                 redownload_time=source['redownload_time'],
@@ -227,12 +293,12 @@ def data_download(database_link, download_list, threads=4, quandl_key=None,
           download_list)
 
 
-def post_download_maintenance(database_link, download_list, period=None,
+def post_download_maintenance(database_options, download_list, period=None,
                               verbose=False):
     """ Perform tasks that require all data to be downloaded first, such as the
     source cross validator function.
 
-    :param database_link: String of the database file director
+    :param database_options: Dictionary of the postgres database options
     :param download_list: List of dictionaries, with each dictionary containing
         all of the relevant variables for the specific source
     :param period: Optional integer indicating the prior number of days whose
@@ -241,47 +307,65 @@ def post_download_maintenance(database_link, download_list, period=None,
     :param verbose: Boolean of whether debugging prints should occur.
     """
 
-    table = None
+    intervals = {}
     for source in download_list:
         if source['interval'] == 'daily':
-            table = 'daily_prices'
+            intervals['daily_prices'] = True
         elif source['interval'] == 'minute':
-            table = 'minute_prices'
+            print('The cross validator for minute prices is disabled because '
+                  'there is currently only one source (Google Finance). Thus, '
+                  'it does not make sense to run it. When you add a second '
+                  'source you can re-enable it by un-commenting out the line '
+                  'below this message in post_download_maintenance within '
+                  'pySecMaster.py')
+            # intervals['minute_prices'] = True
         else:
             raise SystemError('No interval was provided for %s in '
                               'data_download in pySecMaster.py' %
                               source['interval'])
 
-    tsids_df = query_all_active_tsids(db_location=database_link, table=table,
-                                      period=period)
-    tsid_list = tsids_df['tsid'].values
+    for key, value in intervals.items():
+        # The key is the table name to process
+        table = key
 
-    CrossValidate(db_location=database_link, table=table, tsid_list=tsid_list,
-                  period=period, verbose=verbose)
+        if verbose:
+            print('Starting cross validator for %s' % table)
+
+        tsids_df = query_all_active_tsids(
+            database=database_options['database'],
+            user=database_options['user'],
+            password=database_options['password'],
+            host=database_options['host'],
+            port=database_options['port'],
+            table=table,
+            period=period)
+        tsid_list = tsids_df['tsid'].values
+
+        CrossValidate(
+            database=database_options['database'],
+            user=database_options['user'],
+            password=database_options['password'],
+            host=database_options['host'],
+            port=database_options['port'],
+            table=table, tsid_list=tsid_list, period=period, verbose=verbose)
 
 
 if __name__ == '__main__':
 
     ############################################################################
-    # General options:
-
-    # Go to quandl.com to signup for a free account to get a Quandl API Token
-    # NOTE: DELETE THIS TOKEN BEFORE CONTRIBUTING CODE; keep it confidential!
-    test_quandl_token = 'XXXXXXXXXXX'
-
-    # Specify the name of the Security Master database
-    # Name must have underscores instead of spaces and must have '.db' on end
-    test_database_name = 'pySecMaster_d.db'
-
-    # Change the location for where the database will be created
-    # Example: 'C:/Users/XXXXXX/Desktop/'; change '\' to '/' for Windows
-    test_database_location = 'C:/Users/joshs/Programming/Databases/pySecMaster/'
-    # test_database_location = '/home/####/Programming/Databases/pySecMaster/'
-
-    test_database_link = test_database_location + test_database_name
-
-    ############################################################################
     # Database maintenance options:
+
+    test_database_options = {
+        'admin_user': userdir['postgresql']['main_user'],
+        'admin_password': userdir['postgresql']['main_password'],
+        'database': userdir['postgresql']['pysecmaster_db'],
+        'user': userdir['postgresql']['pysecmaster_user'],
+        'password': userdir['postgresql']['pysecmaster_password'],
+        'host': userdir['postgresql']['pysecmaster_host'],
+        'port': userdir['postgresql']['pysecmaster_port'],
+    }
+
+    test_quandl_key = userdir['quandl']['quandl_token']
 
     # These are the Quandl Databases that will have all their codes downloaded
     # Examples: 'GOOG', 'WIKI', 'YAHOO', 'SEC', 'EIA', 'JODI', 'CURRFX', 'FINRA'
@@ -308,24 +392,23 @@ if __name__ == '__main__':
     # Example download list: should be a list of dictionaries, with the
     #   dictionaries containing all relevant variables for the specific source
     test_download_list = [
+        # Quandl WIKI daily data with wiki
         {'source': 'quandl', 'selection': 'wiki', 'interval': 'daily',
          'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
-         'replace_days_back': 50000},
-        {'source': 'quandl', 'selection': 'goog_us_main_no_end_date',
-         'interval': 'daily', 'redownload_time': 60 * 60 * 12,
-         'data_process': 'replace', 'replace_days_back': 60},
-        # {'source': 'google', 'selection': 'us_main_no_end_date',
-        #  'interval': 'daily', 'period': 60, 'redownload_time': 60 * 60 * 12,
-        #  'data_process': 'replace', 'replace_days_back': 60},
+         'replace_days_back': 60},
+        # Yahoo Fin daily data with us_main - 9300 seconds (2.58 hours)
         {'source': 'yahoo', 'selection': 'us_main', 'interval': 'daily',
-         'redownload_time': 60 * 60 * 12, 'data_process': 'append',
-         'replace_days_back': 60}
+         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
+         'replace_days_back': 60},
+        # Google daily data with us_main_no_end_date (only gets 15 day's prices)
+        {'source': 'google', 'selection': 'us_main_no_end_date',
+         'interval': 'daily', 'period': 60, 'redownload_time': 60 * 60 * 12,
+         'data_process': 'replace', 'replace_days_back': 10},
+        # Google minute data with us_main (only gets 15 day's prices)
+        {'source': 'google', 'selection': 'us_main', 'interval': 'minute',
+         'period': 20, 'redownload_time': 60 * 60 * 12,
+         'data_process': 'replace', 'replace_days_back': 10}
     ]
-    # test_download_list = [
-    #     {'source': 'google_fin', 'selection': 'us_main', 'interval': 'minute',
-    #      'period': 20, 'redownload_time': 60 * 60 * 12,
-    #      'data_process': 'replace', 'replace_days_back': 10}
-    # ]
 
     # source: String of which data provider should have their data downloaded
     # selection: String of which data from the source should be downloaded. To
@@ -353,22 +436,24 @@ if __name__ == '__main__':
     #   function is run
     ############################################################################
 
-    maintenance(database_link=test_database_link,
+    maintenance(database_options=test_database_options,
+                quandl_key=test_quandl_key,
                 quandl_ticker_source=quandl_ticker_source,
                 database_list=database_list,
                 threads=8,
-                quandl_key=test_quandl_token,
                 quandl_update_range=quandl_update_range,
                 csidata_update_range=csidata_update_range,
                 symbology_sources=symbology_sources)
 
-    data_download(database_link=test_database_link,
+    data_download(database_options=test_database_options,
+                  quandl_key=test_quandl_key,
                   download_list=test_download_list,
                   threads=8,
-                  quandl_key=test_quandl_token,
                   verbose=True)
 
-    post_download_maintenance(database_link=test_database_link,
+    # 15 hours for complete build; adds ~6 GB
+    post_download_maintenance(database_options=test_database_options,
                               download_list=test_download_list,
-                              # period=60,
+                              # period=60,      # Comment out to replace all
                               verbose=True)
+    print(datetime.now())

@@ -18,7 +18,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.2'
+__version__ = '1.4.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -56,10 +56,11 @@ class MainWindow(QtGui.QMainWindow):
         self.actionCSI_Data.triggered.connect(lambda: self.open_url('http://www.csidata.com/'))
         self.actionGoogle_Finance.triggered.connect(lambda: self.open_url('https://www.google.com/finance'))
         self.actionQuandl.triggered.connect(lambda: self.open_url('https://www.quandl.com/'))
+        self.actionInstall_PostgreSQL.triggered.connect(lambda: self.open_url('http://www.postgresql.org/download/'))
+        self.actionInstall_Psycopg.triggered.connect(lambda: self.open_url('http://initd.org/psycopg/docs/install.html'))
         self.actionJosh_Schertz.triggered.connect(lambda: self.open_url('https://joshschertz.com/'))
 
         # Establish all form button connections
-        self.toolbtn_dbdir.clicked.connect(self.select_dir)
         self.toolbtn_details.clicked.connect(self.txtbrwsr_details_toggle)
         self.btnbox_action.button(self.btnbox_action.Ok).\
             clicked.connect(self.process)
@@ -266,18 +267,34 @@ class MainWindow(QtGui.QMainWindow):
         to the Worker class where it'll be executed.
         """
 
-        # Determine if the database name and directory were provided
-        if (self.lineedit_dbname.text() or self.lineedit_dbdir.text()) == '':
-            raise ValueError('Blank database name and/or directory provided')
+        # Determine if any of the postgres database options were not provided
+        if (self.lineedit_admin_user.text() or
+                self.lineedit_admin_password.text() or
+                self.lineedit_name.text() or self.lineedit_user.text() or
+                self.lineedit_password.text() or self.lineedit_host.text() or
+                self.lineedit_port.text()) == '':
+            raise ValueError('One or multiple database options were not '
+                             'provided. Ensure there is a value in each field '
+                             'within the PostgreSQL Database Options section.')
 
         # Determine if the Quandl API Key is required; if so, was it provided?
         if (self.cmb_data_source.currentText() in ['quandl'] and
                 self.lineedit_quandlkey.text() == ''):
             raise ValueError('No Quandl API key provided')
 
-        # Combine the directory path with the database name
-        db_link = os.path.abspath(os.path.join(self.lineedit_dbdir.text(),
-                                               self.lineedit_dbname.text()))
+        # # Depreciated when DB switched to PostgreSQL; kept for posterity
+        # # Combine the directory path with the database name
+        # db_link = os.path.abspath(os.path.join(self.lineedit_dbdir.text(),
+        #                                        self.lineedit_dbname.text()))
+
+        # PostgreSQL database options
+        database_options = {'admin_user': self.lineedit_admin_user.text(),
+                            'admin_password': self.lineedit_admin_password.text(),
+                            'database': self.lineedit_name.text(),
+                            'user': self.lineedit_user.text(),
+                            'password': self.lineedit_password.text(),
+                            'host': self.lineedit_host.text(),
+                            'port': self.lineedit_port.text()}
 
         # Change the quandl database string to a list
         quandl_db_list = [self.cmb_tickers_quandl_db.currentText()]
@@ -296,7 +313,7 @@ class MainWindow(QtGui.QMainWindow):
 
         # Build the dictionary with all the pySecMaster settings
         settings_dict = {
-            'db_link': db_link,
+            'database_options': database_options,
             'quandl_ticker_source': self.cmb_tickers_quandl.currentText(),
             'quandl_db_list': quandl_db_list,
             'download_list': download_list,
@@ -434,6 +451,8 @@ class MainWindow(QtGui.QMainWindow):
         """
         Opens a PyQt folder search. If a folder is selected, it will
         populate the db_dir text editor box.
+
+        DEPRECIATED
         """
 
         db_dir = QtGui.QFileDialog.getExistingDirectory(self,
@@ -479,8 +498,8 @@ class MainWindow(QtGui.QMainWindow):
 
         # ToDo: Figure out why none of these kill the thread...
         # Safely shut down the thread
-        self.thread_worker.quit()
-        # self.thread_worker.terminate()
+        # self.thread_worker.quit()
+        self.thread_worker.terminate()
         # self.thread_worker.wait()
 
         print('Current process has been halted.')
@@ -493,32 +512,30 @@ class Worker(QtCore.QObject):
     @QtCore.pyqtSlot(dict)
     def pysecmaster(self, settings_dict):
         """
-        Prepares the db link, and then calls the actual functions that
-        operate the pySecMaster. Emits signals back to the main gui for
-        further processing, using the dataReady process.
+        Calls the functions that operate the pySecMaster. Emits signals back to
+        the main gui for further processing, using the dataReady process.
 
         :param settings_dict: Dictionary of all parameters to be passed back
         to the pySecMaster.py functions.
         """
 
-        db_link = settings_dict['db_link']
-        self.dataReady.emit('Building the pySecMaster using the %s database '
-                            'located at %s\n' %
-                            (os.path.basename(db_link),
-                             os.path.dirname(db_link)))
+        self.dataReady.emit('Building the pySecMaster in the %s database '
+                            'located at host %s\n' %
+                            (settings_dict['database_options']['database'],
+                             settings_dict['database_options']['host']))
 
-        maintenance(database_link=db_link,
+        maintenance(database_options=settings_dict['database_options'],
+                    quandl_key=settings_dict['quandl_key'],
                     quandl_ticker_source=settings_dict['quandl_ticker_source'],
                     database_list=settings_dict['quandl_db_list'],
                     threads=settings_dict['threads'],
-                    quandl_key=settings_dict['quandl_key'],
                     quandl_update_range=settings_dict['quandl_update_range'],
                     csidata_update_range=settings_dict['google_fin_update_range'],
                     symbology_sources=settings_dict['symbology_sources'])
-        data_download(database_link=db_link,
+        data_download(database_options=settings_dict['database_options'],
+                      quandl_key=settings_dict['quandl_key'],
                       download_list=settings_dict['download_list'],
                       threads=settings_dict['threads'],
-                      quandl_key=settings_dict['quandl_key'],
                       verbose=True)
 
         self.dataReady.emit('Finished running the pySecMaster process\n')

@@ -3,7 +3,28 @@ An automated framework to store and maintain financial data.
 
 [![AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](http://opensource.org/licenses/AGPL-3.0)
 
-The goal of the system is to have a central repository of interrelated finance data that can be used for strategy backtests.
+The goal of the system is to have a central repository of interrelated finance data that can be used for strategy backtests and live trading systems.
+
+[Data types](#data-types) that can be stored includes historical and live stock prices (daily, minute, tick), option chains, corporate actions, economic events, IPO pricings and financial statements.
+
+**Contents**:
+ - [Database](#database)
+ - [TSID](#tsid)
+ - [Symbology](#symbology)
+ - [Data Types](#data-types)
+ - [Cross Validator](#cross-validator)
+ - [Quick Start Guides](#quick-start-guides)
+ - [System Requirements](#system-requirements)
+ - [Future Goals](#future-goals)
+ - [Notes](#notes)
+ - [Disclaimer](#disclaimer)
+ - [License](#license-gnu-agplv3))
+
+## Database
+This system utilizes [PostgreSQL](http://www.postgresql.org/) for the database engine. [Postgres](https://en.wikipedia.org/wiki/PostgreSQL) provides an extremely flexible yet powerful database experience. Furthermore, Postgres allows the database to be stored on a remote server, accessible by multiple users.
+
+Currently, there are 21 tables that make up the pySecMaster database. You can view the database table structure [here](../master/table_structure.md).
+
 
 ## TSID
 All of the data tables utilize a custom symbol ID (called a **'tsid'**; 'trading system ID'). This allows for consistent data nomenclature across the system.
@@ -25,7 +46,7 @@ WMT.N.0
 #### TSID Creation
 The tsid creation process requires a unique ID as the backbone. At the moment, the CSI Data's *CSI Number* system is used as the backbone for ensuring that there are no tsid duplicates. It is possible to use another vendor's ID structure as the backbone (Bloomberg, RIC, etc.), or create a custom one (using a predefined base).
 
-The biggest hindrance to using CSI Data's CSI Number system is that it restricts tsid codes to only the US, Toronto and London based exchanges (as those are the only exchanges they list). I've considering using Quandl's GOOG database to enable the tsid structure to expand to all other global exchanges, but haven't implemented this yet.
+The biggest hindrance to using CSI Data's CSI Number system is that it restricts tsid codes to only the US, Toronto and London based exchanges (as those are the only exchanges they list). I've considering using the [EODData](http://www.eoddata.com/) symbol database to enable the tsid structure to expand to all other global exchanges, but haven't implemented this yet.
 
 You can view (or download) the CSI Data stock factsheet [here](http://www.csidata.com/factsheets.php?type=stock&format=html).
 
@@ -89,81 +110,76 @@ The system is setup to work with as many data sources as available, so future da
 
 **Currently, the only way to run the cross validator is to run the system through the pySecMaster.py script. The validator has not been implemented into the GUI yet.**
 
-This can be multi-processed based on tsids. By default, 4 threads are used. This value is dependent on the disk and processor speed, so you may need to lower this value.
+This can be multi-processed based on tsids. By default, 5 threads are used. This value is dependent on the disk and processor speed, so you may need to lower this value.
 
 
 # Quick Start Guides
 
+  1. Download and install both [PostgreSQL](http://www.postgresql.org/download/) and [Psycopg2](http://initd.org/psycopg/docs/install.html) to your computer. Installing Psycopg2 on Windows can be challenging, but I found it easy to use the wheel provided on Christoph Gohlke's [Windows Binaries for Python](http://www.lfd.uci.edu/~gohlke/pythonlibs/#psycopg) page.
+  
+  2. Create a new Postgres user to use with pySecMaster (i.e. pysecmaster)
+
+  3. Clone the pySecMaster to your computer
+
+  4. Open the folder called pySecMaster, and run **main_gui.py**
+
+  5. Within the GUI, provide the Postgres admin user and password, along with the database name you want to use for the pySecMaster (i.e. pysecmaster). Also, enter the user, password, host and port number that will be used to access this new database.
+
 ### Quandl daily data
-  1. Clone the pySecMaster to your computer
 
-  2. Open the folder called pySecMaster, and run **main_gui.py**
-
-  3. Within the GUI, provide a file directory in *Database Directory* where you want the database to be built
-
-  4. Enter a Quandl API Key (free at <https://www.quandl.com>)
+  6. Enter a Quandl API Key (free at <https://www.quandl.com>)
   
-  5. In the *Data* tab, change *Download Source* combo-box to **quandl**
+  7. In the *Data* tab, change *Download Source* combo-box to **quandl**
   
-  6. In the *Data* tab, change *Selection* combo-box to:
+  8. In the *Data* tab, change *Selection* combo-box to:
     - **wiki** if you want all Quandl WIKI data ([Note 4](#notes)) (~3,000 symbols)
     - **goog** if you want all *US, Toronto and London* Quandl Google Finance data (~38,000 symbols)
     - **goog_etf** if you want all Quandl Google Finance ETF data ([Note 5](#notes))) (~3,700 symbols)
     - **goog_us_main_no_end_date** if you want main US exchange Quandl Google Finance data ([Note 6](#notes))) (~15,000 symbols)
 
-  7. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
+  9. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
 
-  8. Click on the *Ok* button, and the database will start building itself
+  10. Click on the *Ok* button, and the database will start building itself
   
-  9. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+  11. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
 
 ### Yahoo Finance daily data
-  1. Clone the pySecMaster to your computer
-
-  2. Open the folder called pySecMaster, and run **main_gui.py**
-
-  3. Within the GUI, provide a file directory in *Database Directory* where you want the database to be built
-
-  4. In the *Data* tab, change *Download Source* combo-box to **yahoo**
   
-  5. In the *Data* tab, change *Selection* combo-box to:
+  6. In the *Data* tab, change *Download Source* combo-box to **yahoo**
+  
+  7. In the *Data* tab, change *Selection* combo-box to:
     - **all** if you want all *US, Toronto and London* Yahoo Finance data (~38,000 symbols)
     - **us_main** if you want main US exchange Yahoo Finance data that's been active within the prior two years ([Note 6](#notes)) (~9,000 symbols)
     - **us_main_no_end_date** if you want main US exchange Yahoo Finance data ([Note 6](#notes)) (~15,000 symbols)
     - **us_canada_london** if you want all *US, Toronto and London* Yahoo Finance data that's been active within the prior two years (~25,000 symbols)
   
-  6. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
+  8. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
 
-  7. Click on the *Ok* button, and the database will start building itself with daily data from Yahoo Finance
+  9. Click on the *Ok* button, and the database will start building itself with daily data from Yahoo Finance
   
-  8. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+  10. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
 
 ### Google Finance minute data
-  1. Clone the pySecMaster to your computer
 
-  2. Open the folder called pySecMaster, and run **main_gui.py**
-
-  3. Within the GUI, provide a file directory in *Database Directory* where you want the database to be built
-
-  4. In the *Data* tab, change *Download Source* combo-box to **google**
+  6. In the *Data* tab, change *Download Source* combo-box to **google**
   
-  5. In the *Data* tab, change *Selection* combo-box to:
+  7. In the *Data* tab, change *Selection* combo-box to:
     - **all** if you want all *US, Toronto and London* Google Finance data (~38,000 symbols)
     - **us_main** if you want main US exchange Google Finance data that's been active within the prior two years ([Note 6](#notes)) (~9,000 symbols)
     - **us_canada_london** if you want all *US, Toronto and London* Google Finance data that's been active within the prior two years (~25,000 symbols)
   
-  6. In the *Data* tab, change *Interval* combo-box to **minute**
+  8. In the *Data* tab, change *Interval* combo-box to **minute**
   
-  7. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
+  9. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
 
-  8. Click on the *Ok* button, and the database will start building itself with minute data from Google Finance
+  10. Click on the *Ok* button, and the database will start building itself with minute data from Google Finance
   
-  9. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+  11. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
 
-### Retrieve SQLite Data
-  1. To retrieve the data in the SQLite database, open **query_data.py** in a code editor (IDE, PyCharm, Sublime, etc.)
+## Retrieve Database Values
+  1. To retrieve the data from the PostgreSQL database, open **query_data.py** in a code editor (IDE, PyCharm, Sublime, etc.)
 
-  2. Navigate to the query options (lines 128 - 134): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQLite query. By default, the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
+  2. Navigate to the query options (lines 128 - 134): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQL query. By default the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
 
   3. You can now save and run query_data.py
 
@@ -171,18 +187,20 @@ This can be multi-processed based on tsids. By default, 4 threads are used. This
   - Python 3.4+
   - Pandas 0.16.2+
   - PyQt 4.11+
+  - PostgreSQL 9.5+
+  - Psycopg2 2.6.1+
   - More than 20GB of storage space (daily Quandl WIKI data is about 4 GB, while a year's worth of Google Finance minute data can become 50+ GB)
 
 # User Requirements
   - Quandl API Token (free at <https://www.quandl.com>)
 
 # Future Goals
-  - Change the database from Sqlite3 to PostgreSQL
-  - Build a table tsid re-index function (if a tsid changes, all tables that have data of that tsid should be updated)
-  - Add function to manually calculate the adjusted prices for all price tables (instead of relying on the source) 
+  - Add function to manually calculate the adjusted prices for all price tables (instead of relying on the source)
+  - Add Quandl_YAHOO to symbology
+  - Add custom holiday table
 
 # Additional Info
-To view the SQLite3 database, you can download SQLite Database Browser for free (<http://sqlitebrowser.org>). This allows you to view and edit all characteristics of the database.
+To view the PostgreSQL database, you can [pgAdmin](http://www.pgadmin.org) program that is installed when you download PostgreSQL. This allows you to view and edit all characteristics of the database.
 
 # Notes
   - Note 1: I have not implemented the integer of duplicates yet, so all tsid symbols have a 0 (zero) value for that. This is only relevant when you have access to delisted stock data, and for tickers that overlap active tickers (I.E. ABG on NYSE).

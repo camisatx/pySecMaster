@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from functools import wraps
+import numpy as np
 import pandas as pd
 import time
 from urllib.request import urlopen
@@ -16,7 +17,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.2'
+__version__ = '1.4.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -67,6 +68,17 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
             return ret
         return rate_limit_func
     return rate_decorator
+
+
+def csv_load_converter(input):
+
+    # try:
+    #     return int(input)
+    # except ValueError:
+    try:
+        return float(input)
+    except ValueError:
+        return -1
 
 
 class QuandlDownload(object):
@@ -132,8 +144,8 @@ class QuandlDownload(object):
         df['last_updated'] = df.apply(date_to_iso, axis=1, args=('last_updated',))
 
         df.insert(len(df.columns), 'page_num', page_num)
-        df.insert(len(df.columns), 'created_date', datetime.utcnow().isoformat())
-        df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
+        df.insert(len(df.columns), 'created_date', datetime.now().isoformat())
+        df.insert(len(df.columns), 'updated_date', datetime.now().isoformat())
 
         return df
 
@@ -163,11 +175,15 @@ class QuandlDownload(object):
             column_names = ['date', 'open', 'high', 'low', 'close', 'volume',
                             'ex_dividend', 'split_ratio', 'adj_open',
                             'adj_high', 'adj_low', 'adj_close', 'adj_volume']
+            columns_to_remove = ['adj_open', 'adj_high', 'adj_low', 'adj_close',
+                                 'adj_volume']
         elif q_code[:4] == 'GOOG':
             column_names = ['date', 'open', 'high', 'low', 'close', 'volume']
+            columns_to_remove = []
         elif q_code[:5] == 'YAHOO':
             column_names = ['date', 'open', 'high', 'low', 'close',
                             'volume', 'adjusted_close']
+            columns_to_remove = ['adjusted_close']
         else:
             print('The data source for %s is not implemented in the price '
                   'extractor. Please define the columns in '
@@ -175,27 +191,59 @@ class QuandlDownload(object):
             return pd.DataFrame()
 
         if file:
-            raw_df = pd.read_csv(file, index_col=False, names=column_names,
-                                 encoding='utf-8')
+            try:
+                # Create a DataFrame from the file object
+                raw_df = pd.read_csv(file, index_col=False, names=column_names,
+                                     encoding='utf-8',
+                                     converters={'open': csv_load_converter,
+                                                 'high': csv_load_converter,
+                                                 'low': csv_load_converter,
+                                                 'close': csv_load_converter,
+                                                 'volume': csv_load_converter})
+            except IndexError:
+                return pd.DataFrame()
+            except OSError:
+                # Occurs when url_obj is None, meaning url returned a 404 error
+                return pd.DataFrame()
+            except Exception as e:
+                print('Unknown error occurred when reading Quandl CSV for %s' %
+                      q_code)
+                print(e)
+                return pd.DataFrame()
+
+            # Remove all adjusted value columns
+            raw_df.drop(columns_to_remove, axis=1, inplace=True)
 
             # Data successfully downloaded; check to see if code was on the list
-            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-            if len(codes_wo_data_df.
-                    loc[codes_wo_data_df['q_code'] == q_code]) > 0:
-                # This q_code now has data whereas it didn't on that last run.
-                #   Remove the code from the DataFrame
-                wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code != q_code]
-                # Remove any duplicates (keeping the latest) and save to a CSV
-                clean_wo_data_df = wo_data_df.drop_duplicates(subset='q_code',
-                                                              keep='last')
-                clean_wo_data_df.to_csv(csv_out, index=False)
-                if verbose:
-                    print('%s was removed from the wo_data CSV file since data '
-                          'was available for download.' % (q_code,))
+            try:
+                codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+                if len(codes_wo_data_df.
+                        loc[codes_wo_data_df['q_code'] == q_code]) > 0:
+                    # This q_code now has data whereas it didn't on that last
+                    #   run. Remove the code from the DataFrame
+                    wo_data_df = codes_wo_data_df[codes_wo_data_df.q_code !=
+                                                  q_code]
+                    # Remove any duplicates (keeping the latest) and save to CSV
+                    clean_wo_data_df = \
+                        wo_data_df.drop_duplicates(subset='q_code', keep='last')
+                    clean_wo_data_df.to_csv(csv_out, index=False)
+                    if verbose:
+                        print('%s was removed from the wo_data CSV file since '
+                              'data was available for download.' % (q_code,))
+            except ValueError:
+                # The CSV file wasn't able to be read, so skip it for now
+                pass
+
         else:
             # There is no minute data for this code so add it to the CSV file
-            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-            cur_date = datetime.utcnow().isoformat()
+
+            try:
+                codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+            except ValueError:
+                # The CSV file wasn't able to be read, so skip it for now
+                return pd.DataFrame()
+
+            cur_date = datetime.now().isoformat()
             if len(codes_wo_data_df.
                     loc[codes_wo_data_df['q_code'] == q_code]) > 0:
                 # The code already exists within the CSV, so update the date
@@ -222,14 +270,57 @@ class QuandlDownload(object):
             # Return an empty DF; QuandlDataExtractor will be able to handle it
             return pd.DataFrame()
 
-        if len(raw_df.index) == 0:
-            return raw_df
+        if len(raw_df) in [0, 1]:
+            # The raw data has no values
+            return pd.DataFrame()
 
         raw_df = raw_df[1:]     # Removes the column headers from data download
         raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
-        raw_df.insert(0, 'q_code', q_code)
         raw_df.insert(len(raw_df.columns), 'updated_date',
-                      datetime.utcnow().isoformat())
+                      datetime.now().isoformat())
+
+        # Convert all DataFrame values to a number, ignoring NaN values
+        raw_df = pd.to_numeric(raw_df, errors='coerce')
+
+        # Fill all NaN values with -1 to indicate no data
+        raw_df.fillna(-1.0, inplace=True)
+
+        # Check each price column for outliers
+        for column in raw_df.columns:
+
+            try:
+                # Remove all rows that have values larger than 3 deviations mean
+                # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+                #           all(axis=1)])
+                # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+                #                 (3*raw_df.std())]
+
+                if column in ['open', 'high', 'low', 'close']:
+                    # Check column for values over 1M, create DF for outliers
+                    outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) >
+                                         1000000]
+
+                    if len(outliers_df):
+                        print(outliers_df)
+                        # If outlier, replace the value for the row with -1
+                        for index, row in outliers_df.iterrows():
+                            # Index from the outlier_df is the index
+                            #   from the raw_df
+                            raw_df.set_value(index, column, -1.0)
+
+                    # Round all data values to their appropriate levels
+                    raw_df[column] = np.round(raw_df[column], decimals=4)
+
+                # elif column in ['ex_dividend']:
+                #     # Round all data values to their appropriate levels
+                #     raw_df[column] = np.round(raw_df[column], decimals=3)
+
+                elif column in ['volume']:
+                    # Round all data values to their appropriate levels
+                    raw_df[column] = np.round(raw_df[column], decimals=0)
+
+            except TypeError:
+                pass
 
         return raw_df
 
@@ -543,7 +634,7 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                         date_obj = (data[-1][0] +
                                     timedelta(seconds=unix_sec_diff*interval))
                 data.append(tuple((date_obj, float(close), float(high),
-                                   float(low), float(open_), float(volume))))
+                                   float(low), float(open_), int(volume))))
 
         column_names = ['date', 'close', 'high', 'low', 'open', 'volume']
         processed_df = pd.DataFrame(data, columns=column_names)
@@ -554,7 +645,12 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     try:
         raw_df = google_data_processing(url_obj)
     except IndexError:
-        raw_df = pd.DataFrame()
+        return pd.DataFrame()
+    except Exception as e:
+        print('Unknown error occurred when processing Google raw data for %s' %
+              tsid)
+        print(e)
+        return pd.DataFrame()
 
     if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list
@@ -574,7 +670,7 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         # There is no price data for this code; add to CSV file via DataFrame
         try:
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-            cur_date = datetime.utcnow().isoformat()
+            cur_date = datetime.now().isoformat()
             if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
                 # The code already exists within the CSV, so update the date
                 codes_wo_data_df.set_value(codes_wo_data_df['tsid'] == tsid,
@@ -609,9 +705,45 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     # google_data_processing method converts the string dates to datetimes
     raw_df['date'] = raw_df.apply(datetime_to_iso, axis=1, args=('date',))
-    raw_df.insert(0, 'tsid', tsid)
+    # raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
-                  datetime.utcnow().isoformat())
+                  datetime.now().isoformat())
+
+    # Convert all DataFrame values to a number, ignoring NaN values
+    raw_df = pd.to_numeric(raw_df, errors='coerce')
+
+    # Fill all NaN values with -1 to indicate no data
+    raw_df.fillna(-1.0, inplace=True)
+
+    # Check each price column for outliers
+    for column in raw_df.columns:
+        try:
+            # Remove all rows that have values larger than 3 deviations mean
+            # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+            #           all(axis=1)])
+            # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+            #                 (3*raw_df.std())]
+
+            if column in ['open', 'high', 'low', 'close']:
+                # Check column for values over 1M, creating DF for all outliers
+                outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
+
+                if len(outliers_df):
+                    print(outliers_df)
+                    # If there is outlier, replace the value for the row with -1
+                    for index, row in outliers_df.iterrows():
+                        # Index from the outlier_df is the index from the raw_df
+                        raw_df.set_value(index, column, -1.0)
+
+                # Round all data values to their appropriate levels
+                raw_df[column] = np.round(raw_df[column], decimals=4)
+
+            elif column in ['volume']:
+                # Round all data values to their appropriate levels
+                raw_df[column] = np.round(raw_df[column], decimals=0)
+
+        except TypeError:
+            pass
 
     return raw_df
 
@@ -758,12 +890,21 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     try:
         raw_df = pd.read_csv(url_obj, index_col=False, names=column_names,
-                             encoding='utf-8')
+                             encoding='utf-8',
+                             converters={'open': csv_load_converter,
+                                         'high': csv_load_converter,
+                                         'low': csv_load_converter,
+                                         'close': csv_load_converter,
+                                         'volume': csv_load_converter})
     except IndexError:
-        raw_df = pd.DataFrame()
+        return pd.DataFrame()
     except OSError:
         # Occurs when the url_obj is None, meaning the url returned a 404 error
-        raw_df = pd.DataFrame()
+        return pd.DataFrame()
+    except Exception as e:
+        print('Unknown error occurred when reading Yahoo CSV for %s' % tsid)
+        print(e)
+        return pd.DataFrame()
 
     if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list
@@ -783,7 +924,7 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         # There is no price data for this code; add to CSV file via DataFrame
         try:
             codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-            cur_date = datetime.utcnow().isoformat()
+            cur_date = datetime.now().isoformat()
             if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
                 # The code already exists within the CSV, so update the date
                 codes_wo_data_df.set_value(codes_wo_data_df['tsid'] == tsid,
@@ -817,21 +958,57 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     raw_df = raw_df[1:]
 
     raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
-    raw_df.insert(0, 'tsid', tsid)
+    # raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
-                  datetime.utcnow().isoformat())
+                  datetime.now().isoformat())
 
     # Remove the adjusted close column since this is calculated manually
     raw_df.drop('adj_close', axis=1, inplace=True)
+
+    # Convert all DataFrame values to a number, ignoring NaN values
+    raw_df = pd.to_numeric(raw_df, errors='coerce')
+
+    # Fill all NaN values with -1 to indicate no data
+    raw_df.fillna(-1.0, inplace=True)
+
+    # Check each price column for outliers
+    for column in raw_df.columns:
+
+        try:
+            # Remove all rows that have values larger than 3 deviations mean
+            # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
+            #           all(axis=1)])
+            # raw_df = raw_df[pd.DataFrame.abs(raw_df-raw_df.mean()) <=
+            #                 (3*raw_df.std())]
+
+            if column in ['open', 'high', 'low', 'close']:
+                # Check column for values over 1M, creating DF for all outliers
+                outliers_df = raw_df[pd.DataFrame.abs(raw_df[column]) > 1000000]
+
+                if len(outliers_df):
+                    print(outliers_df)
+                    # If there is outlier, replace the value for the row with -1
+                    for index, row in outliers_df.iterrows():
+                        # Index from the outlier_df is the index from the raw_df
+                        raw_df.set_value(index, column, -1.0)
+
+                # Round all data values to their appropriate levels
+                raw_df[column] = np.round(raw_df[column], decimals=4)
+
+            elif column in ['volume']:
+                # Round all data values to their appropriate levels
+                raw_df[column] = np.round(raw_df[column], decimals=0)
+
+        except TypeError:
+            pass
 
     return raw_df
 
 
 def download_csidata_factsheet(db_url, data_type, exchange_id=None,
                                data_format='csv'):
-    """
-    Downloads the CSV factsheet for the provided data_type (stocks, commodities,
-    currencies, etc.). A DataFrame is returned.
+    """ Downloads the CSV factsheet for the provided data_type (stocks,
+    commodities, currencies, etc.). A DataFrame is returned.
 
     http://www.csidata.com/factsheets.php?type=stock&format=csv
 
@@ -960,21 +1137,37 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
     try:
         df = pd.read_csv(csv_file, encoding='latin_1', low_memory=False)
 
+        # Rename column headers to a standardized format
+        df.rename(columns={'CsiNumber': 'csi_number', 'Symbol': 'symbol',
+                           'Name': 'name', 'Exchange': 'exchange',
+                           'IsActive': 'is_active', 'StartDate': 'start_date',
+                           'EndDate': 'end_date', 'Sector': 'sector',
+                           'Industry': 'industry',
+                           'ConversionFactor': 'conversion_factor',
+                           'SwitchCfDate': 'switch_cf_date',
+                           'PreSwitchCf': 'pre_switch_cf',
+                           'LastVolume': 'last_volume', 'Type': 'type',
+                           'ChildExchange': 'child_exchange',
+                           'Currency': 'currency'},
+                  inplace=True)
+
         if data_type == 'stock':
-            df['StartDate'] = df.apply(datetime_to_iso, axis=1,
-                                       args=('StartDate',))
-            df['EndDate'] = df.apply(datetime_to_iso, axis=1,
-                                     args=('EndDate',))
-            df['SwitchCfDate'] = df.apply(datetime_to_iso, axis=1,
-                                          args=('SwitchCfDate',))
+            df['start_date'] = df.apply(datetime_to_iso, axis=1,
+                                        args=('start_date',))
+            df['end_date'] = df.apply(datetime_to_iso, axis=1,
+                                      args=('end_date',))
+            df['switch_cf_date'] = df.apply(datetime_to_iso, axis=1,
+                                            args=('switch_cf_date',))
 
     except Exception as e:
-        print('Flag: Error occurred when processing CSI %s data' % data_type)
+        print('Error occurred when processing CSI %s data in '
+              'download_csidata_factsheet' % data_type)
         print(e)
         return pd.DataFrame()
 
-    df.insert(len(df.columns), 'created_date', datetime.utcnow().isoformat())
-    df.insert(len(df.columns), 'updated_date', datetime.utcnow().isoformat())
+    # df.insert(len(df.columns), 'symbology_source', 'CSI_Data')
+    df.insert(len(df.columns), 'created_date', datetime.now().isoformat())
+    df.insert(len(df.columns), 'updated_date', datetime.now().isoformat())
 
     return df
 
@@ -986,6 +1179,6 @@ if __name__ == '__main__':
     url_root = 'http://www.csidata.com/factsheets.php?'
     csi_data_type = 'commodity'     # commodity, stock
     csi_exchange_id = '113'     # 113, 89
-    df = download_csidata_factsheet(url_root, csi_data_type, csi_exchange_id)
+    df1 = download_csidata_factsheet(url_root, csi_data_type, csi_exchange_id)
 
-    print(df.head(10))
+    print(df1.head(10))

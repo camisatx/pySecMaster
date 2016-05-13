@@ -1,5 +1,5 @@
-import sqlite3
 import pandas as pd
+import psycopg2
 import time
 
 __author__ = 'Josh Schertz'
@@ -10,7 +10,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.3.2'
+__version__ = '1.4.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -28,38 +28,74 @@ __version__ = '1.3.2'
 '''
 
 
-def query_entire_table(db_local, csv_dir, table):
+def query_entire_table(database, user, password, host, port, table):
+    """ Query all of the active tsid values from the specified database.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param table: String of the table whose values should be returned
+    :return: DataFrame of the returned values
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
 
     try:
-        conn = sqlite3.connect(db_local)
         with conn:
             cur = conn.cursor()
-            # query = ("""SELECT * FROM %s""" % (table,))
-            query = ("""SELECT tsid FROM %s GROUP BY(tsid)""" % (table,))
+            query = ("""SELECT sym.source_id AS tsid
+                     FROM symbology AS sym,
+                     LATERAL (
+                         SELECT source_id
+                         FROM %s
+                         WHERE source_id = sym.source_id
+                         ORDER BY source_id ASC NULLS LAST
+                         LIMIT 1) AS prices""" %
+                     (table,))
             cur.execute(query)
             rows = cur.fetchall()
-            df = pd.DataFrame(rows)
-    except sqlite3.Error as e:
+            if rows:
+                df = pd.DataFrame(rows)
+            else:
+                raise SystemExit('No data returned from query_entire_table')
+
+            return df
+    except psycopg2.Error as e:
+        print(
+            'Error when trying to retrieve data from the %s database in '
+            'query_entire_table' % database)
         print(e)
-        raise SystemError('Error: Not able to query the SQL DB')
-
-    try:
-        df.to_csv(csv_dir + table + '.csv')
-    except FileNotFoundError:
-        raise SystemError('Error: No directory found for the CSV dir provided')
-
-    print('The CSV for the %s table was successfully saved in %s' %
-          (table, csv_dir))
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_entire_table. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in query_entire_table')
 
 if __name__ == '__main__':
 
+    from utilities.user_dir import user_dir
+
+    userdir = user_dir()
+
+    test_database = userdir['postgresql']['pysecmaster_db']
+    test_user = userdir['postgresql']['pysecmaster_user']
+    test_password = userdir['postgresql']['pysecmaster_password']
+    test_host = userdir['postgresql']['pysecmaster_host']
+    test_port = userdir['postgresql']['pysecmaster_port']
+
+    test_table = 'daily_prices'      # daily_prices, minute_prices, quandl_codes
+
     start_time = time.time()
 
-    db_local = 'C:/Users/joshs/Programming/Databases/pySecMaster/' \
-               'pySecMaster_d.db'
-    csv_dir = 'C:/Users/joshs/Desktop/'
-    table = 'daily_prices'      # daily_prices, minute_prices, quandl_codes
-
-    query_entire_table(db_local, csv_dir, table)
+    table_df = query_entire_table(test_database, test_user, test_password,
+                                  test_host, test_port, test_table)
 
     print('Query took %0.2f seconds' % (time.time() - start_time))
+
+    # table_df.to_csv('%s.csv' % test_table)
+    print(table_df)
