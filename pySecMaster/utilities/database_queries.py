@@ -59,22 +59,28 @@ def delete_sql_table_rows(database, user, password, host, port, query, table,
         with conn:
             cur = conn.cursor()
             cur.execute(query)
-        return 'success'
+        outcome = 'success'
     except psycopg2.Error as e:
         conn.rollback()
         print(e)
         print('Error: Not able to delete the overlapping rows for %s in '
               'the %s table.' % (item, table))
-        return 'failure'
+        conn.close()
+        outcome = 'failure'
     except conn.OperationalError:
         print('Unable to connect to the %s database in delete_sql_table_rows. '
               'Make sure the database address/name are correct.' % database)
-        return 'failure'
+        conn.close()
+        outcome = 'failure'
     except Exception as e:
         print('Error: Unknown issue when trying to delete overlapping rows for'
               '%s in the %s table.' % (item, table))
         print(e)
-        return 'failure'
+        conn.close()
+        outcome = 'failure'
+
+    conn.close()
+    return outcome
 
 
 def df_to_sql(database, user, password, host, port, df, sql_table, exists,
@@ -115,6 +121,8 @@ def df_to_sql(database, user, password, host, port, df, sql_table, exists,
         print('Error: Unknown issue when adding the DataFrame to the %s '
               'database for %s' % (database, item))
         print(e)
+
+    conn.close()
 
 
 def insert_csi_data(database, user, password, host, port, df, source):
@@ -184,6 +192,7 @@ def query_all_active_tsids(database, user, password, host, port, table,
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    df = None
 
     try:
         with conn:
@@ -235,7 +244,6 @@ def query_all_active_tsids(database, user, password, host, port, table,
             if data:
                 df = pd.DataFrame(data, columns=['tsid'])
                 df.drop_duplicates(inplace=True)
-                return df
             else:
                 raise TypeError('Not able to query any tsid codes in '
                                 'query_all_active_tsids')
@@ -252,6 +260,9 @@ def query_all_active_tsids(database, user, password, host, port, table,
         raise SystemError('Error: Unknown issue occurred in '
                           'query_all_active_tsids')
 
+    conn.close()
+    return df
+
 
 def query_all_tsid_prices(database, user, password, host, port, table, tsid):
     """ Query all relevant interval data for this ticker from the relevant
@@ -266,9 +277,11 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
     :param tsid: String of the tsid whose prices should be queried
     """
 
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+    df = None
+
     try:
-        conn = psycopg2.connect(database=database, user=user, password=password,
-                                host=host, port=port)
         with conn:
             cur = conn.cursor()
             if table == 'daily_prices':
@@ -318,7 +331,6 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
                 df.index.name = ['date', 'data_vendor_id']
 
                 df.sortlevel(inplace=True)
-                return df
             else:
                 raise TypeError('Not able to query any prices for %s in '
                                 'query_all_tsid_prices' % tsid)
@@ -326,6 +338,13 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
         print(e)
         raise TypeError('Error when trying to connect to the %s database '
                         'in query_all_tsid_prices' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'query_all_tsid_prices')
+
+    conn.close()
+    return df
 
 
 def query_codes(database, user, password, host, port, download_selection):
@@ -348,6 +367,7 @@ def query_codes(database, user, password, host, port, download_selection):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    df = None
 
     try:
         with conn:
@@ -448,7 +468,7 @@ def query_codes(database, user, password, host, port, download_selection):
                 df.drop_duplicates(inplace=True)
 
                 # df.to_csv('query_tsid.csv')
-                return df
+
             else:
                 raise TypeError('Not able to determine the tsid from '
                                 'the SQL query in query_codes.')
@@ -463,6 +483,9 @@ def query_codes(database, user, password, host, port, download_selection):
     except Exception as e:
         print(e)
         raise SystemError('Error: Unknown issue occurred in query_codes')
+
+    conn.close()
+    return df
 
 
 def query_csi_stocks(database, user, password, host, port, query='all'):
@@ -479,6 +502,8 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    csi_df = None
+
     try:
         with conn:
             cur = conn.cursor()
@@ -572,7 +597,6 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                  'query_csi_stocks. Valid queries '
                                  'include: all, main_us, exchanges_only' %
                                  (query,))
-            return csi_df
     except psycopg2.Error as e:
         print(e)
         raise SystemError('Failed to query the data into the symbology table '
@@ -584,6 +608,9 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
     except Exception as e:
         print(e)
         raise SystemError('Error: Unknown issue occurred in query_csi_stocks')
+
+    conn.close()
+    return csi_df
 
 
 def query_csi_stock_start_date(database, user, password, host, port, tsid):
@@ -620,7 +647,6 @@ def query_csi_stock_start_date(database, user, password, host, port, tsid):
                 start_date = start_date_obj.strftime('%Y-%m-%d')
             else:
                 start_date = None
-            return start_date
     except psycopg2.Error as e:
         print(e)
         raise SystemError('Failed to query the start date for %s within '
@@ -633,6 +659,9 @@ def query_csi_stock_start_date(database, user, password, host, port, tsid):
         print(e)
         raise SystemError('Error: Unknown issue occurred in '
                           'query_csi_stock_start_date')
+
+    conn.close()
+    return start_date
 
 
 def query_data_vendor_id(database, user, password, host, port, name):
@@ -654,6 +683,7 @@ def query_data_vendor_id(database, user, password, host, port, name):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    data = None
 
     try:
         with conn:
@@ -675,19 +705,21 @@ def query_data_vendor_id(database, user, password, host, port, name):
                 data = 'Unknown'
                 print('Not able to determine the data_vendor_id for %s'
                       % name)
-            return data
     except psycopg2.Error as e:
         print('Error when trying to retrieve data from the %s database in '
-              'retrieve_data_vendor_id' % database)
+              'query_data_vendor_id' % database)
         print(e)
     except conn.OperationalError:
         raise SystemError('Unable to connect to the %s database in '
-                          'retrieve_data_vendor_id. Make sure the database '
+                          'query_data_vendor_id. Make sure the database '
                           'address/name are correct.' % database)
     except Exception as e:
         print(e)
         raise SystemError('Error: Unknown issue occurred in '
-                          'retrieve_data_vendor_id')
+                          'query_data_vendor_id')
+
+    conn.close()
+    return data
 
 
 def query_existing_sid(database, user, password, host, port, source):
@@ -712,7 +744,6 @@ def query_existing_sid(database, user, password, host, port, source):
                         WHERE source=%s""", (source,))
             rows = cur.fetchall()
             sid_df = pd.DataFrame(rows, columns=['symbol_id', 'source_id'])
-            return sid_df
     except psycopg2.Error as e:
         print(e)
         raise SystemError('Failed to query the %s data from the symbology '
@@ -724,6 +755,9 @@ def query_existing_sid(database, user, password, host, port, source):
     except Exception as e:
         print(e)
         raise SystemError('Error: Unknown issue occurred in query_existing_sid')
+
+    conn.close()
+    return sid_df
 
 
 def query_exchanges(database, user, password, host, port):
@@ -748,7 +782,7 @@ def query_exchanges(database, user, password, host, port):
             df = pd.DataFrame(rows, columns=['symbol', 'name', 'goog_symbol',
                                              'yahoo_symbol', 'csi_symbol',
                                              'tsid_symbol'])
-            return df
+
     except psycopg2.Error as e:
         print(e)
         raise SystemError('Failed to query the data from the exchange table '
@@ -760,6 +794,9 @@ def query_exchanges(database, user, password, host, port):
     except Exception as e:
         print(e)
         raise SystemError('Error: Unknown issue occurred in query_exchanges')
+
+    conn.close()
+    return df
 
 
 def query_last_price(database, user, password, host, port, table, vendor_id):
@@ -796,6 +833,8 @@ def query_last_price(database, user, password, host, port, table, vendor_id):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    df = None
+
     try:
         with conn:
             cur = conn.cursor()
@@ -851,14 +890,11 @@ def query_last_price(database, user, password, host, port, table, vendor_id):
             df = pd.DataFrame(rows, columns=['tsid', 'date', 'updated_date'])
             df.set_index(['tsid'], inplace=True)
 
-            if len(df.index) == 0:
-                return df
-
-            # Convert the ISO dates to datetime objects
-            df['date'] = pd.to_datetime(df['date'], utc=True)
-            df['updated_date'] = pd.to_datetime(df['updated_date'], utc=True)
-            # df.to_csv('query_last_price.csv')
-            return df
+            if len(df.index) > 0:
+                # Convert the ISO dates to datetime objects
+                df['date'] = pd.to_datetime(df['date'], utc=True)
+                df['updated_date'] = pd.to_datetime(df['updated_date'], utc=True)
+                # df.to_csv('query_last_price.csv')
     except psycopg2.Error as e:
         print(e)
         raise TypeError('Error when trying to connect to the %s database '
@@ -870,6 +906,9 @@ def query_last_price(database, user, password, host, port, table, vendor_id):
     except Exception as e:
         print(e)
         raise SystemError('Error: Unknown issue occurred in query_last_price')
+
+    conn.close()
+    return df
 
 
 def query_load_table(database, user, password, host, port, table):
@@ -888,6 +927,8 @@ def query_load_table(database, user, password, host, port, table):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    df = None
+
     try:
         with conn:
             cur = conn.cursor()
@@ -912,7 +953,6 @@ def query_load_table(database, user, password, host, port, table):
             # created/updated date columns are not needed for comparison
             df.drop(labels=['created_date', 'updated_date'], axis=1,
                     inplace=True)
-            return df
     except psycopg2.Error as e:
         print(e)
         raise SystemError('Failed to query the data from the symbology table '
@@ -924,6 +964,9 @@ def query_load_table(database, user, password, host, port, table):
     except Exception as e:
         print(e)
         raise SystemError('Error: Unknown issue occurred in query_load_table')
+
+    conn.close()
+    return df
 
 
 def query_q_codes(database, user, password, host, port, download_selection):
@@ -946,6 +989,7 @@ def query_q_codes(database, user, password, host, port, download_selection):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    df = None
 
     try:
         with conn:
@@ -1086,7 +1130,6 @@ def query_q_codes(database, user, password, host, port, download_selection):
 
                 # ticker_list = df.values.flatten()
                 # df.to_csv('query_q_code.csv')
-                return df
             else:
                 raise SystemError('Not able to determine the q_codes '
                                   'from the SQL query in query_q_codes')
@@ -1102,6 +1145,9 @@ def query_q_codes(database, user, password, host, port, download_selection):
         print(e)
         raise SystemError('Error: Unknown issue occurred in query_q_codes')
 
+    conn.close()
+    return df
+
 
 def query_source_weights(database, user, password, host, port):
     """ Create a DataFrame of the source weights.
@@ -1116,6 +1162,7 @@ def query_source_weights(database, user, password, host, port):
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    df = None
 
     try:
         with conn:
@@ -1128,7 +1175,6 @@ def query_source_weights(database, user, password, host, port):
                 df = pd.DataFrame(data, columns=['data_vendor_id',
                                                  'consensus_weight'])
                 df.drop_duplicates(inplace=True)
-                return df
             else:
                 raise TypeError('Unable to query data vendor weights within '
                                 'query_source_weights')
@@ -1144,6 +1190,9 @@ def query_source_weights(database, user, password, host, port):
         print(e)
         raise SystemError('Error: Unknown issue occurred in '
                           'query_source_weights')
+
+    conn.close()
+    return df
 
 
 def update_load_table(database, user, password, host, port, values_df, table,

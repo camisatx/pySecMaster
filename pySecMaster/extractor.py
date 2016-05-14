@@ -164,6 +164,7 @@ class QuandlCodeExtract(object):
                                (self.user, self.password, self.host, self.port,
                                 self.database))
         conn = engine.connect()
+        df = pd.DataFrame()
 
         try:
             with conn:
@@ -172,12 +173,14 @@ class QuandlCodeExtract(object):
                                  FROM quandl_codes
                                  ORDER BY data_vendor, page_num DESC
                                      NULLS LAST""", conn)
-                return df
         except Exception as e:
             print('Error when querying the quandl code download page from the '
                   '%s database inQuandlCodeExtract.query_last_download_pg' %
                   self.database)
             print(e)
+
+        conn.close()
+        return df
 
     def extractor(self, db_name, page_num=1):
         """ For every database passed through, each page number will be
@@ -720,8 +723,8 @@ class GoogleFinanceDataExtraction(object):
         self.verbose = verbose
 
         # Rate limiter parameters based on guessed Google Finance limitations
-        # Received captcha after about 2000 queries
-        rate = 70
+        # Received captcha if too fast (about 2000 queries within x seconds)
+        rate = 60       # Received captcha at 70/60s
         period_sec = 60
         self.min_interval = float((period_sec/rate)*threads)
 
@@ -845,7 +848,6 @@ class GoogleFinanceDataExtraction(object):
                 rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=['symbol', 'goog_symbol',
                                                  'tsid_symbol'])
-                return df
         except psycopg2.Error as e:
             print(e)
             raise SystemError('Failed to query the data from the exchange '
@@ -859,6 +861,9 @@ class GoogleFinanceDataExtraction(object):
             print(e)
             raise SystemError('Error: Unknown issue occurred in '
                               'query_exchanges in GoogleFinanceExtraction.')
+
+        conn.close()
+        return df
 
     def extractor(self, tsid):
         """ Takes the tsid symbol, downloads the historical data, and then
@@ -910,7 +915,7 @@ class GoogleFinanceDataExtraction(object):
                 # Only keep data that is after the days_back period
                 if self.data_process == 'replace' and self.days_back:
                     beg_date = (last_date - timedelta(days=self.days_back))
-                    clean_data = raw_data[raw_data.date > beg_date]
+                    clean_data = raw_data[raw_data.date > beg_date.isoformat()]
 
                 # Only keep data that is after the latest existing data point
                 else:
@@ -1148,7 +1153,6 @@ class YahooFinanceDataExtraction(object):
                 rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=['symbol', 'yahoo_symbol',
                                                  'tsid_symbol'])
-                return df
         except psycopg2.Error as e:
             print(e)
             raise SystemError('Failed to query the data from the exchange '
@@ -1162,6 +1166,9 @@ class YahooFinanceDataExtraction(object):
             print(e)
             raise SystemError('Error: Unknown issue occurred in '
                               'query_exchanges in YahooFinanceDataExtraction.')
+
+        conn.close()
+        return df
 
     def extractor(self, tsid):
         """ Takes the tsid symbol, downloads the historical data, and then
@@ -1213,7 +1220,7 @@ class YahooFinanceDataExtraction(object):
                 # Only keep data that is after the days_back period
                 if self.data_process == 'replace' and self.days_back:
                     beg_date = (last_date - timedelta(days=self.days_back))
-                    clean_data = raw_data[raw_data.date > beg_date]
+                    clean_data = raw_data[raw_data.date > beg_date.isoformat()]
 
                 # Only keep data that is after the latest existing data point
                 else:
@@ -1395,10 +1402,12 @@ class CSIDataExtractor(object):
         :return: A DataFrame with the Quandl data set and the max page_num.
         """
 
+        conn = psycopg2.connect(database=self.database, user=self.user,
+                                password=self.password, host=self.host,
+                                port=self.port)
+        df = pd.DataFrame()
+
         try:
-            conn = psycopg2.connect(database=self.database, user=self.user,
-                                    password=self.password, host=self.host,
-                                    port=self.port)
             with conn:
                 # Add new CSI Data tables to this if block
                 if self.data_type == 'stock':
@@ -1410,9 +1419,11 @@ class CSIDataExtractor(object):
                           'file, add an elif block to the main and '
                           'query_existing_data methods in the CSIDataExtractor '
                           'class of extractor.py.' % (self.data_type,))
-                    df = pd.DataFrame()
-                return df
+
         except psycopg2.Error as e:
             print('Error when trying to connect to the %s database in '
                   'query_existing_data.' % (self.database,))
             print(e)
+
+        conn.close()
+        return df
