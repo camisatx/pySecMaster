@@ -1,3 +1,4 @@
+from datetime import datetime
 import pandas as pd
 import psycopg2
 import re
@@ -203,6 +204,7 @@ if __name__ == '__main__':
     test_query_type = 'ticker'     # index, ticker
     tsid = 'AAPL.Q.0'
     test_data_vendor_id = 15        # pySecMaster_Consensus
+    # test_data_vendor_id = 12        # Google_Finance
     test_beg_date = '1950-01-01 00:00:00'
     test_end_date = '2016-12-30 00:00:00'
     frequency = 'daily'    # daily, minute
@@ -242,7 +244,9 @@ if __name__ == '__main__':
     csv_friendly_tsid = re.sub('[.]', '_', tsid)
     print('Query took %0.2f seconds' % (time.time() - start_time))
     print(prices_df)
-    # prices_df.to_csv('%s_%s.csv' % (csv_friendly_tsid, frequency))
+    prices_df.to_csv('output/%s_%s_%s.csv' %
+                     (csv_friendly_tsid, frequency,
+                      datetime.today().strftime('%Y%m%d')))
 
     unique_codes = pd.unique((prices_df['tsid']).values)
     print('There are %i unique tsid codes' % (len(unique_codes)))

@@ -18,7 +18,7 @@ The goal of the system is to have a central repository of interrelated finance d
  - [Future Goals](#future-goals)
  - [Notes](#notes)
  - [Disclaimer](#disclaimer)
- - [License](#license-gnu-agplv3))
+ - [License](#license-gnu-agplv3)
 
 ## Database
 This system utilizes [PostgreSQL](http://www.postgresql.org/) for the database engine. [Postgres](https://en.wikipedia.org/wiki/PostgreSQL) provides an extremely flexible yet powerful database experience. Furthermore, Postgres allows the database to be stored on a remote server, accessible by multiple users.
@@ -198,6 +198,7 @@ This can be multi-processed based on tsids. By default, 5 threads are used. This
   - Add function to manually calculate the adjusted prices for all price tables (instead of relying on the source)
   - Add Quandl_YAHOO to symbology
   - Add custom holiday table
+  - Dockerize the system (?)
 
 # Additional Info
 To view the PostgreSQL database, you can [pgAdmin](http://www.pgadmin.org) program that is installed when you download PostgreSQL. This allows you to view and edit all characteristics of the database.

@@ -310,8 +310,6 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
                 # Convert the ISO date to a datetime object
                 if table == 'daily_prices':
                     df['date'] = pd.to_datetime(df['date'], utc=True)
-                    # df['date'] = pd.to_datetime(df['date'], utc=True,
-                    #                             format='%Y-%m-%d')
                     df['date'] = df['date'].apply(lambda x: x.date())
                 elif table == 'minute_prices':
                     df['date'] = pd.to_datetime(df['date'], utc=True)

@@ -700,12 +700,12 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         # Return an empty DF; DataExtraction class will be able to handle it
         return pd.DataFrame()
 
-    def datetime_to_iso(row, column):
-        return row[column].isoformat()
+    if db_url['interval'] == 'i=' + str(60*60*24):
+        # Processing daily data, thus remove the time stamp from the date
+        raw_df['date'] = raw_df['date'].apply(lambda x: x.date().isoformat())
+    else:
+        raw_df['date'] = raw_df['date'].apply(lambda x: x.isoformat())
 
-    # google_data_processing method converts the string dates to datetimes
-    raw_df['date'] = raw_df.apply(datetime_to_iso, axis=1, args=('date',))
-    # raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
                   datetime.now().isoformat())
 
@@ -958,7 +958,6 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     raw_df = raw_df[1:]
 
     raw_df['date'] = raw_df.apply(date_to_iso, axis=1, args=('date',))
-    # raw_df.insert(0, 'tsid', tsid)
     raw_df.insert(len(raw_df.columns), 'updated_date',
                   datetime.now().isoformat())
 

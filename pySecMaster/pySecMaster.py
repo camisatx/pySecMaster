@@ -400,11 +400,11 @@ if __name__ == '__main__':
         {'source': 'yahoo', 'selection': 'us_main', 'interval': 'daily',
          'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
          'replace_days_back': 60},
-        # Google daily data with us_main_no_end_date (only gets 15 day's prices)
+        # Google daily data with us_main_no_end_date (max of 50 day's prices)
         {'source': 'google', 'selection': 'us_main_no_end_date',
          'interval': 'daily', 'period': 60, 'redownload_time': 60 * 60 * 12,
          'data_process': 'replace', 'replace_days_back': 10},
-        # Google minute data with us_main (only gets 15 day's prices)
+        # Google minute data with us_main (max of 15 day's prices)
         {'source': 'google', 'selection': 'us_main', 'interval': 'minute',
          'period': 20, 'redownload_time': 60 * 60 * 12,
          'data_process': 'replace', 'replace_days_back': 10}
