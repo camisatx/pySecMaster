@@ -242,6 +242,12 @@ class QuandlDownload(object):
             except ValueError:
                 # The CSV file wasn't able to be read, so skip it for now
                 return pd.DataFrame()
+            try:
+                # check the DataFrame for values
+                codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code]
+            except KeyError:
+                # The CSV file wasn't able to be read, so skip it for now
+                return pd.DataFrame()
 
             cur_date = datetime.now().isoformat()
             if len(codes_wo_data_df.
@@ -279,14 +285,19 @@ class QuandlDownload(object):
         raw_df.insert(len(raw_df.columns), 'updated_date',
                       datetime.now().isoformat())
 
-        # Convert all DataFrame values to a number, ignoring NaN values
-        raw_df = pd.to_numeric(raw_df, errors='coerce')
-
-        # Fill all NaN values with -1 to indicate no data
-        raw_df.fillna(-1.0, inplace=True)
-
         # Check each price column for outliers
         for column in raw_df.columns:
+
+            # Skip the date and updated_date columns
+            if column in ['date', 'updated_date']:
+                continue
+
+            # Convert each column's values to a number, forcing all non-numbers
+            #   to be NaN values
+            raw_df[column] = pd.to_numeric(raw_df[column], errors='coerce')
+
+            # Fill all NaN values with -1 to indicate no data
+            raw_df.fillna(-1.0, inplace=True)
 
             try:
                 # Remove all rows that have values larger than 3 deviations mean
@@ -709,14 +720,20 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     raw_df.insert(len(raw_df.columns), 'updated_date',
                   datetime.now().isoformat())
 
-    # Convert all DataFrame values to a number, ignoring NaN values
-    raw_df = pd.to_numeric(raw_df, errors='coerce')
-
-    # Fill all NaN values with -1 to indicate no data
-    raw_df.fillna(-1.0, inplace=True)
-
     # Check each price column for outliers
     for column in raw_df.columns:
+
+        # Skip the date and updated_date columns
+        if column in ['date', 'updated_date']:
+            continue
+
+        # Convert each column's values to a number, forcing all non-numbers
+        #   to be NaN values
+        raw_df[column] = pd.to_numeric(raw_df[column], errors='coerce')
+
+        # Fill all NaN values with -1 to indicate no data
+        raw_df.fillna(-1.0, inplace=True)
+
         try:
             # Remove all rows that have values larger than 3 deviations mean
             # raw_df = (raw_df[(pd.DataFrame.abs(stats.zscore(raw_df)) < 3).
@@ -964,14 +981,19 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
     # Remove the adjusted close column since this is calculated manually
     raw_df.drop('adj_close', axis=1, inplace=True)
 
-    # Convert all DataFrame values to a number, ignoring NaN values
-    raw_df = pd.to_numeric(raw_df, errors='coerce')
-
-    # Fill all NaN values with -1 to indicate no data
-    raw_df.fillna(-1.0, inplace=True)
-
     # Check each price column for outliers
     for column in raw_df.columns:
+
+        # Skip the date and updated_date columns
+        if column in ['date', 'updated_date']:
+            continue
+
+        # Convert each column's values to a number, forcing all non-numbers
+        #   to be NaN values
+        raw_df[column] = pd.to_numeric(raw_df[column], errors='coerce')
+
+        # Fill all NaN values with -1 to indicate no data
+        raw_df.fillna(-1.0, inplace=True)
 
         try:
             # Remove all rows that have values larger than 3 deviations mean
