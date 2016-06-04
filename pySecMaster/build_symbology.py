@@ -138,7 +138,7 @@ def create_symbology(database, user, password, host, port, source_list):
                 #   codes: NYSE and NASDAQ that are active or recently delisted.
 
                 # DataFrame of main US active tickers, their exchanges and
-                #   child exchanges
+                #   sub exchanges
                 csi_stock_df = query_csi_stocks(database=database, user=user,
                                                 password=password, host=host,
                                                 port=port, query='main_us')
@@ -169,49 +169,49 @@ def create_symbology(database, user, password, host, port, source_list):
                     #   GOOG/<goog exchange symbol>_<ticker>
                     ticker = row['ticker']
                     exchange = row['exchange']
-                    child_exchange = row['child_exchange']
+                    sub_exchange = row['sub_exchange']
 
-                    if child_exchange == 'NYSE ARCA':
-                        # NYSE ARCA is a special situation where the child
+                    if sub_exchange == 'NYSE ARCA':
+                        # NYSE ARCA is a special situation where the sub
                         #   exchange matches the csi_symbol
                         goog_exch = (exch_df.loc[exch_df['csi_symbol'] ==
-                                     child_exchange, 'goog_symbol'].values)
+                                     sub_exchange, 'goog_symbol'].values)
                         if goog_exch:
                             return 'GOOG/' + goog_exch[0] + '_' + ticker
                         else:
                             print('Unable to find the goog exchange symbol for '
-                                  'the child exchange %s in csi_to_quandl_goog'
-                                  % child_exchange)
+                                  'the sub exchange %s in csi_to_quandl_goog'
+                                  % sub_exchange)
                     else:
                         # For all non NYSE ARCA exchanges, see if there is a
-                        #   child exchange and if so, try matching that to the
-                        #   csi_symbol (first) or name (second). If no child
+                        #   sub exchange and if so, try matching that to the
+                        #   csi_symbol (first) or name (second). If no sub
                         #   exchange, try matching to the csi_symbol.
 
-                        if child_exchange:
+                        if sub_exchange:
                             # (exch: AMEX | chld_exch: NYSE)
                             goog_exch = (exch_df.loc[exch_df['csi_symbol'] ==
-                                         child_exchange, 'goog_symbol'].values)
+                                         sub_exchange, 'goog_symbol'].values)
                             if goog_exch:
                                 return 'GOOG/' + goog_exch[0] + '_' + ticker
                             else:
                                 # (exch: NYSE | chld_exch: OTC Markets QX)
                                 # (exch: AMEX | chld_exch: BATS Global Markets)
                                 goog_exch = (exch_df.loc[exch_df['name'] ==
-                                             child_exchange, 'goog_symbol'].
+                                             sub_exchange, 'goog_symbol'].
                                              values)
                                 if goog_exch:
                                     return 'GOOG/' + goog_exch[0] + '_' + ticker
                                 else:
                                     print('Unable to find the goog exchange '
-                                          'symbol for the child exchange %s in '
+                                          'symbol for the sub exchange %s in '
                                           'csi_to_quandl_goog. Will try to '
                                           'find a match for the exchange now.'
-                                          % child_exchange)
+                                          % sub_exchange)
                                     # If there is an exchange, try to match that
 
                         if exchange:
-                            # Either no child exchange or the child exchange
+                            # Either no sub exchange or the sub exchange
                             #   never found a match
                             goog_exch = (exch_df.loc[exch_df['csi_symbol'] ==
                                          exchange, 'goog_symbol'].values)
@@ -223,8 +223,8 @@ def create_symbology(database, user, password, host, port, source_list):
                                       'csi_to_quandl_goog' % exchange)
                         else:
                             print('Unable to find the goog exchange symbol for '
-                                  'either the exchange or child exchange for '
-                                  '%s:%s' % (exchange, child_exchange))
+                                  'either the exchange or sub exchange for '
+                                  '%s:%s' % (exchange, sub_exchange))
 
                 csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_quandl_goog,
                                                             axis=1)
@@ -256,48 +256,48 @@ def create_symbology(database, user, password, host, port, source_list):
                     #   <ticker>.<tsid exchange symbol>.<count>
                     ticker = row['ticker']
                     exchange = row['exchange']
-                    child_exchange = row['child_exchange']
+                    sub_exchange = row['sub_exchange']
 
-                    if child_exchange == 'NYSE ARCA':
-                        # NYSE ARCA is a special situation where the child
+                    if sub_exchange == 'NYSE ARCA':
+                        # NYSE ARCA is a special situation where the sub
                         #   exchange matches the csi_symbol
                         tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
-                                     child_exchange, 'tsid_symbol'].values)
+                                     sub_exchange, 'tsid_symbol'].values)
                         if tsid_exch:
                             return ticker + '.' + tsid_exch[0] + '.0'
                         else:
                             print('Unable to find the tsid exchange symbol for '
-                                  'the child exchange %s in csi_to_tsid' %
-                                  child_exchange)
+                                  'the sub exchange %s in csi_to_tsid' %
+                                  sub_exchange)
 
                     else:
                         # For all non NYSE ARCA exchanges, see if there is a
-                        #   child exchange and if so, try matching that to the
-                        #   csi_symbol (first) or name (second). If no child
+                        #   sub exchange and if so, try matching that to the
+                        #   csi_symbol (first) or name (second). If no sub
                         #   exchange, try matching to the csi_symbol.
-                        if child_exchange:
+                        if sub_exchange:
                             # (exch: AMEX | chld_exch: NYSE)
                             tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
-                                         child_exchange, 'tsid_symbol'].values)
+                                         sub_exchange, 'tsid_symbol'].values)
                             if tsid_exch:
                                 return ticker + '.' + tsid_exch[0] + '.0'
                             else:
                                 # (exch: NYSE | chld_exch: OTC Markets QX)
                                 # (exch: AMEX | chld_exch: BATS Global Markets)
                                 tsid_exch = (exch_df.loc[exch_df['name'] ==
-                                             child_exchange, 'tsid_symbol'].
+                                             sub_exchange, 'tsid_symbol'].
                                              values)
                                 if tsid_exch:
                                     return ticker + '.' + tsid_exch[0] + '.0'
                                 else:
                                     print('Unable to find the tsid exchange'
-                                          'symbol for the child exchange %s in '
+                                          'symbol for the sub exchange %s in '
                                           'csi_to_tsid. Will try to '
                                           'find a match for the exchange now.'
-                                          % child_exchange)
+                                          % sub_exchange)
                                     # If there is an exchange, try to match that
                         if exchange:
-                            # Either no child exchange or the child exchange
+                            # Either no sub exchange or the sub exchange
                             #   never found a match
                             tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
                                          exchange, 'tsid_symbol'].values)
@@ -309,8 +309,8 @@ def create_symbology(database, user, password, host, port, source_list):
                                       exchange)
                         else:
                             print('Unable to find the tsid exchange symbol for '
-                                  'either the exchange or child exchange for '
-                                  '%s:%s' % (exchange, child_exchange))
+                                  'either the exchange or sub exchange for '
+                                  '%s:%s' % (exchange, sub_exchange))
 
                 csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_tsid, axis=1)
 
@@ -331,7 +331,7 @@ def create_symbology(database, user, password, host, port, source_list):
 
                     ticker = row['ticker']
                     exchange = row['exchange']
-                    child_exchange = row['child_exchange']
+                    sub_exchange = row['sub_exchange']
                     us_exchanges = ['AMEX', 'BATS Global Markets',
                                     'Nasdaq Capital Market',
                                     'Nasdaq Global Market',
@@ -339,7 +339,7 @@ def create_symbology(database, user, password, host, port, source_list):
                                     'NYSE', 'NYSE ARCA']
 
                     if exchange in ['AMEX', 'NYSE'] \
-                            or child_exchange in us_exchanges:
+                            or sub_exchange in us_exchanges:
                         return ticker           # US ticker; no exchange needed
                     elif exchange == 'LSE':
                         return ticker + '.L'    # LSE -> L
@@ -347,12 +347,12 @@ def create_symbology(database, user, password, host, port, source_list):
                         return ticker + '.TO'   # TSX -> TO
                     elif exchange == 'VSE':
                         return ticker + '.V'    # VSE -> V
-                    elif child_exchange == 'OTC Markets Pink Sheets':
+                    elif sub_exchange == 'OTC Markets Pink Sheets':
                         return ticker + '.PK'   # OTC Pinks -> PK
                     else:
                         print('csi_to_yahoo did not find a match for %s with an'
-                              'exchange of %s and a child exchange of %s' %
-                              (ticker, exchange, child_exchange))
+                              'exchange of %s and a sub exchange of %s' %
+                              (ticker, exchange, sub_exchange))
 
                 csi_stock_df['ticker'] = csi_stock_df.apply(csi_to_yahoo,
                                                             axis=1)

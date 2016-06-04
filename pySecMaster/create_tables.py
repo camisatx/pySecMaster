@@ -120,28 +120,41 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)''')
 
+            def classification(c):
+                c.execute("""CREATE TABLE IF NOT EXISTS classification
+                (classification_id  BIGINT                      PRIMARY KEY,
+                source_id           TEXT                        NOT NULL,
+                source              TEXT                        NOT NULL,
+                standard            TEXT,
+                code                INTEGER,
+                level_1             TEXT,
+                level_2             TEXT,
+                level_3             TEXT,
+                level_4             TEXT,
+                created_date        TIMESTAMP WITH TIME ZONE,
+                updated_date        TIMESTAMP WITH TIME ZONE)""")
+                c.execute("""CREATE INDEX IF NOT EXISTS
+                    idx_classification_values
+                ON classification(source, source_id, standard, level_1,
+                    level_2, level_3, level_4)""")
+
             def csidata_stock_factsheet(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS csidata_stock_factsheet
                 (csi_number         TEXT                        PRIMARY KEY,
                 symbol              TEXT,
                 name                TEXT,
                 exchange            TEXT,
+                sub_exchange        TEXT,
                 is_active           SMALLINT,
                 start_date          DATE,
                 end_date            DATE,
-                sector              TEXT,
-                industry            TEXT,
                 conversion_factor   SMALLINT,
                 switch_cf_date      DATE,
                 pre_switch_cf       SMALLINT,
-                last_volume         BIGINT,
-                type                TEXT,
-                child_exchange      TEXT,
-                currency            TEXT,
                 created_date        TIMESTAMP WITH TIME ZONE,
                 updated_date        TIMESTAMP WITH TIME ZONE)''')
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_csidata_symbol
-                            ON csidata_stock_factsheet(symbol)""")
+                ON csidata_stock_factsheet(symbol)""")
 
             def data_vendor(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS data_vendor
@@ -250,6 +263,7 @@ def main_tables(database='pysecmaster', user='pysecmaster',
             symbology(cur)
             baskets(cur)
             basket_values(cur)
+            classification(cur)
             csidata_stock_factsheet(cur)
             data_vendor(cur)
             exchanges(cur)
@@ -309,6 +323,9 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_identifiers
                     ON daily_prices(source_id, data_vendor_id,
                         date DESC NULLS LAST, updated_date)""")
+                # c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_values
+                #     ON daily_prices(source_id, data_vendor_id, date, close,
+                #         volume)""")
 
             def finra_data(c):
                 c.execute('''CREATE TABLE IF NOT EXISTS finra_data
@@ -363,6 +380,9 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_identifiers
                     ON minute_prices(source_id, data_vendor_id,
                     date DESC NULLS LAST, updated_date)""")
+                # c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_values
+                #     ON minute_prices(source_id, data_vendor_id, date, close,
+                #         volume)""")
 
             def option_chains(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS option_chains
@@ -577,7 +597,7 @@ def events_tables(database='pysecmaster', user='pysecmaster',
                 payable_date    TIMESTAMP WITH TIME ZONE,
                 ex_date         TIMESTAMP WITH TIME ZONE,
                 announced_date  TIMESTAMP WITH TIME ZONE,
-                optionable      INTEGER,
+                optionable      BOOLEAN,
                 ratio           DECIMAL(11,4),
                 created_date    TIMESTAMP WITH TIME ZONE,
                 updated_date    TIMESTAMP WITH TIME ZONE,

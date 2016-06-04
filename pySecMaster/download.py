@@ -242,6 +242,10 @@ class QuandlDownload(object):
             except ValueError:
                 # The CSV file wasn't able to be read, so skip it for now
                 return pd.DataFrame()
+            except Exception as e:
+                # An error that happens sometimes; idk
+                print(e)
+                return pd.DataFrame()
             try:
                 # check the DataFrame for values
                 codes_wo_data_df.loc[codes_wo_data_df['q_code'] == q_code]
@@ -1162,15 +1166,17 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
         df.rename(columns={'CsiNumber': 'csi_number', 'Symbol': 'symbol',
                            'Name': 'name', 'Exchange': 'exchange',
                            'IsActive': 'is_active', 'StartDate': 'start_date',
-                           'EndDate': 'end_date', 'Sector': 'sector',
-                           'Industry': 'industry',
+                           'EndDate': 'end_date',
                            'ConversionFactor': 'conversion_factor',
                            'SwitchCfDate': 'switch_cf_date',
                            'PreSwitchCf': 'pre_switch_cf',
-                           'LastVolume': 'last_volume', 'Type': 'type',
-                           'ChildExchange': 'child_exchange',
-                           'Currency': 'currency'},
+                           'SubExchange': 'sub_exchange'},
                   inplace=True)
+
+        # Rearrange the columns so sub_exchange is right after exchange
+        df = df[['csi_number', 'symbol', 'name', 'exchange', 'sub_exchange',
+                 'is_active', 'start_date', 'end_date', 'conversion_factor',
+                 'switch_cf_date', 'pre_switch_cf']]
 
         if data_type == 'stock':
             df['start_date'] = df.apply(datetime_to_iso, axis=1,
@@ -1186,7 +1192,6 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
         print(e)
         return pd.DataFrame()
 
-    # df.insert(len(df.columns), 'symbology_source', 'CSI_Data')
     df.insert(len(df.columns), 'created_date', datetime.now().isoformat())
     df.insert(len(df.columns), 'updated_date', datetime.now().isoformat())
 

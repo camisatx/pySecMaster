@@ -1358,12 +1358,17 @@ class CSIDataExtractor(object):
                     return
 
                 else:
+                    data_col = list(data.columns.values)
+                    existing_data_col = list(existing_data.columns.values)
                     if ((len(data) >= 1.2 * len(existing_data)) |
-                            (len(data) <= len(existing_data) / 1.2)):
+                            (len(data) <= len(existing_data) / 1.2) |
+                            (data_col == existing_data_col)):
                         # Check to make sure new data is within 20% of the
-                        #   existing data
-                        print('The new data was outside of the 20% band from '
-                              'the existing data')
+                        #   existing data, along with the columns being the same
+                        print('The new data was either outside of the 20% band '
+                              'or it had different column names from the '
+                              'existing data. The existing values were NOT '
+                              'replaced.')
                         return
 
                     # Delete old data [since not referenced in a foreign key]

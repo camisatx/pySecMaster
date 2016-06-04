@@ -125,50 +125,6 @@ def df_to_sql(database, user, password, host, port, df, sql_table, exists,
     conn.close()
 
 
-def insert_csi_data(database, user, password, host, port, df, source):
-    """ DEPRECIATED
-
-    :param database: String of the database name
-    :param user: String of the username used to login to the database
-    :param password: String of the password used to login to the database
-    :param host: String of the database address (localhost, url, ip, etc.)
-    :param port: Integer of the database port number (5432)
-    :param df:
-    :param source:
-    :return: DataFrame of exchanges
-    """
-
-    conn = psycopg2.connect(database=database, user=user, password=password,
-                            host=host, port=port)
-    try:
-        with conn:
-            for index, row in df.iterrows():
-                symbol_id = int(row['symbol_id'])
-
-                cur_time = datetime.now().isoformat()
-                cur = conn.cursor()
-                cur.execute("""INSERT INTO symbology
-                            (symbol_id, source, source_id, type, created_date,
-                            updated_date)
-                            VALUES (%s,%s,%s,%s,%s,%s)""",
-                            (symbol_id, source, symbol_id, 'stock',
-                             cur_time, cur_time))
-                conn.commit()
-    except psycopg2.Error as e:
-        conn.rollback()
-        print('Failed to insert the data into the symbology table within '
-              'insert_csi_data.')
-        print(e)
-    except conn.OperationalError:
-        print('Unable to connect to the %s database in insert_csi_data. Make '
-              'sure the database address/name are correct.' % database)
-    except Exception as e:
-        print(e)
-        print('Error: Unknown issue occurred in insert_csi_data')
-
-    conn.close()
-
-
 def query_all_active_tsids(database, user, password, host, port, table,
                            period=None):
     """ Get a list of all tickers that have data.
@@ -220,7 +176,7 @@ def query_all_active_tsids(database, user, password, host, port, table,
                 # Option 1:
                 # query = ("""SELECT source_id
                 #             FROM symbology
-                #             WHERE source='tsid' AND type='stock'""")
+                #             WHERE source='tsid'""")
 
                 # Option 2:
                 # query = ("""SELECT DISTINCT ON (source_id)
@@ -377,7 +333,7 @@ def query_codes(database, user, password, host, port, download_selection):
                 # Retrieve all tsid stock tickers
                 cur.execute("""SELECT source_id
                                FROM symbology
-                               WHERE source='tsid' AND type='stock'""")
+                               WHERE source='tsid'""")
             elif download_selection == 'us_main':
                 # Retrieve tsid tickers that trade only on main US exchanges
                 #   and that have been active within the prior two years.
@@ -394,13 +350,12 @@ def query_codes(database, user, password, host, port, download_selection):
                                        FROM csidata_stock_factsheet
                                        WHERE end_date>=%s
                                        AND (exchange IN ('AMEX', 'NYSE')
-                                       OR child_exchange IN ('AMEX',
+                                       OR sub_exchange IN ('AMEX',
                                            'BATS Global Markets',
                                            'Nasdaq Capital Market',
                                            'Nasdaq Global Market',
                                            'Nasdaq Global Select',
                                            'NYSE', 'NYSE ARCA'))))
-                               AND type='stock'
                                ORDER BY source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
             elif download_selection == 'us_main_no_end_date':
@@ -416,13 +371,12 @@ def query_codes(database, user, password, host, port, download_selection):
                                        SELECT csi_number
                                        FROM csidata_stock_factsheet
                                        WHERE (exchange IN ('AMEX', 'NYSE')
-                                       OR child_exchange IN ('AMEX',
+                                       OR sub_exchange IN ('AMEX',
                                            'BATS Global Markets',
                                            'Nasdaq Capital Market',
                                            'Nasdaq Global Market',
                                            'Nasdaq Global Select',
                                            'NYSE', 'NYSE ARCA'))))
-                               AND type='stock'
                                ORDER BY source_id ASC NULLS LAST""")
             elif download_selection == 'us_canada_london':
                 # Retrieve tsid tickers that trade on AMEX, LSE, MSE, NYSE,
@@ -442,14 +396,13 @@ def query_codes(database, user, password, host, port, download_selection):
                                        WHERE end_date>=%s
                                        AND (exchange IN ('AMEX', 'LSE', 'NYSE',
                                        'TSX', 'VSE')
-                                       OR child_exchange IN ('AMEX',
+                                       OR sub_exchange IN ('AMEX',
                                            'BATS Global Markets',
                                            'Nasdaq Capital Market',
                                            'Nasdaq Global Market',
                                            'Nasdaq Global Select',
                                            'NYSE', 'NYSE ARCA',
                                            'OTC Markets Pink Sheets'))))
-                               AND type='stock'
                                ORDER BY source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
             else:
@@ -508,12 +461,12 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
 
             if query == 'all':
                 cur.execute("""SELECT csi_number, symbol, exchange,
-                               child_exchange
+                               sub_exchange
                                FROM csidata_stock_factsheet""")
                 rows = cur.fetchall()
                 csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
                                                      'exchange',
-                                                     'child_exchange'])
+                                                     'sub_exchange'])
                 csi_df.sort_values('sid', axis=0, inplace=True)
                 csi_df.reset_index(drop=True, inplace=True)
 
@@ -524,16 +477,16 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                 #   non-active one (same company but different start and end
                 #   dates, with one being active).
                 # NOTE: Due to different punctuations, it is possible for
-                #   items with similar symbol, exchange and child exchange
+                #   items with similar symbol, exchange and sub exchange
                 #   to be returned (ie. 'ABK.A TSX' and 'ABK+A TSX')
                 cur.execute("""SELECT DISTINCT ON (symbol, exchange)
-                                   csi_number, symbol, exchange, child_exchange
+                                   csi_number, symbol, exchange, sub_exchange
                                FROM (SELECT csi_number, symbol, exchange,
-                                   child_exchange, is_active
+                                   sub_exchange, is_active
                                    FROM csidata_stock_factsheet
                                    WHERE (exchange IN ('AMEX', 'LSE', 'NYSE',
                                        'TSX', 'VSE')
-                                   OR child_exchange IN ('AMEX',
+                                   OR sub_exchange IN ('AMEX',
                                        'BATS Global Markets',
                                        'Nasdaq Capital Market',
                                        'Nasdaq Global Market',
@@ -548,7 +501,7 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                 if rows:
                     csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
                                                          'exchange',
-                                                         'child_exchange'])
+                                                         'sub_exchange'])
                 else:
                     raise SystemExit('Not able to retrieve any tickers after '
                                      'querying %s in query_csi_stocks'
@@ -560,17 +513,17 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                 #   active one over the non-active one (same company but
                 #   different start and end dates, with one being active).
                 # NOTE: Due to different punctuations, it is possible for
-                #   items with similar symbol, exchange and child exchange
+                #   items with similar symbol, exchange and sub exchange
                 #   to be returned (ie. 'ABK.A TSX' and 'ABK+A TSX')
                 beg_date = (datetime.now() - timedelta(days=730))
                 cur.execute("""SELECT DISTINCT ON (symbol, exchange)
-                                   csi_number, symbol, exchange, child_exchange
+                                   csi_number, symbol, exchange, sub_exchange
                                FROM (SELECT csi_number, symbol, exchange,
-                                   child_exchange, is_active
+                                   sub_exchange, is_active
                                    FROM csidata_stock_factsheet
                                    WHERE end_date>=%s
                                    AND (exchange IN ('AMEX', 'NYSE')
-                                   OR child_exchange IN ('AMEX',
+                                   OR sub_exchange IN ('AMEX',
                                        'BATS Global Markets',
                                        'Nasdaq Capital Market',
                                        'Nasdaq Global Market',
@@ -585,7 +538,7 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                 if rows:
                     csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
                                                          'exchange',
-                                                         'child_exchange'])
+                                                         'sub_exchange'])
                 else:
                     raise SystemExit('Not able to retrieve any tickers after '
                                      'querying %s in query_csi_stocks'
@@ -1033,7 +986,7 @@ def query_q_codes(database, user, password, host, port, download_selection):
                                     FROM csidata_stock_factsheet
                                     WHERE end_date>=%s
                                     AND (exchange IN ('AMEX', 'NYSE')
-                                    OR child_exchange IN ('AMEX',
+                                    OR sub_exchange IN ('AMEX',
                                         'BATS Global Markets',
                                         'Nasdaq Capital Market',
                                         'Nasdaq Global Market',
@@ -1058,7 +1011,7 @@ def query_q_codes(database, user, password, host, port, download_selection):
                                     SELECT csi_number
                                     FROM csidata_stock_factsheet
                                     WHERE (exchange IN ('AMEX', 'NYSE')
-                                    OR child_exchange IN ('AMEX',
+                                    OR sub_exchange IN ('AMEX',
                                         'BATS Global Markets',
                                         'Nasdaq Capital Market',
                                         'Nasdaq Global Market',
@@ -1087,7 +1040,7 @@ def query_q_codes(database, user, password, host, port, download_selection):
                                     WHERE end_date>=%s
                                     AND (exchange IN ('AMEX', 'LSE', 'NYSE',
                                         'TSX', 'VSE')
-                                    OR child_exchange IN ('AMEX',
+                                    OR sub_exchange IN ('AMEX',
                                         'BATS Global Markets',
                                         'Nasdaq Capital Market',
                                         'Nasdaq Global Market',
@@ -1096,23 +1049,6 @@ def query_q_codes(database, user, password, host, port, download_selection):
                                         'OTC Markets Pink Sheets'))))
                             ORDER BY qcode.source_id ASC NULLS LAST""",
                             (beg_date.isoformat(),))
-            elif download_selection == 'goog_etf':
-                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
-                                tsid.source_id, qcode.source_id
-                            FROM symbology tsid
-                            INNER JOIN symbology qcode
-                            ON tsid.symbol_id = qcode.symbol_id
-                            WHERE tsid.source='tsid'
-                            AND qcode.source='quandl_goog'
-                            AND qcode.symbol_id IN (
-                                SELECT symbol_id
-                                FROM symbology
-                                WHERE source='csi_data'
-                                AND source_id IN (
-                                    SELECT csi_number
-                                    FROM csidata_stock_factsheet
-                                    WHERE Type='Exchange-Traded Fund'))
-                            ORDER BY qcode.source_id ASC NULLS LAST""")
             else:
                 raise SystemError('Improper download_selection was provided '
                                   'in query_codes. If this is a new query, '
