@@ -273,8 +273,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name  | Type                              | Foreign Key                  | Index              |
 |--------------|-----------------------------------|------------------------------|--------------------|
 | conf_call_id | SERIAL PRIMARY KEY                |                              |                    |
-| source       | TEXT NOT NULL                     | symbology(source, source_id) |                    |
-| source_id    | TEXT NOT NULL                     | symbology(source, source_id) | idx_conf_source_id |
+| source       | TEXT                              | symbology(source, source_id) |                    |
+| source_id    | TEXT                              | symbology(source, source_id) | idx_conf_source_id |
 | symbol       | TEXT                              |                              |                    |
 | date         | TIMESTAMP WITH TIME ZONE NOT NULL |                              | idx_conf_source_id |
 | event_title  | TEXT                              |                              |                    |
@@ -286,8 +286,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name       | Type                              | Foreign Key                  | Index             |
 |-------------------|-----------------------------------|------------------------------|-------------------|
 | dividend_id       | SERIAL PRIMARY KEY                |                              |                   |
-| source            | TEXT NOT NULL                     | symbology(source, source_id) |                   |
-| source_id         | TEXT NOT NULL                     | symbology(source, source_id) | idx_div_source_id |
+| source            | TEXT                              | symbology(source, source_id) |                   |
+| source_id         | TEXT                              | symbology(source, source_id) | idx_div_source_id |
 | symbol            | TEXT                              |                              |                   |
 | company           | TEXT                              |                              |                   |
 | dividend          | DECIMAL(6,3)                      |                              |                   |
@@ -303,8 +303,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name   | Type                              | Foreign Key                  | Index              |
 |---------------|-----------------------------------|------------------------------|--------------------|
 | earnings_id   | SERIAL PRIMARY KEY                |                              |                    |
-| source        | TEXT NOT NULL                     | symbology(source, source_id) |                    |
-| source_id     | TEXT NOT NULL                     | symbology(source, source_id) | idx_earn_source_id |
+| source        | TEXT                              | symbology(source, source_id) |                    |
+| source_id     | TEXT                              | symbology(source, source_id) | idx_earn_source_id |
 | symbol        | TEXT                              |                              |                    |
 | company_name  | TEXT                              |                              |                    |
 | date          | TIMESTAMP WITH TIME ZONE NOT NULL |                              |                    |
@@ -318,8 +318,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name       | Type                     | Foreign Key                  | Index                    |
 |-------------------|--------------------------|------------------------------|--------------------------|
 | event_id          | SERIAL PRIMARY KEY       |                              |                          |
-| source            | TEXT NOT NULL            | symbology(source, source_id) |                          |
-| source_id         | TEXT NOT NULL            | symbology(source, source_id) | idx_econ_event_source_id |
+| source            | TEXT                     | symbology(source, source_id) |                          |
+| source_id         | TEXT                     | symbology(source, source_id) | idx_econ_event_source_id |
 | event_name        | TEXT                     |                              |                          |
 | date              | TIMESTAMP WITH TIME ZONE |                              |                          |
 | date_for          | TIMESTAMP WITH TIME ZONE |                              |                          |
@@ -336,8 +336,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name    | Type                     | Foreign Key                  | Index              |
 |----------------|--------------------------|------------------------------|--------------------|
 | ipo_id         | SERIAL PRIMARY KEY       |                              |                    |
-| source         | TEXT NOT NULL            | symbology(source, source_id) |                    |
-| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_ipop_source_id |
+| source         | TEXT                     | symbology(source, source_id) |                    |
+| source_id      | TEXT                     | symbology(source, source_id) | idx_ipop_source_id |
 | symbol         | TEXT                     |                              |                    |
 | company_name   | TEXT                     |                              |                    |
 | offer_date     | TIMESTAMP WITH TIME ZONE |                              |                    |
@@ -352,8 +352,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name    | Type                     | Foreign Key                  | Index                |
 |----------------|--------------------------|------------------------------|----------------------|
 | split_id       | SERIAL PRIMARY KEY       |                              |                      |
-| source         | TEXT NOT NULL            | symbology(source, source_id) |                      |
-| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_splits_source_id |
+| source         | TEXT                     | symbology(source, source_id) |                      |
+| source_id      | TEXT                     | symbology(source, source_id) | idx_splits_source_id |
 | symbol         | TEXT                     |                              |                      |
 | company_name   | TEXT                     |                              |                      |
 | payable_date   | TIMESTAMP WITH TIME ZONE |                              |                      |
