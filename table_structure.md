@@ -2,7 +2,7 @@
 
 These are structures for all of the tables built by pySecMaster. The three types of tables include [Main Tables](#main-tables), [Data Tables](#data-tables) and [Events Tables](#events-tables).
  
- Currently, 21 tables are created within the specified PostgreSQL database when pySecMaster is run.
+ Currently, 22 tables are created within the specified PostgreSQL database when pySecMaster is run.
 
 ## Main Tables
 
@@ -29,6 +29,22 @@ These are structures for all of the tables built by pySecMaster. The three types
 | source_id     | TEXT NOT NULL            | symbology(source, source_id) |       |
 | updated_date  | TIMESTAMP WITH TIME ZONE |                              |       |
 
+#### classification
+
+| Column Name       | Type                     | Foreign Key                  | Index                     |
+|-------------------|--------------------------|------------------------------|---------------------------|
+| classificatino_id | BIGSERIAL PRIMARY KEY    |                              |                           |
+| source            | TEXT NOT NULL            | symbology(source, source_id) | idx_classification_values |
+| source_id         | TEXT NOT NULL            | symbology(source, source_id) | idx_classification_values |
+| standard          | TEXT                     |                              | idx_classification_values |
+| code              | INTEGER                  |                              |                           |
+| level_1           | TEXT                     |                              | idx_classification_values |
+| level_2           | TEXT                     |                              | idx_classification_values |
+| level_3           | TEXT                     |                              | idx_classification_values |
+| level_4           | TEXT                     |                              | idx_classification_values |
+| created_date      | TIMESTAMP WITH TIME ZONE |                              |                           |
+| updated_date      | TIMESTAMP WITH TIME ZONE |                              |                           |
+
 #### csidata_stock_factsheet
 
 | Column Name       | Type                     | Foreign Key | Index              |
@@ -37,18 +53,13 @@ These are structures for all of the tables built by pySecMaster. The three types
 | symbol            | TEXT                     |             | idx_csidata_symbol |
 | name              | TEXT                     |             |                    |
 | exchange          | TEXT                     |             |                    |
+| sub_exchange      | TEXT                     |             |                    |
 | is_active         | SMALLINT                 |             |                    |
 | start_date        | DATE                     |             |                    |
 | end_date          | DATE                     |             |                    |
-| sector            | TEXT                     |             |                    |
-| industry          | TEXT                     |             |                    |
 | conversion_factor | SMALLINT                 |             |                    |
 | switch_cf_date    | DATE                     |             |                    |
 | pre_switch_cf     | SMALLINT                 |             |                    |
-| last_volume       | BIGINT                   |             |                    |
-| type              | TEXT                     |             |                    |
-| child_exchange    | TEXT                     |             |                    |
-| currency          | TEXT                     |             |                    |
 | created_date      | TIMESTAMP WITH TIME ZONE |             |                    |
 | updated_date      | TIMESTAMP WITH TIME ZONE |             |                    |
 
@@ -205,7 +216,6 @@ These are structures for all of the tables built by pySecMaster. The three types
 | exchange       | TEXT                     |                              |                          |
 | currency       | TEXT                     |                              |                          |
 | multiplier     | SMALLINT                 |                              |                          |
-| leg_id         | SMALLINT                 |                              |                          |
 | contract_id    | BIGINT NOT NULL          |                              | idx_option_chains_values |
 | expiry         | DATE                     |                              | idx_option_chains_values |
 | type           | TEXT                     |                              |                          |
@@ -349,7 +359,7 @@ These are structures for all of the tables built by pySecMaster. The three types
 | payable_date   | TIMESTAMP WITH TIME ZONE |                              |                      |
 | ex_date        | TIMESTAMP WITH TIME ZONE |                              |                      |
 | announced_date | TIMESTAMP WITH TIME ZONE |                              |                      |
-| optionable     | INTEGER                  |                              |                      |
+| optionable     | BOOLEAN                  |                              |                      |
 | ratio          | DECIMAL(11,4)            |                              |                      |
 | created_date   | TIMESTAMP WITH TIME ZONE |                              |                      |
 | updated_date   | TIMESTAMP WITH TIME ZONE |                              |                      |

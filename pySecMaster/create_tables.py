@@ -11,7 +11,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.0'
+__version__ = '1.4.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -132,7 +132,10 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                 level_3             TEXT,
                 level_4             TEXT,
                 created_date        TIMESTAMP WITH TIME ZONE,
-                updated_date        TIMESTAMP WITH TIME ZONE)""")
+                updated_date        TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(source, source_id)
+                    REFERENCES symbology(source, source_id)
+                    ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS
                     idx_classification_values
                 ON classification(source, source_id, standard, level_1,
