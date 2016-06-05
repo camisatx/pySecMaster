@@ -18,7 +18,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.0'
+__version__ = '1.4.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -218,7 +218,7 @@ class MainWindow(QtGui.QMainWindow):
 
         quandl_possible_selections = ['wiki', 'goog', 'goog_us_main',
                                       'goog_us_main_no_end_date',
-                                      'goog_us_canada_london', 'goog_etf']
+                                      'goog_us_canada_london']
         quandl_default_selection = 0
 
         self.cmb_data_selection.clear()

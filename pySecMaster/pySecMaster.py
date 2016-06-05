@@ -19,7 +19,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.0'
+__version__ = '1.4.2'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -421,9 +421,9 @@ if __name__ == '__main__':
          'interval': 'daily', 'period': 60, 'redownload_time': 60 * 60 * 12,
          'data_process': 'replace', 'replace_days_back': 10},
         # Google minute data with us_main (max of 15 day's prices)
-        {'source': 'google', 'selection': 'us_main', 'interval': 'minute',
-         'period': 20, 'redownload_time': 60 * 60 * 12,
-         'data_process': 'replace', 'replace_days_back': 10}
+        # {'source': 'google', 'selection': 'us_main', 'interval': 'minute',
+        #  'period': 20, 'redownload_time': 60 * 60 * 12,
+        #  'data_process': 'replace', 'replace_days_back': 10}
     ]
 
     # source: String of which data provider should have their data downloaded
