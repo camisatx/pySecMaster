@@ -1129,6 +1129,56 @@ def query_source_weights(database, user, password, host, port):
     return df
 
 
+def query_tsid_based_on_exchanges(database, user, password, host, port,
+                                  exchanges_list):
+    """ Query all tsids that have one of the provided exchange abbreviations
+    in their structure.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param exchanges_list: List of tsid exchange abbreviations
+    :return: DataFrame of exchanges
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
+    exchanges_list_str = ["source_id LIKE '%." + exchange + ".%'"
+                          for exchange in exchanges_list]
+    exchanges_query = 'AND (' + ' OR '.join(exchanges_list_str) + ')'
+
+    try:
+        with conn:
+            cur = conn.cursor()
+            query = ("""SELECT DISTINCT ON (source_id) source_id
+                     FROM symbology
+                     WHERE source='tsid'
+                     %s
+                     ORDER BY source_id""" % (exchanges_query,))
+            cur.execute(query)
+            rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=['source_id'])
+
+    except psycopg2.Error as e:
+        print(e)
+        raise SystemError('Failed to query the tsid data from the symbology '
+                          'table within query_tsid_based_on_exchanges')
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'query_tsid_based_on_exchanges. Make sure the '
+                          'database address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'query_tsid_based_on_exchanges')
+
+    conn.close()
+    return df
+
+
 def update_load_table(database, user, password, host, port, values_df, table,
                       verbose=False):
     """ Update the load table values for each item in the values_df. Assuming
@@ -1205,6 +1255,57 @@ def update_load_table(database, user, password, host, port, values_df, table,
     conn.close()
 
 
+def update_classification_values(database, user, password, host, port,
+                                 values_df, verbose=True):
+    """ Update the classification table values for each item in the values_df.
+
+    :param database: String of the database name
+    :param user: String of the username used to login to the database
+    :param password: String of the password used to login to the database
+    :param host: String of the database address (localhost, url, ip, etc.)
+    :param port: Integer of the database port number (5432)
+    :param values_df: DataFrame with all the classification values to update
+    :param verbose: Boolean of whether to print debugging statement
+    """
+
+    conn = psycopg2.connect(database=database, user=user, password=password,
+                            host=host, port=port)
+
+    try:
+        with conn:
+            cur = conn.cursor()
+            # Updating each database value
+            for index, row in values_df.iterrows():
+                cur.execute("""UPDATE classification
+                            SET code=(%s), level_1=(%s), level_2=(%s),
+                            level_3=(%s), level_4=(%s), updated_date=(%s)
+                            WHERE source='tsid' AND source_id=(%s)
+                            AND standard=(%s)""",
+                            (row['source_id'], row['code'], row['level_1'],
+                             row['level_2'], row['level_3'], row['level_4'],
+                             row['updated_date'], row['source_id'],
+                             row['standard']))
+                if verbose:
+                    print('Updated classification %s values for %s' %
+                          (row['standard'], row['source_id']))
+            conn.commit()
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(e)
+        raise SystemError('Failed to update the symbology values within '
+                          'update_symbology_values')
+    except conn.OperationalError:
+        raise SystemError('Unable to connect to the %s database in '
+                          'update_symbology_values. Make sure the database '
+                          'address/name are correct.' % database)
+    except Exception as e:
+        print(e)
+        raise SystemError('Error: Unknown issue occurred in '
+                          'update_symbology_values')
+
+    conn.close()
+
+
 def update_symbology_values(database, user, password, host, port, values_df,
                             verbose=True):
     """ Update the source_id and updated_date values for each item in the
@@ -1229,7 +1330,7 @@ def update_symbology_values(database, user, password, host, port, values_df,
             for index, row in values_df.iterrows():
                 cur.execute("""UPDATE symbology
                             SET source_id=(%s), updated_date=(%s)
-                            WHERE symbol_id=(%s) and source=(%s)""",
+                            WHERE symbol_id=(%s) AND source=(%s)""",
                             (row['source_id'], row['updated_date'],
                              row['symbol_id'], row['source']))
                 if verbose:

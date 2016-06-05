@@ -669,18 +669,22 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list
-        codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-        if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
-            # This tsid now has data whereas it didn't on that last run.
-            #   Remove the code from the DataFrame
-            wo_data_df = codes_wo_data_df[codes_wo_data_df.tsid != tsid]
-            # Remove any duplicates (keeping the latest) and save to a CSV
-            clean_wo_data_df = wo_data_df.drop_duplicates(subset='tsid',
-                                                          keep='last')
-            clean_wo_data_df.to_csv(csv_out, index=False)
-            if verbose:
-                print('%s was removed from the wo_data CSV file since data '
-                      'was available for download.' % (tsid,))
+        try:
+            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+            if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
+                # This tsid now has data whereas it didn't on that last run.
+                #   Remove the code from the DataFrame
+                wo_data_df = codes_wo_data_df[codes_wo_data_df.tsid != tsid]
+                # Remove any duplicates (keeping the latest) and save to a CSV
+                clean_wo_data_df = wo_data_df.drop_duplicates(subset='tsid',
+                                                              keep='last')
+                clean_wo_data_df.to_csv(csv_out, index=False)
+                if verbose:
+                    print('%s was removed from the wo_data CSV file since data '
+                          'was available for download.' % (tsid,))
+        except ValueError:
+            # The CSV file wasn't able to be read, so skip it for now
+            pass
     else:
         # There is no price data for this code; add to CSV file via DataFrame
         try:
@@ -929,18 +933,22 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     if len(raw_df.index) > 0:
         # Data successfully downloaded; check to see if code was on the list
-        codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
-        if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
-            # This tsid now has data whereas it didn't on that last run.
-            #   Remove the code from the DataFrame
-            wo_data_df = codes_wo_data_df[codes_wo_data_df.tsid != tsid]
-            # Remove any duplicates (keeping the latest) and save to a CSV
-            clean_wo_data_df = wo_data_df.drop_duplicates(subset='tsid',
-                                                          keep='last')
-            clean_wo_data_df.to_csv(csv_out, index=False)
-            if verbose:
-                print('%s was removed from the wo_data CSV file since data '
-                      'was available for download.' % (tsid,))
+        try:
+            codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
+            if len(codes_wo_data_df.loc[codes_wo_data_df['tsid'] == tsid]) > 0:
+                # This tsid now has data whereas it didn't on that last run.
+                #   Remove the code from the DataFrame
+                wo_data_df = codes_wo_data_df[codes_wo_data_df.tsid != tsid]
+                # Remove any duplicates (keeping the latest) and save to a CSV
+                clean_wo_data_df = wo_data_df.drop_duplicates(subset='tsid',
+                                                              keep='last')
+                clean_wo_data_df.to_csv(csv_out, index=False)
+                if verbose:
+                    print('%s was removed from the wo_data CSV file since data '
+                          'was available for download.' % (tsid,))
+        except ValueError:
+            # The CSV file wasn't able to be read, so skip it for now
+            pass
     else:
         # There is no price data for this code; add to CSV file via DataFrame
         try:
@@ -1196,6 +1204,150 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
     df.insert(len(df.columns), 'updated_date', datetime.now().isoformat())
 
     return df
+
+
+def download_nasdaq_industry_sector(db_url, exchange_list):
+    """ Download the CSV file from nasdaq.com that includes all company sector
+    and industry values for the specified exchange. Only NASDAQ, NYSE and AMEX
+    exchanges are available from NASDAQ's website.
+
+    http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ
+        &render=download
+
+    :param db_url: String of the url root
+    :param exchange_list: List of the exchanges to download; valid exchanges
+        include NASDAQ, NYSE and AMEX
+    :return: DataFrame of the industry and sector values for each tsid
+    """
+
+    def download_data(url, download_try=0):
+        """ Downloads the data from the url provided.
+
+        :param url: String that contains the url of the data to download.
+        :param download_try: Integer of the number of attempts to download data.
+        :return: A CSV file as a url object
+        """
+
+        download_try += 1
+        try:
+            # Download the data
+            return urlopen(url)
+
+        except HTTPError as e:
+            if str(e) == 'HTTP Error 403: Forbidden':
+                raise OSError('HTTPError %s: Reached API call limit. Make the '
+                              'RateLimit more restrictive.' % (e.reason,))
+            elif str(e) == 'HTTP Error 404: Not Found':
+                raise OSError('HTTPError %s: Not found' %
+                              (e.reason))
+            elif str(e) == 'HTTP Error 429: Too Many Requests':
+                if download_try <= 5:
+                    print('HTTPError %s: Exceeded API limit. Make the '
+                          'RateLimit more restrictive. Program will sleep for '
+                          '11 minutes and will try again...' % (e.reason,))
+                    time.sleep(11 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Exceeded API limit. After '
+                                  'trying 5 time, the download was still not '
+                                  'successful. You could have hit the per day '
+                                  'call limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 502: Bad Gateway':
+                if download_try <= 10:
+                    print('HTTPError %s: Encountered a bad gateway with the '
+                          'server. Maybe the network is down. Will sleep for '
+                          '5 minutes'
+                          % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 times, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
+            elif str(e) == 'HTTP Error 503: Service Unavailable':
+                # Received this HTTP Error after 2000 queries. Browser showed
+                #   captch message upon loading url.
+                if download_try <= 10:
+                    print('HTTPError %s: Server is currently unavailable. '
+                          'Maybe the network is down or the server is blocking '
+                          'you. Will sleep for 5 minutes...' % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. '
+                                  'Quitting for now.' % (e.reason,))
+            elif str(e) == 'HTTP Error 504: GATEWAY_TIMEOUT':
+                if download_try <= 10:
+                    print('HTTPError %s: Server connection timed out. Maybe '
+                          'the network is down. Will sleep for 5 minutes'
+                          % (e.reason,))
+                    time.sleep(5 * 60)
+                    download_data(url, download_try)
+                else:
+                    raise OSError('HTTPError %s: Server is currently '
+                                  'unavailable. After trying 10 time, the '
+                                  'download was still not successful. Quitting '
+                                  'for now.' % (e.reason,))
+            else:
+                print('Base URL used: %s' % (url,))
+                raise OSError('HTTPError %s: Unknown error when downloading '
+                              'data' % (e.reason))
+
+        except URLError as e:
+            if download_try <= 10:
+                print('Warning: Experienced URL Error %s. Program will '
+                      'sleep for 5 minutes and will then try again...' %
+                      (e.reason,))
+                time.sleep(5 * 60)
+                download_data(url, download_try)
+            else:
+                raise URLError('Warning: Still experiencing URL Error %s. '
+                               'After trying 10 times, the error remains. '
+                               'Quitting for now, but you can try again later.'
+                               % (e.reason,))
+
+        except Exception as e:
+            print(e)
+            raise OSError('Warning: Encountered an unknown error when '
+                          'downloading data in download_data in download.py')
+
+    exchanges_df = pd.DataFrame(columns=['symbol', 'exchange', 'sector',
+                                         'industry'])
+
+    for exchange in exchange_list:
+        url_string = db_url + 'exchange=' + exchange + '&render=download'
+
+        csv_file = download_data(url=url_string)
+
+        try:
+            # df = pd.read_csv(csv_file, encoding='utf-8', low_memory=False)
+            df = pd.read_csv(csv_file, encoding='utf-8')
+
+            # Only keep the symbol, sector and industry columns
+            df = df[['Symbol', 'Sector', 'Industry']]
+
+            # Rename column headers to a standardized format
+            df.rename(columns={'Symbol': 'symbol', 'Sector': 'sector',
+                               'Industry': 'industry'}, inplace=True)
+
+            # Replace n/a values with Numpy NaN
+            df.replace(to_replace='n/a', value=np.nan, inplace=True)
+
+            # Add the exchange to the second column; it'll be used to convert
+            #   the symbol to a tsid
+            df.insert(1, 'exchange', exchange)
+
+            exchanges_df = exchanges_df.append(df, ignore_index=True)
+
+        except Exception as e:
+            print('Error occurred when processing the %s exchange sector and '
+                  'industry data in download_nasdaq_sector_industry' % exchange)
+            print(e)
+
+    return exchanges_df
 
 
 if __name__ == '__main__':

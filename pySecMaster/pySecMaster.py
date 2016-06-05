@@ -3,7 +3,8 @@ from datetime import datetime
 from create_tables import create_database, main_tables, data_tables,\
     events_tables
 from extractor import QuandlCodeExtract, QuandlDataExtraction,\
-    GoogleFinanceDataExtraction, YahooFinanceDataExtraction, CSIDataExtractor
+    GoogleFinanceDataExtraction, YahooFinanceDataExtraction, CSIDataExtractor,\
+    NASDAQSectorIndustryExtractor
 from load_aux_tables import LoadTables
 from build_symbology import create_symbology
 from cross_validator import CrossValidate
@@ -72,6 +73,11 @@ csidata_url = 'http://www.csidata.com/factsheets.php?'
 tables_to_load = ['data_vendor', 'exchanges']
 symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
                      'seeking_alpha', 'yahoo']
+
+nasdaq_sector_industry_url = 'http://www.nasdaq.com/screening/' \
+                             'companies-by-industry.aspx?'
+nasdaq_sector_industry_extractor_exchanges = ['NASDAQ', 'NYSE', 'AMEX']
+nasdaq_sector_industry_redownload_time = 0
 
 ###############################################################################
 # Database data download options:
@@ -179,6 +185,16 @@ def maintenance(database_options, quandl_key, quandl_ticker_source,
                      host=database_options['host'],
                      port=database_options['port'],
                      source_list=symbology_sources)
+
+    NASDAQSectorIndustryExtractor(
+        database=database_options['database'],
+        user=database_options['user'],
+        password=database_options['password'],
+        host=database_options['host'],
+        port=database_options['port'],
+        db_url=nasdaq_sector_industry_url,
+        exchange_list=nasdaq_sector_industry_extractor_exchanges,
+        redownload_time=nasdaq_sector_industry_redownload_time)
 
 
 def data_download(database_options, quandl_key, download_list, threads=4,

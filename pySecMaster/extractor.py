@@ -7,10 +7,12 @@ from sqlalchemy import create_engine
 import time
 
 from download import QuandlDownload, download_google_data, \
-    download_yahoo_data, download_csidata_factsheet
+    download_yahoo_data, download_csidata_factsheet,\
+    download_nasdaq_industry_sector
 from utilities.database_queries import df_to_sql, delete_sql_table_rows, \
     query_data_vendor_id, query_codes, query_csi_stock_start_date,\
-    query_last_price, query_q_codes
+    query_last_price, query_q_codes, query_tsid_based_on_exchanges,\
+    update_classification_values
 from utilities.multithread import multithread
 
 __author__ = 'Josh Schertz'
@@ -1404,7 +1406,7 @@ class CSIDataExtractor(object):
         """ Determine what prior CSI Data codes are in the database for the
         current data type (stock, commodity, etc.).
 
-        :return: A DataFrame with the Quandl data set and the max page_num.
+        :return: DataFrame
         """
 
         conn = psycopg2.connect(database=self.database, user=self.user,
@@ -1432,3 +1434,209 @@ class CSIDataExtractor(object):
 
         conn.close()
         return df
+
+
+class NASDAQSectorIndustryExtractor(object):
+    """ Download and store the sector and industry data for companies traded
+    on the NASDAQ, NYSE and AMEX exchanges.
+
+    http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ
+        &render=download
+    """
+
+    def __init__(self, database, user, password, host, port, db_url,
+                 exchange_list, redownload_time):
+        """
+        :param database: String of the database name
+        :param user: String of the username used to login to the database
+        :param password: String of the password used to login to the database
+        :param host: String of the database address (localhost, url, ip, etc.)
+        :param port: Integer of the database port number (5432)
+        :param db_url: String of the root URL for downloading this data
+        :param exchange_list: List of the exchanges whose values should be
+            downloaded; valid exchanges include NASDAQ, NYSE and AMEX
+        :param redownload_time: Integer of the number of days to pass before
+            the existing data should be replaced
+        """
+
+        self.database = database
+        self.user = user
+        self.password = password
+        self.host = host
+        self.port = port
+        self.db_url = db_url
+        self.exchange_list = exchange_list
+        self.redownload_time = redownload_time
+
+        self.main()
+
+    def main(self):
+
+        start_time = time.time()
+
+        existing_data_df = self.query_existing_data()
+
+        if len(existing_data_df.index) == 0:
+            # There are no sector or industry values from NASDAQ within the
+            #   classification table; download new data
+
+            print('Downloading the NASDAQ sector and industry data for the '
+                  'following exchanges: %s' % self.exchange_list)
+
+            raw_df = download_nasdaq_industry_sector(self.db_url,
+                                                     self.exchange_list)
+
+            if len(raw_df.index) == 0:
+                print('No data returned for these exchange: %s' %
+                      self.exchange_list)
+                return
+
+        else:
+            # If there is existing data, check if the data is older than the
+            #   specified update range. If so, ensure that data looks
+            #   reasonable, and then delete the existing data.
+
+            beg_date_obj = (datetime.now(timezone.utc) -
+                            timedelta(days=self.redownload_time))
+
+            if existing_data_df.loc[0, 'updated_date'] < beg_date_obj:
+
+                # Download the latest data
+                print('Downloading the NASDAQ sector and industry data for '
+                      'the following exchanges: %s' % self.exchange_list)
+
+                raw_df = download_nasdaq_industry_sector(self.db_url,
+                                                         self.exchange_list)
+
+                if len(raw_df.index) == 0:
+                    print('No data returned for these exchanges: %s' %
+                          self.exchange_list)
+                    return
+
+            else:
+                # The last update to the data was within the update window
+                print('The downloaded sector and industry data is within the '
+                      'update window, thus the existing data will not be '
+                      'replaced.')
+                return
+
+        raw_df.drop_duplicates(subset=['symbol', 'exchange'], inplace=True)
+
+        # Replace the exchange name with the tsid exchange abbreviation
+        raw_df.replace(to_replace={'exchange': {'NASDAQ': 'Q', 'NYSE': 'N'}},
+                       inplace=True)
+
+        # Build a faux tsid from the symbol and exchange values, which will be
+        #   compared against the real tsid values for matches
+        raw_df['temp_tsid'] = raw_df['symbol'] + '.' + raw_df['exchange'] + '.0'
+
+        exchange_abbrev_list = ['AMEX', 'N', 'Q']   # tsid exchange abbrev
+        existing_tsid_df = query_tsid_based_on_exchanges(
+            database=self.database, user=self.user, password=self.password,
+            host=self.host, port=self.port, exchanges_list=exchange_abbrev_list)
+
+        # Only want to keep the values that have a temp_tsid match with an
+        #   existing tsid. Not able to insert a tsid that doesn't already
+        #   exist within the symbology table because that would raise a foreign
+        #   key error. Assume that symbology contains all possible tsids.
+        raw_df = pd.merge(left=raw_df, right=existing_tsid_df, how='inner',
+                          left_on='temp_tsid', right_on='source_id')
+        raw_df.drop(['symbol', 'exchange', 'temp_tsid'], axis=1, inplace=True)
+
+        # Compare the existing values with the new values, only keeping the
+        #   altered and new values
+        altered_values_df = self.altered_values(existing_df=existing_data_df,
+                                                new_df=raw_df)
+
+        clean_df = pd.DataFrame()
+        clean_df.insert(0, 'source_id', altered_values_df['source_id'])
+        clean_df.insert(0, 'source', 'tsid')    # Must be after DF is populated
+        clean_df.insert(2, 'standard', 'NASDAQ')
+        clean_df.insert(3, 'code', None)
+        clean_df.insert(4, 'level_1', altered_values_df['sector'])
+        clean_df.insert(5, 'level_2', altered_values_df['industry'])
+        clean_df.insert(6, 'level_3', None)
+        clean_df.insert(7, 'level_4', None)
+        clean_df.insert(len(clean_df.columns), 'created_date',
+                        datetime.now().isoformat())
+        clean_df.insert(len(clean_df.columns), 'updated_date',
+                        datetime.now().isoformat())
+
+        # Separate out the updated values from the altered_df
+        updated_symbols_df = (clean_df[clean_df['source_id'].
+                              isin(existing_data_df['tsid'])])
+        # Update all modified values in the database
+        update_classification_values(
+            database=self.database, user=self.user, password=self.password,
+            host=self.host, port=self.port, values_df=updated_symbols_df)
+
+        # Separate out the new values from the altered_df
+        new_symbols_df = (clean_df[~clean_df['source_id'].
+                          isin(existing_data_df['tsid'])])
+
+        # Append the new values to the existing classification table
+        df_to_sql(database=self.database, user=self.user,
+                  password=self.password, host=self.host, port=self.port,
+                  df=new_symbols_df, sql_table='classification',
+                  exists='append', item='NASDAQ exchanges')
+
+        print('Updated these NASDAQ exchanges: %s | %0.1f seconds' %
+              (self.exchange_list, time.time() - start_time))
+
+    def query_existing_data(self):
+        """ Determine which tsids have existing sector and industry data from
+        NASDAQ.
+
+        :return: DataFrame
+        """
+
+        conn = psycopg2.connect(database=self.database, user=self.user,
+                                password=self.password, host=self.host,
+                                port=self.port)
+        df = pd.DataFrame()
+
+        try:
+            with conn:
+                df = pd.read_sql("""SELECT source AS tsid, level_1 AS sector,
+                                     level_2 AS industry, updated_date
+                                 FROM classification
+                                 WHERE standard='NASDAQ'""", conn)
+
+        except psycopg2.Error as e:
+            print('Error when trying to connect to the %s database in '
+                  'NASDAQSectorIndustryExtractor.query_existing_data.' %
+                  (self.database,))
+            print(e)
+
+        conn.close()
+        return df
+
+    @staticmethod
+    def altered_values(existing_df, new_df):
+        """ Compare the two provided DataFrames, returning a new DataFrame
+        that only includes rows from the new_df that are different from the
+        existing_df.
+
+        :param existing_df: DataFrame of the existing values
+        :param new_df: DataFrame of the next values
+        :return: DataFrame with the altered/new values
+        """
+
+        # Convert both DataFrames to all string objects. Normally, the symbol_id
+        #   column of the existing_df is an int64 object, messing up the merge
+        if len(existing_df.index) > 0:
+            existing_df = existing_df.applymap(str)
+        new_df = new_df.applymap(str)
+
+        # DataFrame with the similar values from both the existing_df and the
+        #   new_df. The comparison is based on the symbol_id/sid and
+        #   source_id/ticker columns.
+        combined_df = pd.merge(left=existing_df, right=new_df, how='inner',
+                               left_on=['tsid', 'sector', 'industry'],
+                               right_on=['source_id', 'sector', 'industry'])
+
+        # In a new DataFrame, only keep the new_df rows that did NOT have a
+        #   match to the existing_df
+        altered_df = new_df[~new_df['source_id'].isin(combined_df['source_id'])]
+
+        return altered_df

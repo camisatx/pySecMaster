@@ -122,9 +122,9 @@ def main_tables(database='pysecmaster', user='pysecmaster',
 
             def classification(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS classification
-                (classification_id  BIGINT                      PRIMARY KEY,
-                source_id           TEXT                        NOT NULL,
+                (classification_id  BIGSERIAL                   PRIMARY KEY,
                 source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
                 standard            TEXT,
                 code                INTEGER,
                 level_1             TEXT,
