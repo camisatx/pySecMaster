@@ -182,6 +182,22 @@ def create_symbology(database, user, password, host, port, source_list):
                             print('Unable to find the goog exchange symbol for '
                                   'the sub exchange %s in csi_to_quandl_goog'
                                   % sub_exchange)
+                    elif sub_exchange == 'NYSE Mkt':
+                        # AMEX changed to NYSE Mkt, but only the sub exchange
+                        #   from csi data is showing this, not the exchange.
+                        #   Thus, the exchanges table will continue using AMEX.
+                        goog_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                     'AMEX', 'goog_symbol'].values)
+                        if goog_exch:
+                            return 'GOOG/' + goog_exch[0] + '_' + ticker
+                        else:
+                            print('Unable to find the goog exchange symbol for '
+                                  'the sub exchange NYSE Mkt in '
+                                  'csi_to_quandl_goog')
+                    elif sub_exchange == 'Alberta Stock Exchange':
+                        # All stocks with the Alberta Stock Exchange as the
+                        #   sub exchange were all delisted prior to 2004
+                        pass
                     else:
                         # For all non NYSE ARCA exchanges, see if there is a
                         #   sub exchange and if so, try matching that to the
@@ -269,7 +285,17 @@ def create_symbology(database, user, password, host, port, source_list):
                             print('Unable to find the tsid exchange symbol for '
                                   'the sub exchange %s in csi_to_tsid' %
                                   sub_exchange)
-
+                    elif sub_exchange == 'NYSE Mkt':
+                        # AMEX changed to NYSE Mkt, but only the sub exchange
+                        #   from csi data is showing this, not the exchange.
+                        #   Thus, the exchanges table will continue using AMEX.
+                        tsid_exch = (exch_df.loc[exch_df['csi_symbol'] ==
+                                                 'AMEX', 'tsid_symbol'].values)
+                        if tsid_exch:
+                            return ticker + '.' + tsid_exch[0] + '.0'
+                        else:
+                            print('Unable to find the tsid exchange symbol for '
+                                  'the sub exchange NYSE Mkt in csi_to_tsid')
                     else:
                         # For all non NYSE ARCA exchanges, see if there is a
                         #   sub exchange and if so, try matching that to the
@@ -290,7 +316,7 @@ def create_symbology(database, user, password, host, port, source_list):
                                 if tsid_exch:
                                     return ticker + '.' + tsid_exch[0] + '.0'
                                 else:
-                                    print('Unable to find the tsid exchange'
+                                    print('Unable to find the tsid exchange '
                                           'symbol for the sub exchange %s in '
                                           'csi_to_tsid. Will try to '
                                           'find a match for the exchange now.'
