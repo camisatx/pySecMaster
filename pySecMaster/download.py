@@ -400,6 +400,9 @@ class QuandlDownload(object):
                                   'download was still not successful. You '
                                   'could have hit the 50,000 calls per '
                                   'day limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 500: Internal Server Error':
+                if download_try <= 10:
+                    print('HTTPError %s: Internal Server Error' % (e.reason,))
             elif str(e) == 'HTTP Error 502: Bad Gateway':
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with '
@@ -533,6 +536,9 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                   'trying 5 time, the download was still not '
                                   'successful. You could have hit the per day '
                                   'call limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 500: Internal Server Error':
+                if download_try <= 10:
+                    print('HTTPError %s: Internal Server Error' % (e.reason,))
             elif str(e) == 'HTTP Error 502: Bad Gateway':
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with the '
@@ -846,6 +852,9 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                   'trying 5 time, the download was still not '
                                   'successful. You could have hit the per day '
                                   'call limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 500: Internal Server Error':
+                if download_try <= 10:
+                    print('HTTPError %s: Internal Server Error' % (e.reason,))
             elif str(e) == 'HTTP Error 502: Bad Gateway':
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with the '
@@ -1091,6 +1100,9 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
                                   'trying 5 time, the download was still not '
                                   'successful. You could have hit the per day '
                                   'call limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 500: Internal Server Error':
+                if download_try <= 10:
+                    print('HTTPError %s: Internal Server Error' % (e.reason,))
             elif str(e) == 'HTTP Error 502: Bad Gateway':
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with the '
@@ -1252,6 +1264,9 @@ def download_nasdaq_industry_sector(db_url, exchange_list):
                                   'trying 5 time, the download was still not '
                                   'successful. You could have hit the per day '
                                   'call limit.' % (e.reason,))
+            elif str(e) == 'HTTP Error 500: Internal Server Error':
+                if download_try <= 10:
+                    print('HTTPError %s: Internal Server Error' % (e.reason,))
             elif str(e) == 'HTTP Error 502: Bad Gateway':
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with the '
