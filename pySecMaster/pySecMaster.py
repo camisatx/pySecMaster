@@ -77,7 +77,7 @@ symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
 nasdaq_sector_industry_url = 'http://www.nasdaq.com/screening/' \
                              'companies-by-industry.aspx?'
 nasdaq_sector_industry_extractor_exchanges = ['NASDAQ', 'NYSE', 'AMEX']
-nasdaq_sector_industry_redownload_time = 0
+nasdaq_sector_industry_redownload_time = 7
 
 ###############################################################################
 # Database data download options:
@@ -394,7 +394,7 @@ if __name__ == '__main__':
     #   within this data range, the remainder of the codes will attempt to
     #   download (relevant for Quandl codes).
     quandl_update_range = 30
-    csidata_update_range = 5
+    csidata_update_range = 7
 
     ############################################################################
     # Database data download options:
