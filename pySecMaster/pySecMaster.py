@@ -155,7 +155,8 @@ def maintenance(database_options, quandl_key, quandl_ticker_source,
                password=database_options['password'],
                host=database_options['host'],
                port=database_options['port'],
-               tables_to_load=tables_to_load)
+               tables_to_load=tables_to_load,
+               load_tables=userdir['load_tables'])
 
     # Always extract CSI values, as they are used for the symbology table
     CSIDataExtractor(database=database_options['database'],
@@ -250,6 +251,7 @@ def data_download(database_options, quandl_key, download_list, threads=4,
                     days_back=source['replace_days_back'],
                     threads=threads,
                     table=table,
+                    load_tables=userdir['load_tables'],
                     verbose=verbose)
             else:
                 print('\nNot able to download Quandl data for %s because '
@@ -277,6 +279,7 @@ def data_download(database_options, quandl_key, download_list, threads=4,
                 days_back=source['replace_days_back'],
                 threads=threads,
                 table=table,
+                load_tables=userdir['load_tables'],
                 verbose=verbose)
 
         elif source['source'] == 'yahoo':
@@ -299,6 +302,7 @@ def data_download(database_options, quandl_key, download_list, threads=4,
                 days_back=source['replace_days_back'],
                 threads=threads,
                 table=table,
+                load_tables=userdir['load_tables'],
                 verbose=verbose)
 
         else:

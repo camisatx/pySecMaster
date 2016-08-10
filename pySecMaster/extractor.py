@@ -384,7 +384,8 @@ class QuandlDataExtraction(object):
 
     def __init__(self, database, user, password, host, port, quandl_token,
                  db_url, download_selection, redownload_time, data_process,
-                 days_back, threads, table, verbose=False):
+                 days_back, threads, table, load_tables='load_tables',
+                 verbose=False):
         """
         :param database: String of the directory location for the SQL database.
         :param user: String of the username used to login to the database
@@ -407,6 +408,7 @@ class QuandlDataExtraction(object):
             is using; used for rate limiter
         :param table: String indicating which table the DataFrame should be
             put into.
+        :param load_tables: String of the directory location for the load tables
         :param verbose: Boolean of whether debugging prints should occur.
         """
 
@@ -430,7 +432,7 @@ class QuandlDataExtraction(object):
         period_sec = 600
         self.min_interval = float((period_sec/rate)*threads)
 
-        self.csv_wo_data = 'load_tables/quandl_' + self.table + '_wo_data.csv'
+        self.csv_wo_data = load_tables + '/quandl_' + self.table+'_wo_data.csv'
 
         # Retrieve the Quandl data vendor IDs. Not able to use a list of all
         #   Quandl data vendor IDs because that prevents data being downloaded
@@ -685,7 +687,7 @@ class GoogleFinanceDataExtraction(object):
 
     def __init__(self, database, user, password, host, port, db_url,
                  download_selection, redownload_time, data_process, days_back,
-                 threads, table, verbose=True):
+                 threads, table, load_tables='load_tables', verbose=True):
         """
         :param database: String of the directory location for the SQL database.
         :param user: String of the username used to login to the database
@@ -707,6 +709,7 @@ class GoogleFinanceDataExtraction(object):
             is using; used for rate limiter
         :param table: String indicating which table the DataFrame should be
             put into.
+        :param load_tables: String of the directory location for the load tables
         :param verbose: Boolean of whether debugging prints should occur.
         """
 
@@ -734,7 +737,7 @@ class GoogleFinanceDataExtraction(object):
             database=self.database, user=self.user, password=self.password,
             host=self.host, port=self.port, name='Google_Finance')
 
-        self.csv_wo_data = 'load_tables/goog_' + self.table + '_wo_data.csv'
+        self.csv_wo_data = load_tables + '/goog_' + self.table + '_wo_data.csv'
 
         print('Retrieving dates for the last Google prices per ticker...')
         # Creates a DataFrame with the last price for each security
@@ -990,7 +993,7 @@ class YahooFinanceDataExtraction(object):
 
     def __init__(self, database, user, password, host, port, db_url,
                  download_selection, redownload_time, data_process, days_back,
-                 threads, table, verbose=True):
+                 threads, table, load_tables='load_tables', verbose=True):
         """
         :param database: String of the directory location for the SQL database.
         :param user: String of the username used to login to the database
@@ -1012,6 +1015,7 @@ class YahooFinanceDataExtraction(object):
             is using; used for rate limiter
         :param table: String indicating which table the DataFrame should be
             put into.
+        :param load_tables: String of the directory location for the load tables
         :param verbose: Boolean of whether debugging prints should occur.
         """
 
@@ -1039,7 +1043,7 @@ class YahooFinanceDataExtraction(object):
             database=self.database, user=self.user, password=self.password,
             host=self.host, port=self.port, name='Yahoo_Finance')
 
-        self.csv_wo_data = 'load_tables/yahoo_' + self.table + '_wo_data.csv'
+        self.csv_wo_data = load_tables + '/yahoo_' + self.table + '_wo_data.csv'
 
         print('Retrieving dates for the last Yahoo prices per ticker...')
         # Creates a DataFrame with the last price for each security

@@ -36,13 +36,13 @@ __version__ = '1.4.2'
 class LoadTables(object):
 
     def __init__(self, database, user, password, host, port, tables_to_load,
-                 table_location='load_tables'):
+                 load_tables='load_tables'):
         self.database = database
         self.user = user
         self.password = password
         self.host = host
         self.port = port
-        self.load_to_sql(tables_to_load, table_location)
+        self.load_to_sql(tables_to_load, load_tables)
 
     @staticmethod
     def altered_values(existing_df, new_df):
