@@ -12,6 +12,9 @@ data_vendor_id,name,url,support_email,api,consensus_weight
 11,Quandl_EOD,https://www.quandl.com/data/EOD,connect@quandl.com,EOD,50
 12,Google_Finance,https://www.google.com/finance,,,20
 13,Yahoo_Finance,https://finance.yahoo.com,,,20
-14,CSI_Data,http://www.csidata.com/,support@csidata.com,,50
+14,CSI_Data,http://www.csidata.com,support@csidata.com,,50
 15,pySecMaster_Consensus,https://github.com/camisatx/pySecMaster,,,
 16,IB_API,https://www.interactivebrokers.com,,,
+17,Seeking_Alpha,http://www.seekingalpha.com,,,
+18,Bloomberg,http://www.bloomberg.com,,,
+19,Reuters,http://www.reuters.com,,,
