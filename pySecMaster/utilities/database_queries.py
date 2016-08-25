@@ -1276,15 +1276,41 @@ def update_classification_values(database, user, password, host, port,
             cur = conn.cursor()
             # Updating each database value
             for index, row in values_df.iterrows():
-                cur.execute("""UPDATE classification
-                            SET code=(%s), level_1=(%s), level_2=(%s),
-                            level_3=(%s), level_4=(%s), updated_date=(%s)
-                            WHERE source='tsid' AND source_id=(%s)
-                            AND standard=(%s)""",
-                            (row['source_id'], row['code'], row['level_1'],
-                             row['level_2'], row['level_3'], row['level_4'],
-                             row['updated_date'], row['source_id'],
-                             row['standard']))
+                if row['code']:
+                    cur.execute("""UPDATE classification
+                                SET code=(%s), updated_date=(%s)
+                                WHERE source='tsid' AND source_id=(%s)
+                                AND standard=(%s)""",
+                                (row['code'], row['updated_date'],
+                                 row['source_id'], row['standard']))
+                if row['level_1']:
+                    cur.execute("""UPDATE classification
+                                SET level_1=(%s), updated_date=(%s)
+                                WHERE source='tsid' AND source_id=(%s)
+                                AND standard=(%s)""",
+                                (row['level_1'], row['updated_date'],
+                                 row['source_id'], row['standard']))
+                if row['level_2']:
+                    cur.execute("""UPDATE classification
+                                SET level_2=(%s), updated_date=(%s)
+                                WHERE source='tsid' AND source_id=(%s)
+                                AND standard=(%s)""",
+                                (row['level_2'], row['updated_date'],
+                                 row['source_id'], row['standard']))
+                if row['level_3']:
+                    cur.execute("""UPDATE classification
+                                SET level_3=(%s), updated_date=(%s)
+                                WHERE source='tsid' AND source_id=(%s)
+                                AND standard=(%s)""",
+                                (row['level_3'], row['updated_date'],
+                                 row['source_id'], row['standard']))
+                if row['level_4']:
+                    cur.execute("""UPDATE classification
+                                SET level_4=(%s), updated_date=(%s)
+                                WHERE source='tsid' AND source_id=(%s)
+                                AND standard=(%s)""",
+                                (row['level_4'], row['updated_date'],
+                                 row['source_id'], row['standard']))
                 if verbose:
                     print('Updated classification %s values for %s' %
                           (row['standard'], row['source_id']))

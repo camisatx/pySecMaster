@@ -1496,7 +1496,7 @@ class NASDAQSectorIndustryExtractor(object):
                 return
 
         else:
-            # If there is existing data, check if the data is older than the
+            # There is existing data, so check if the data is older than the
             #   specified update range. If so, ensure that data looks
             #   reasonable, and then delete the existing data.
 
@@ -1547,10 +1547,16 @@ class NASDAQSectorIndustryExtractor(object):
                           left_on='temp_tsid', right_on='source_id')
         raw_df.drop(['symbol', 'exchange', 'temp_tsid'], axis=1, inplace=True)
 
+        # Change any numpy nan values to None
+        raw_df = raw_df.where((pd.notnull(raw_df)), None)
+
         # Compare the existing values with the new values, only keeping the
         #   altered and new values
         altered_values_df = self.altered_values(existing_df=existing_data_df,
                                                 new_df=raw_df)
+        if len(altered_values_df.index) == 0:
+            print('No new items in the NASDAQ sector and industry extractor.')
+            return
 
         clean_df = pd.DataFrame()
         clean_df.insert(0, 'source_id', altered_values_df['source_id'])
@@ -1601,7 +1607,7 @@ class NASDAQSectorIndustryExtractor(object):
 
         try:
             with conn:
-                df = pd.read_sql("""SELECT source AS tsid, level_1 AS sector,
+                df = pd.read_sql("""SELECT source_id AS tsid, level_1 AS sector,
                                      level_2 AS industry, updated_date
                                  FROM classification
                                  WHERE standard='NASDAQ'""", conn)
