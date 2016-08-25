@@ -12,7 +12,7 @@ __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.2'
+__version__ = '1.4.3'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -70,7 +70,7 @@ if __name__ == '__main__':
 
     userdir = user_dir()
 
-    test_database_options = {
+    sayvmaster_database_options = {
         'admin_user': userdir['postgresql']['main_user'],
         'admin_password': userdir['postgresql']['main_password'],
         'database': userdir['postgresql']['sayvmaster_db'],
@@ -80,4 +80,15 @@ if __name__ == '__main__':
         'port': userdir['postgresql']['sayvmaster_port'],
     }
 
-    build_symbology(database_options=test_database_options)
+    newsmaster_database_options = {
+        'admin_user': userdir['postgresql']['main_user'],
+        'admin_password': userdir['postgresql']['main_password'],
+        'database': userdir['postgresql']['newsmaster_db'],
+        'user': userdir['postgresql']['newsmaster_user'],
+        'password': userdir['postgresql']['newsmaster_password'],
+        'host': userdir['postgresql']['newsmaster_host'],
+        'port': userdir['postgresql']['newsmaster_port'],
+    }
+
+    # build_symbology(database_options=sayvmaster_database_options)
+    build_symbology(database_options=newsmaster_database_options)
