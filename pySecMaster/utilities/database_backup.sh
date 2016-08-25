@@ -6,6 +6,9 @@
 #        localhost:5432:mydbname:postgres:mypass
 #    chmod 600 ~/.pgpass
 
+# On linux, you must enable this script to be executable
+#    chmod u+x ~/Programming/Code/database_backup.sh
+
 cur_time=$(date "+%Y%m%dT%H%M%S")
 cur_database="pysecmaster"
 
