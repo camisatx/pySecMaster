@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import numpy as np
 import pandas as pd
 import psycopg2
 from sqlalchemy import create_engine
@@ -1270,41 +1271,42 @@ def update_classification_values(database, user, password, host, port,
 
     conn = psycopg2.connect(database=database, user=user, password=password,
                             host=host, port=port)
+    nothing = [None, np.nan, 'None', 'n/a', 'none', 'NONE']
 
     try:
         with conn:
             cur = conn.cursor()
             # Updating each database value
             for index, row in values_df.iterrows():
-                if row['code']:
+                if row['code'] not in nothing:
                     cur.execute("""UPDATE classification
                                 SET code=(%s), updated_date=(%s)
                                 WHERE source='tsid' AND source_id=(%s)
                                 AND standard=(%s)""",
                                 (row['code'], row['updated_date'],
                                  row['source_id'], row['standard']))
-                if row['level_1']:
+                if row['level_1'] not in nothing:
                     cur.execute("""UPDATE classification
                                 SET level_1=(%s), updated_date=(%s)
                                 WHERE source='tsid' AND source_id=(%s)
                                 AND standard=(%s)""",
                                 (row['level_1'], row['updated_date'],
                                  row['source_id'], row['standard']))
-                if row['level_2']:
+                if row['level_2'] not in nothing:
                     cur.execute("""UPDATE classification
                                 SET level_2=(%s), updated_date=(%s)
                                 WHERE source='tsid' AND source_id=(%s)
                                 AND standard=(%s)""",
                                 (row['level_2'], row['updated_date'],
                                  row['source_id'], row['standard']))
-                if row['level_3']:
+                if row['level_3'] not in nothing:
                     cur.execute("""UPDATE classification
                                 SET level_3=(%s), updated_date=(%s)
                                 WHERE source='tsid' AND source_id=(%s)
                                 AND standard=(%s)""",
                                 (row['level_3'], row['updated_date'],
                                  row['source_id'], row['standard']))
-                if row['level_4']:
+                if row['level_4'] not in nothing:
                     cur.execute("""UPDATE classification
                                 SET level_4=(%s), updated_date=(%s)
                                 WHERE source='tsid' AND source_id=(%s)

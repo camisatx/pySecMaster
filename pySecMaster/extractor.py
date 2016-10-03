@@ -1547,9 +1547,6 @@ class NASDAQSectorIndustryExtractor(object):
                           left_on='temp_tsid', right_on='source_id')
         raw_df.drop(['symbol', 'exchange', 'temp_tsid'], axis=1, inplace=True)
 
-        # Change any numpy nan values to None
-        raw_df = raw_df.where((pd.notnull(raw_df)), None)
-
         # Compare the existing values with the new values, only keeping the
         #   altered and new values
         altered_values_df = self.altered_values(existing_df=existing_data_df,

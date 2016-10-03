@@ -1349,6 +1349,10 @@ def download_nasdaq_industry_sector(db_url, exchange_list):
 
             # Replace n/a values with Numpy NaN
             df.replace(to_replace='n/a', value=np.nan, inplace=True)
+            # Change any numpy nan values to None
+            df = df.where((pd.notnull(df)), None)
+            # Drop all rows where the sector and industry are None
+            df.dropna(how='all', subset=['sector', 'industry'], inplace=True)
 
             # Add the exchange to the second column; it'll be used to convert
             #   the symbol to a tsid
