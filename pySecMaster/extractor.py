@@ -597,7 +597,7 @@ class QuandlDataExtraction(object):
                 df_to_sql(database=self.database, user=self.user,
                           password=self.password, host=self.host,
                           port=self.port, df=clean_data,
-                          sql_table='daily_prices', exists='append', item=tsid)
+                          sql_table=self.table, exists='append', item=tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
 
@@ -640,11 +640,8 @@ class QuandlDataExtraction(object):
                 # data_vendor = retrieve_data_vendor_id(
                 #     db_location=self.db_location, name=vendor_name)
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
-
-                # Add the tsid into the DataFrame, and then remove the q_code
                 clean_data.insert(1, 'source', 'tsid')
                 clean_data.insert(2, 'source_id', tsid)
-                # clean_data.drop('q_code', axis=1, inplace=True)
 
                 # If replacing existing data, delete the overlapping data points
                 if self.data_process == 'replace' and self.days_back:
@@ -652,9 +649,12 @@ class QuandlDataExtraction(object):
                     #   any date between that and the latest date need to be
                     #   deleted before the new data can be added.
                     first_date_iso = clean_data['date'].min()
-                    query = ("""DELETE FROM daily_prices
+
+                    query = ("""DELETE FROM %s
                                 WHERE source_id='%s'
-                                AND date>='%s'""" % (tsid, first_date_iso))
+                                AND date>='%s'
+                                AND data_vendor_id='%s'""" %
+                             (self.table, tsid, first_date_iso, self.vendor_id))
 
                     del_success = 'failure'
                     retry_count = 5
@@ -662,7 +662,7 @@ class QuandlDataExtraction(object):
                         del_success = delete_sql_table_rows(
                             database=self.database, user=self.user,
                             password=self.password, host=self.host,
-                            port=self.port, query=query, table='daily_prices',
+                            port=self.port, query=query, table=self.table,
                             item=tsid)
 
                         if del_success == 'failure':
@@ -678,7 +678,7 @@ class QuandlDataExtraction(object):
                 df_to_sql(database=self.database, user=self.user,
                           password=self.password, host=self.host,
                           port=self.port, df=clean_data,
-                          sql_table='daily_prices', exists='append', item=tsid)
+                          sql_table=self.table, exists='append', item=tsid)
                 print('Updated %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
 
