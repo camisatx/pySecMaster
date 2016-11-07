@@ -138,7 +138,7 @@ def maintenance(database_options, quandl_key, quandl_ticker_source,
                 user=database_options['user'],
                 password=database_options['password'],
                 host=database_options['host'],
-                port=database_options['port'],)
+                port=database_options['port'])
     data_tables(database=database_options['database'],
                 user=database_options['user'],
                 password=database_options['password'],
