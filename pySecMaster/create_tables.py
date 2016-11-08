@@ -395,6 +395,7 @@ def data_tables(database='pysecmaster', user='pysecmaster',
             def option_chains(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS option_chains
                 (option_id      BIGSERIAL                   PRIMARY KEY,
+                data_vendor_id  SMALLINT,
                 source          TEXT                        NOT NULL,
                 source_id       TEXT                        NOT NULL,
                 symbol          TEXT,
@@ -405,13 +406,17 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                 expiry          DATE,
                 type            TEXT,
                 strike          DECIMAL(8,2),
+                pre_split       BOOLEAN,
+                created_date    TIMESTAMP WITH TIME ZONE,
                 updated_date    TIMESTAMP WITH TIME ZONE,
+                FOREIGN KEY(data_vendor_id)
+                    REFERENCES data_vendor(data_vendor_id),
                 FOREIGN KEY(source, source_id)
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_option_chains_values
-                    ON option_chains(source, source_id, contract_id, expiry,
-                        strike)""")
+                    ON option_chains(data_vendor_id, source, source_id,
+                        contract_id, expiry, strike, pre_split)""")
 
             def option_prices(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS option_prices
@@ -445,6 +450,7 @@ def data_tables(database='pysecmaster', user='pysecmaster',
             def tick(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS tick_prices
                 (tick_id        BIGSERIAL                   PRIMARY KEY,
+                data_vendor_id  SMALLINT,
                 source          TEXT                        NOT NULL,
                 source_id       TEXT                        NOT NULL,
                 date            TIMESTAMP WITH TIME ZONE,
@@ -458,6 +464,8 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                 ask_size        INTEGER,
                 last_size       INTEGER,
                 volume          INTEGER,
+                FOREIGN KEY(data_vendor_id)
+                    REFERENCES data_vendor(data_vendor_id),
                 FOREIGN KEY(source, source_id)
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
@@ -467,11 +475,14 @@ def data_tables(database='pysecmaster', user='pysecmaster',
             def tick_stream(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS tick_prices_stream
                 (tick_id        BIGSERIAL                   PRIMARY KEY,
+                data_vendor_id  SMALLINT,
                 source          TEXT                        NOT NULL,
                 source_id       TEXT                        NOT NULL,
                 date            TIMESTAMP WITH TIME ZONE,
                 field           TEXT,
                 value           DECIMAL(11,4),
+                FOREIGN KEY(data_vendor_id)
+                    REFERENCES data_vendor(data_vendor_id),
                 FOREIGN KEY(source, source_id)
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
@@ -550,7 +561,7 @@ def events_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_div_source_id
-                    ON dividends(source, source_id)""")
+                    ON dividends(source, source_id, ex_dividend_date)""")
 
             def earnings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS earnings
@@ -568,7 +579,7 @@ def events_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_earn_source_id
-                    ON earnings(source, source_id)""")
+                    ON earnings(source, source_id, date)""")
 
             def economic_events(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS economic_events
@@ -589,7 +600,7 @@ def events_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_econ_event_source_id
-                    ON economic_events(source, source_id)""")
+                    ON economic_events(source, source_id, date, event_name)""")
 
             def ipo_pricings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS ipo_pricings
@@ -608,7 +619,7 @@ def events_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_ipop_source_id
-                    ON ipo_pricings(source, source_id)""")
+                    ON ipo_pricings(source, source_id, offer_date)""")
 
             def splits(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS splits
@@ -628,7 +639,7 @@ def events_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_splits_source_id
-                    ON splits(source, source_id)""")
+                    ON splits(source, source_id, ex_date, ratio)""")
 
             conference_calls(cur)
             dividends(cur)
