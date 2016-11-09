@@ -160,7 +160,7 @@ def query_all_active_tsids(database, user, password, host, port, table,
                 # query = ("""SELECT DISTINCT ON (source_id)
                 #                 source_id as tsid
                 #          FROM %s
-                #          WHERE date>='%s'
+                #          WHERE source='tsid' AND date>='%s'
                 #          ORDER BY source_id ASC NULLS LAST""" %
                 #          (table, beg_date))
                 query = ("""SELECT sym.source_id AS tsid
@@ -169,7 +169,7 @@ def query_all_active_tsids(database, user, password, host, port, table,
                              SELECT source_id
                              FROM %s
                              WHERE source_id = sym.source_id
-                             AND date>='%s'
+                             AND source='tsid' AND date>='%s'
                              ORDER BY source_id ASC NULLS LAST
                              LIMIT 1) AS prices""" %
                          (table, beg_date))
@@ -192,6 +192,7 @@ def query_all_active_tsids(database, user, password, host, port, table,
                              SELECT source_id
                              FROM %s
                              WHERE source_id = sym.source_id
+                             AND source='tsid'
                              ORDER BY source_id ASC NULLS LAST
                              LIMIT 1) AS prices""" %
                          (table,))
@@ -245,14 +246,14 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
                 cur.execute("""SELECT data_vendor_id, date, open, high, low,
                                 close, volume, ex_dividend, split_ratio
                             FROM daily_prices
-                            WHERE source_id=%s""", (tsid,))
+                            WHERE source_id=%s AND source='tsid'""", (tsid,))
                 columns = ['data_vendor_id', 'date', 'open', 'high', 'low',
                            'close', 'volume', 'ex_dividend', 'split_ratio']
             elif table == 'minute_prices':
                 cur.execute("""SELECT data_vendor_id, date, open, high, low,
                                 close, volume
                             FROM minute_prices
-                            WHERE source_id=%s""", (tsid,))
+                            WHERE source_id=%s AND source='tsid'""", (tsid,))
                 columns = ['data_vendor_id', 'date', 'open', 'high', 'low',
                            'close', 'volume']
             else:

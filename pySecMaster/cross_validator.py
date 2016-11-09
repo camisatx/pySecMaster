@@ -259,7 +259,7 @@ class CrossValidate:
                 # Only delete prior consensus values for this tsid that are
                 #   newer than the beg_date (current date - replace period).
                 delete_query = ("""DELETE FROM %s
-                                   WHERE source_id='%s'
+                                   WHERE source_id='%s' AND source='tsid'
                                    AND data_vendor_id='%s'
                                    AND date>'%s'""" %
                                 (self.table, tsid, validator_id,
@@ -267,7 +267,7 @@ class CrossValidate:
             else:
                 # Delete all existing consensus values for this tsid.
                 delete_query = ("""DELETE FROM %s
-                                   WHERE source_id='%s'
+                                   WHERE source_id='%s' AND source='tsid'
                                    AND data_vendor_id='%s'""" %
                                 (self.table, tsid, validator_id))
 
