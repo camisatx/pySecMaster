@@ -31,7 +31,7 @@ __version__ = '1.4.3'
 
 
 def pull_daily_prices(database, user, password, host, port, query_type,
-                      data_vendor_id, beg_date, end_date, *args):
+                      data_vendor_id, beg_date, end_date, source='tsid', *args):
     """ Query the daily prices from the database for the tsid provided between
     the start and end dates. Return a DataFrame with the prices.
 
@@ -44,7 +44,7 @@ def pull_daily_prices(database, user, password, host, port, query_type,
     :param data_vendor_id: Integer of which data vendor id to return prices for
     :param beg_date: String of the ISO date to start with
     :param end_date: String of the ISO date to end with
-    :param args:
+    :param source: String of the ticker's source
     :return: DataFrame of the returned prices
     """
 
@@ -61,10 +61,10 @@ def pull_daily_prices(database, user, password, host, port, query_type,
                 cur.execute("""SELECT date, source_id AS tsid, open, high, low,
                                 close, volume
                             FROM daily_prices
-                            WHERE source_id=%s
+                            WHERE source_id=%s AND source=%s
                             AND data_vendor_id=%s
                             AND date>=%s AND date<=%s""",
-                            (tsid, data_vendor_id, beg_date, end_date))
+                            (tsid, source, data_vendor_id, beg_date, end_date))
 
             elif query_type == 'index':
                 index, as_of_date = args
@@ -79,10 +79,11 @@ def pull_daily_prices(database, user, password, host, port, query_type,
                                 FROM indices
                                 WHERE stock_index=%s
                                 AND as_of_date=%s)
+                            AND source=%s
                             AND data_vendor_id=%s
                             AND date>=%s AND date<=%s""",
-                            (index, as_of_date, data_vendor_id, beg_date,
-                             end_date))
+                            (index, as_of_date, source, data_vendor_id,
+                             beg_date, end_date))
 
             else:
                 raise NotImplementedError('Query type %s is not implemented '
@@ -120,7 +121,8 @@ def pull_daily_prices(database, user, password, host, port, query_type,
 
 
 def pull_minute_prices(database, user, password, host, port, query_type,
-                       data_vendor_id, beg_date, end_date, *args):
+                       data_vendor_id, beg_date, end_date, source='tsid',
+                       *args):
     """ Query the minute prices from the database for the tsid provided between
     the start and end dates. Return a DataFrame with the prices.
 
@@ -133,6 +135,7 @@ def pull_minute_prices(database, user, password, host, port, query_type,
     :param data_vendor_id: Integer of which data vendor id to return prices for
     :param beg_date: String of the ISO date to start with
     :param end_date: String of the ISO date to end with
+    :param source: String of the source
     :param args:
     :return: DataFrame of the returned prices
     """
@@ -150,10 +153,10 @@ def pull_minute_prices(database, user, password, host, port, query_type,
                 cur.execute("""SELECT date, source_id AS tsid, open, high, low,
                                 close, volume
                             FROM minute_prices
-                            WHERE source_id=%s
+                            WHERE source_id=%s AND source=%s
                             AND data_vendor_id=%s
                             AND date>=%s AND date<=%s""",
-                            (tsid, data_vendor_id, beg_date, end_date))
+                            (tsid, source, data_vendor_id, beg_date, end_date))
             else:
                 raise NotImplementedError('Query type %s is not implemented '
                                           'within pull_minute_prices' %
@@ -202,7 +205,7 @@ if __name__ == '__main__':
     test_port = userdir['postgresql']['pysecmaster_port']
 
     test_query_type = 'ticker'     # index, ticker
-    tsid = 'AAPL.Q.0'
+    test_tsid = 'AAPL.Q.0'
     test_data_vendor_id = 15        # pySecMaster_Consensus
     # test_data_vendor_id = 12        # Google_Finance
     test_beg_date = '1950-01-01 00:00:00'
@@ -210,8 +213,8 @@ if __name__ == '__main__':
     frequency = 'daily'    # daily, minute
 
     # NOTE: Background code implemented yet
-    index = 'S&P 500'  # 'S&P 500', 'Russell Midcap', 'Russell 2000'
-    as_of_date = '2015-01-01'
+    test_index = 'S&P 500'  # 'S&P 500', 'Russell Midcap', 'Russell 2000'
+    test_as_of_date = '2015-01-01'
 
     start_time = time.time()
     if test_query_type == 'ticker':
@@ -219,13 +222,15 @@ if __name__ == '__main__':
             prices_df = pull_daily_prices(test_database, test_user,
                                           test_password, test_host, test_port,
                                           test_query_type, test_data_vendor_id,
-                                          test_beg_date, test_end_date, tsid)
+                                          test_beg_date, test_end_date,
+                                          test_tsid)
 
         elif frequency == 'minute':
             prices_df = pull_minute_prices(test_database, test_user,
                                            test_password, test_host, test_port,
                                            test_query_type, test_data_vendor_id,
-                                           test_beg_date, test_end_date, tsid)
+                                           test_beg_date, test_end_date,
+                                           test_tsid)
 
         else:
             raise NotImplementedError('Frequency %s is not implemented within '
@@ -235,13 +240,14 @@ if __name__ == '__main__':
         prices_df = pull_daily_prices(test_database, test_user,
                                       test_password, test_host, test_port,
                                       test_query_type, test_beg_date,
-                                      test_end_date, index, as_of_date)
+                                      test_end_date, test_index,
+                                      test_as_of_date)
 
     else:
         raise NotImplementedError('Query type %s is not implemented within '
                                   'query_data.py' % test_query_type)
 
-    csv_friendly_tsid = re.sub('[.]', '_', tsid)
+    csv_friendly_tsid = re.sub('[.]', '_', test_tsid)
     print('Query took %0.2f seconds' % (time.time() - start_time))
     print(prices_df)
     prices_df.to_csv('output/%s_%s_%s.csv' %
