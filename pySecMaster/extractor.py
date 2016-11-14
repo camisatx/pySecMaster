@@ -651,7 +651,7 @@ class QuandlDataExtraction(object):
                     first_date_iso = clean_data['date'].min()
 
                     query = ("""DELETE FROM %s
-                                WHERE source_id='%s'
+                                WHERE source_id='%s' AND source='tsid'
                                 AND date>='%s'
                                 AND data_vendor_id='%s'""" %
                              (self.table, tsid, first_date_iso, self.vendor_id))
@@ -950,7 +950,7 @@ class GoogleFinanceDataExtraction(object):
                     first_date_iso = clean_data['date'].min()
 
                     query = ("""DELETE FROM %s
-                                WHERE source_id='%s'
+                                WHERE source_id='%s' AND source='tsid'
                                 AND date>='%s'
                                 AND data_vendor_id='%s'""" %
                              (self.table, tsid, first_date_iso, self.vendor_id))
@@ -1256,7 +1256,7 @@ class YahooFinanceDataExtraction(object):
                     first_date_iso = clean_data['date'].min()
 
                     query = ("""DELETE FROM %s
-                                WHERE source_id='%s'
+                                WHERE source_id='%s' AND source='tsid'
                                 AND date>='%s'
                                 AND data_vendor_id='%s'""" %
                              (self.table, tsid, first_date_iso, self.vendor_id))
