@@ -372,16 +372,16 @@ class QuandlDownload(object):
             return csv_file
 
         except HTTPError as e:
-            if 'http error 400' in str(e.lower()):
+            if 'http error 400' in str(e).lower():
                 # HTTP Error 400: Bad Request
                 # Don't raise an exception; indicates a non existent code
                 print('HTTPError %s: %s does not exist.' % (e.reason, name))
-            elif 'http error 403' in str(e.lower()):
+            elif 'http error 403' in str(e).lower():
                 # HTTP Error 403: Forbidden
                 raise OSError('HTTPError %s: Reached Quandl API call '
                               'limit. Make the RateLimit more restrictive.'
                               % e.reason)
-            elif 'http error 404' in str(e.lower()):
+            elif 'http error 404' in str(e).lower():
                 # HTTP Error 404: Not Found
                 if page_num:
                     raise OSError('HTTPError %s: Quandl page %i for %s not '
@@ -389,7 +389,7 @@ class QuandlDownload(object):
                 # else:
                 #     # Don't raise an exception; indicates the last page
                 #     print('HTTPError %s: %s not found.' % (e.reason, name))
-            elif 'http error 429' in str(e.lower()):
+            elif 'http error 429' in str(e).lower():
                 # HTTP Error 429: Too Many Requests
                 if download_try <= 5:
                     print('HTTPError %s: Exceeded Quandl API limit. Make '
@@ -404,11 +404,11 @@ class QuandlDownload(object):
                                   'download was still not successful. You '
                                   'could have hit the 50,000 calls per '
                                   'day limit.' % (e.reason,))
-            elif 'http error 500' in str(e.lower()):
+            elif 'http error 500' in str(e).lower():
                 # HTTP Error 500: Internal Server Error
                 if download_try <= 10:
                     print('HTTPError %s: Internal Server Error' % (e.reason,))
-            elif 'http error 502' in str(e.lower()):
+            elif 'http error 502' in str(e).lower():
                 # HTTP Error 502: Bad Gateway
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with '
@@ -421,7 +421,7 @@ class QuandlDownload(object):
                                   'unavailable. After trying 10 times, the '
                                   'download was still not successful. '
                                   'Quitting for now.' % (e.reason,))
-            elif 'http error 503' in str(e.lower()):
+            elif 'http error 503' in str(e).lower():
                 # HTTP Error 503: Service Unavailable
                 if download_try <= 10:
                     print('HTTPError %s: Server is currently unavailable. '
@@ -434,7 +434,7 @@ class QuandlDownload(object):
                                   'unavailable. After trying 10 time, the '
                                   'download was still not successful. '
                                   'Quitting for now.' % (e.reason,))
-            elif 'http error 504' in str(e.lower()):
+            elif 'http error 504' in str(e).lower():
                 # HTTP Error 504: GATEWAY_TIMEOUT
                 if download_try <= 10:
                     print('HTTPError %s: Server connection timed out. '
@@ -527,14 +527,14 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
             return urlopen(url).readlines()
 
         except HTTPError as e:
-            if 'http error 403' in str(e.lower()):
+            if 'http error 403' in str(e).lower():
                 # HTTP Error 403: Forbidden
                 raise OSError('HTTPError %s: Reached API call limit. Make the '
                               'RateLimit more restrictive.' % (e.reason,))
-            elif 'http error 404' in str(e.lower()):
+            elif 'http error 404' in str(e).lower():
                 # HTTP Error 404: Not Found
                 raise OSError('HTTPError %s: %s not found' % (e.reason, tsid))
-            elif 'http error 429' in str(e.lower()):
+            elif 'http error 429' in str(e).lower():
                 # HTTP Error 429: Too Many Requests
                 if download_try <= 5:
                     print('HTTPError %s: Exceeded API limit. Make the '
@@ -547,11 +547,11 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                   'trying 5 time, the download was still not '
                                   'successful. You could have hit the per day '
                                   'call limit.' % (e.reason,))
-            elif 'http error 500' in str(e.lower()):
+            elif 'http error 500' in str(e).lower():
                 # HTTP Error 500: Internal Server Error
                 if download_try <= 10:
                     print('HTTPError %s: Internal Server Error' % (e.reason,))
-            elif 'http error 502' in str(e.lower()):
+            elif 'http error 502' in str(e).lower():
                 # HTTP Error 502: Bad Gateway
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with the '
@@ -565,7 +565,7 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                   'unavailable. After trying 10 times, the '
                                   'download was still not successful. Quitting '
                                   'for now.' % (e.reason,))
-            elif 'http error 503' in str(e.lower()):
+            elif 'http error 503' in str(e).lower():
                 # HTTP Error 503: Service Unavailable
                 # Received this HTTP Error after 2000 queries. Browser showed
                 #   captcha message upon loading url.
@@ -580,7 +580,7 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                   'unavailable. After trying 10 time, the '
                                   'download was still not successful. '
                                   'Quitting for now.' % (e.reason,))
-            elif 'http error 504' in str(e.lower()):
+            elif 'http error 504' in str(e).lower():
                 # HTTP Error 504: GATEWAY_TIMEOUT
                 if download_try <= 10:
                     print('HTTPError %s: Server connection timed out. Maybe '
@@ -847,16 +847,16 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
             return urlopen(url)
 
         except HTTPError as e:
-            if 'http error 403' in str(e.lower()):
+            if 'http error 403' in str(e).lower():
                 # HTTP Error 403: Forbidden
                 raise OSError('HTTPError %s: Reached API call limit. Make the '
                               'RateLimit more restrictive.' % (e.reason,))
-            elif 'http error 404' in str(e.lower()):
+            elif 'http error 404' in str(e).lower():
                 # HTTP Error 404: Not Found
                 # if verbose:
                 #     print('HTTPError %s: %s not found' % (e.reason, tsid))
                 return None
-            elif 'http error 429' in str(e.lower()):
+            elif 'http error 429' in str(e).lower():
                 # HTTP Error 429: Too Many Requests
                 if download_try <= 5:
                     print('HTTPError %s: Exceeded API limit. Make the '
@@ -869,11 +869,11 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                   'trying 5 time, the download was still not '
                                   'successful. You could have hit the per day '
                                   'call limit.' % (e.reason,))
-            elif 'http error 500' in str(e.lower()):
+            elif 'http error 500' in str(e).lower():
                 # HTTP Error 500: Internal Server Error
                 if download_try <= 10:
                     print('HTTPError %s: Internal Server Error' % (e.reason,))
-            elif 'http error 502' in str(e.lower()):
+            elif 'http error 502' in str(e).lower():
                 # HTTP Error 502: Bad Gateway
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with the '
@@ -887,7 +887,7 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                   'unavailable. After trying 10 times, the '
                                   'download was still not successful. Quitting '
                                   'for now.' % (e.reason,))
-            elif 'http error 503' in str(e.lower()):
+            elif 'http error 503' in str(e).lower():
                 # HTTP Error 503: Service Unavailable
                 # Received this HTTP Error after 2000 queries. Browser showed
                 #   captcha message upon loading url.
@@ -902,7 +902,7 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
                                   'unavailable. After trying 10 time, the '
                                   'download was still not successful. '
                                   'Quitting for now.' % (e.reason,))
-            elif 'http error 504' in str(e.lower()):
+            elif 'http error 504' in str(e).lower():
                 # HTTP Error 504: GATEWAY_TIMEOUT
                 if download_try <= 10:
                     print('HTTPError %s: Server connection timed out. Maybe '
@@ -1103,15 +1103,15 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
             return urlopen(url)
 
         except HTTPError as e:
-            if 'http error 403' in str(e.lower()):
+            if 'http error 403' in str(e).lower():
                 # HTTP Error 403: Forbidden
                 raise OSError('HTTPError %s: Reached API call limit. Make the '
                               'RateLimit more restrictive.' % (e.reason,))
-            elif 'http error 404' in str(e.lower()):
+            elif 'http error 404' in str(e).lower():
                 # HTTP Error 404: Not Found
                 raise OSError('HTTPError %s: %s not found' %
                               (e.reason, data_type))
-            elif 'http error 429' in str(e.lower()):
+            elif 'http error 429' in str(e).lower():
                 # HTTP Error 429: Too Many Requests
                 if download_try <= 5:
                     print('HTTPError %s: Exceeded API limit. Make the '
@@ -1124,11 +1124,11 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
                                   'trying 5 time, the download was still not '
                                   'successful. You could have hit the per day '
                                   'call limit.' % (e.reason,))
-            elif 'http error 500' in str(e.lower()):
+            elif 'http error 500' in str(e).lower():
                 # HTTP Error 500: Internal Server Error
                 if download_try <= 10:
                     print('HTTPError %s: Internal Server Error' % (e.reason,))
-            elif 'http error 502' in str(e.lower()):
+            elif 'http error 502' in str(e).lower():
                 # HTTP Error 502: Bad Gateway
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with the '
@@ -1142,7 +1142,7 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
                                   'unavailable. After trying 10 times, the '
                                   'download was still not successful. Quitting '
                                   'for now.' % (e.reason,))
-            elif 'http error 503' in str(e.lower()):
+            elif 'http error 503' in str(e).lower():
                 # HTTP Error 503: Service Unavailable
                 # Received this HTTP Error after 2000 queries. Browser showed
                 #   captch message upon loading url.
@@ -1157,7 +1157,7 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
                                   'unavailable. After trying 10 time, the '
                                   'download was still not successful. '
                                   'Quitting for now.' % (e.reason,))
-            elif 'http error 504' in str(e.lower()):
+            elif 'http error 504' in str(e).lower():
                 # HTTP Error 504: GATEWAY_TIMEOUT
                 if download_try <= 10:
                     print('HTTPError %s: Server connection timed out. Maybe '
@@ -1274,14 +1274,14 @@ def download_nasdaq_industry_sector(db_url, exchange_list):
             return urlopen(url)
 
         except HTTPError as e:
-            if 'http error 403' in str(e.lower()):
+            if 'http error 403' in str(e).lower():
                 # HTTP Error 403: Forbidden
                 raise OSError('HTTPError %s: Reached API call limit. Make the '
                               'RateLimit more restrictive.' % (e.reason,))
-            elif 'http error 404' in str(e.lower()):
+            elif 'http error 404' in str(e).lower():
                 # HTTP Error 404: Not Found
                 raise OSError('HTTPError %s: Not found' % (e.reason,))
-            elif 'http error 429' in str(e.lower()):
+            elif 'http error 429' in str(e).lower():
                 # HTTP Error 429: Too Many Requests
                 if download_try <= 5:
                     print('HTTPError %s: Exceeded API limit. Make the '
@@ -1294,11 +1294,11 @@ def download_nasdaq_industry_sector(db_url, exchange_list):
                                   'trying 5 time, the download was still not '
                                   'successful. You could have hit the per day '
                                   'call limit.' % (e.reason,))
-            elif 'http error 500' in str(e.lower()):
+            elif 'http error 500' in str(e).lower():
                 # HTTP Error 500: Internal Server Error
                 if download_try <= 10:
                     print('HTTPError %s: Internal Server Error' % (e.reason,))
-            elif 'http error 502' in str(e.lower()):
+            elif 'http error 502' in str(e).lower():
                 # HTTP Error 502: Bad Gateway
                 if download_try <= 10:
                     print('HTTPError %s: Encountered a bad gateway with the '
@@ -1312,7 +1312,7 @@ def download_nasdaq_industry_sector(db_url, exchange_list):
                                   'unavailable. After trying 10 times, the '
                                   'download was still not successful. Quitting '
                                   'for now.' % (e.reason,))
-            elif 'http error 503' in str(e.lower()):
+            elif 'http error 503' in str(e).lower():
                 # HTTP Error 503: Service Unavailable
                 # Received this HTTP Error after 2000 queries. Browser showed
                 #   captch message upon loading url.
@@ -1327,7 +1327,7 @@ def download_nasdaq_industry_sector(db_url, exchange_list):
                                   'unavailable. After trying 10 time, the '
                                   'download was still not successful. '
                                   'Quitting for now.' % (e.reason,))
-            elif 'http error 504' in str(e.lower()):
+            elif 'http error 504' in str(e).lower():
                 # HTTP Error 504: GATEWAY_TIMEOUT
                 if download_try <= 10:
                     print('HTTPError %s: Server connection timed out. Maybe '
