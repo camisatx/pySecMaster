@@ -237,6 +237,8 @@ def data_download(database_options, quandl_key, download_list, threads=4,
                       '\nNew data will %s the prior %s day\'s data' %
                       (source['selection'], source['data_process'],
                        source['replace_days_back']))
+                # NOTE: Quandl only allows a single concurrent download with
+                #   their free account
                 QuandlDataExtraction(
                     database=database_options['database'],
                     user=database_options['user'],
@@ -249,7 +251,7 @@ def data_download(database_options, quandl_key, download_list, threads=4,
                     redownload_time=source['redownload_time'],
                     data_process=source['data_process'],
                     days_back=source['replace_days_back'],
-                    threads=threads,
+                    threads=1,
                     table=table,
                     load_tables=userdir['load_tables'],
                     verbose=verbose)
