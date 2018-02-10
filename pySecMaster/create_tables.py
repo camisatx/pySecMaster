@@ -324,11 +324,11 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_identifiers
-                    ON daily_prices(source, source_id, data_vendor_id,
-                        date DESC NULLS LAST, updated_date)""")
+                    ON daily_prices(source, source_id, data_vendor_id, date
+                    DESC NULLS LAST, updated_date)""")
                 # c.execute("""CREATE INDEX IF NOT EXISTS idx_dp_values
                 #     ON daily_prices(source, source_id, data_vendor_id, date,
-                #         close, volume)""")
+                #     close, volume)""")
 
             def finra_data(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS finra_data
@@ -364,8 +364,8 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_fund_source_id
-                    ON fundamental_data(source, source_id, data_vendor_id,
-                        date DESC NULLS LAST)""")
+                    ON fundamental_data(source, source_id, data_vendor_id, date
+                    DESC NULLS LAST)""")
 
             def minute_prices(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS minute_prices
@@ -386,11 +386,11 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_identifiers
-                    ON minute_prices(source, source_id, data_vendor_id,
-                    date DESC NULLS LAST, updated_date)""")
+                    ON minute_prices(source, source_id, data_vendor_id, date
+                    DESC NULLS LAST, updated_date)""")
                 # c.execute("""CREATE INDEX IF NOT EXISTS idx_mp_values
                 #     ON minute_prices(source, source_id, data_vendor_id, date,
-                #         close, volume)""")
+                #     close, volume)""")
 
             def option_chains(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS option_chains
@@ -416,7 +416,7 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_option_chains_values
                     ON option_chains(data_vendor_id, source, source_id,
-                        contract_id, expiry, strike, pre_split)""")
+                    contract_id, expiry, strike, pre_split)""")
 
             def option_prices(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS option_prices
@@ -444,10 +444,10 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES option_chains(option_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_option_prices
-                    ON option_prices(option_id, data_vendor_id,
-                        date DESC NULLS LAST)""")
+                    ON option_prices(option_id, data_vendor_id, date
+                    DESC NULLS LAST)""")
 
-            def tick(c):
+            def tick_prices(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS tick_prices
                 (tick_id        BIGSERIAL                   PRIMARY KEY,
                 data_vendor_id  SMALLINT,
@@ -472,7 +472,7 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_tick_values
                     ON tick_prices(source, source_id, date DESC NULLS LAST)""")
 
-            def tick_stream(c):
+            def tick_prices_stream(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS tick_prices_stream
                 (tick_id        BIGSERIAL                   PRIMARY KEY,
                 data_vendor_id  SMALLINT,
@@ -487,8 +487,8 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_tick_stream_values
-                    ON tick_prices_stream(source, source_id,
-                        date DESC NULLS LAST, field)""")
+                    ON tick_prices_stream(source, source_id, date field
+                    DESC NULLS LAST)""")
 
             daily_prices(cur)
             finra_data(cur)
@@ -496,8 +496,8 @@ def data_tables(database='pysecmaster', user='pysecmaster',
             minute_prices(cur)
             option_chains(cur)
             option_prices(cur)
-            tick(cur)
-            tick_stream(cur)
+            tick_prices(cur)
+            tick_prices_stream(cur)
 
             conn.commit()
             cur.close()
@@ -530,8 +530,8 @@ def events_tables(database='pysecmaster', user='pysecmaster',
             def conference_calls(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS conference_calls
                 (conf_call_id       SERIAL                      PRIMARY KEY,
-                source              TEXT,
-                source_id           TEXT,
+                source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
                 symbol              TEXT,
                 date                TIMESTAMP WITH TIME ZONE    NOT NULL,
                 event_title         TEXT,
@@ -546,8 +546,8 @@ def events_tables(database='pysecmaster', user='pysecmaster',
             def dividends(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS dividends
                 (dividend_id        SERIAL                      PRIMARY KEY,
-                source              TEXT,
-                source_id           TEXT,
+                source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
                 symbol              TEXT,
                 company             TEXT,
                 dividend            DECIMAL(6,3),
@@ -566,8 +566,8 @@ def events_tables(database='pysecmaster', user='pysecmaster',
             def earnings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS earnings
                 (earnings_id    SERIAL                      PRIMARY KEY,
-                source          TEXT,
-                source_id       TEXT,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
                 symbol          TEXT,
                 company_name    TEXT,
                 date            TIMESTAMP WITH TIME ZONE    NOT NULL,
@@ -584,8 +584,8 @@ def events_tables(database='pysecmaster', user='pysecmaster',
             def economic_events(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS economic_events
                 (event_id           SERIAL                      PRIMARY KEY,
-                source              TEXT,
-                source_id           TEXT,
+                source              TEXT                        NOT NULL,
+                source_id           TEXT                        NOT NULL,
                 event_name          TEXT,
                 date                TIMESTAMP WITH TIME ZONE,
                 date_for            TIMESTAMP WITH TIME ZONE,
@@ -605,8 +605,8 @@ def events_tables(database='pysecmaster', user='pysecmaster',
             def ipo_pricings(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS ipo_pricings
                 (ipo_id         SERIAL                      PRIMARY KEY,
-                source          TEXT,
-                source_id       TEXT,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
                 symbol          TEXT,
                 company_name    TEXT,
                 offer_date      TIMESTAMP WITH TIME ZONE,
@@ -624,8 +624,8 @@ def events_tables(database='pysecmaster', user='pysecmaster',
             def splits(c):
                 c.execute("""CREATE TABLE IF NOT EXISTS splits
                 (split_id       SERIAL                      PRIMARY KEY,
-                source          TEXT,
-                source_id       TEXT,
+                source          TEXT                        NOT NULL,
+                source_id       TEXT                        NOT NULL,
                 symbol          TEXT,
                 company_name    TEXT,
                 payable_date    TIMESTAMP WITH TIME ZONE,
