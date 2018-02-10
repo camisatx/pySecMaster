@@ -2,7 +2,7 @@
 
 These are structures for all of the tables built by pySecMaster. The three types of tables include [Main Tables](#main-tables), [Data Tables](#data-tables) and [Events Tables](#events-tables).
  
- Currently, 22 tables are created within the specified PostgreSQL database when pySecMaster is run.
+ 24 tables are created within the specified PostgreSQL database when pySecMaster is run.
 
 ## Main Tables
 
@@ -141,6 +141,28 @@ These are structures for all of the tables built by pySecMaster. The three types
 | created_date | TIMESTAMP WITH TIME ZONE |             |                       |
 | updated_date | TIMESTAMP WITH TIME ZONE |             |                       |
 
+#### tickers
+
+| Column Name      | Type                     | Foreign Key                  | Index              |
+|------------------|--------------------------|------------------------------|--------------------|
+| tsid             | TEXT PRIMARY KEY         | symbology(source, source_id) |                    |
+| ticker           | TEXT NOT NULL            |                              |                    |
+| name             | TEXT                     |                              |                    |
+| exchange         | TEXT NOT NULL            | exchanges(abbrev)            |                    |
+| child_exchange   | TEXT                     |                              |                    |
+| is_active        | SMALLINT                 |                              |                    |
+| start_date       | TIMESTAMP WITH TIME ZONE |                              |                    |
+| end_date         | TIMESTAMP WITH TIME ZONE |                              |                    |
+| type             | TEXT                     |                              |                    |
+| sector           | TEXT                     |                              | idx_tickers_sector |
+| industry         | TEXT                     |                              |                    |
+| sub_industry     | TEXT                     |                              |                    |
+| currency         | TEXT                     |                              |                    |
+| hq_country       | TEXT                     |                              |                    |
+| symbology_source | TEXT NOT NULL            | symbology(source, source_id) |                    |
+| created_date     | TIMESTAMP WITH TIME ZONE |                              |                    |
+| updated_date     | TIMESTAMP WITH TIME ZONE |                              |                    |
+
 
 ## Data Tables
 
@@ -177,16 +199,18 @@ These are structures for all of the tables built by pySecMaster. The three types
 
 #### fundamental_data
 
-| Column Name    | Type                     | Foreign Key                  | Index              |
-|----------------|--------------------------|------------------------------|--------------------|
-| fundamental_id | BIGSERIAL PRIMARY KEY    |                              |                    |
-| source         | TEXT NOT NULL            | symbology(source, source_id) |                    |
-| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_fund_source_id |
-| date           | TIMESTAMP WITH TIME ZONE |                              |                    |
-| value          | DECIMAL(14,2)            |                              |                    |
-| note           | TEXT                     |                              |                    |
-| created_date   | TIMESTAMP WITH TIME ZONE |                              |                    |
-| updated_date   | TIMESTAMP WITH TIME ZONE |                              |                    |
+| Column Name    | Type                              | Foreign Key                  | Index              |
+|----------------|-----------------------------------|------------------------------|--------------------|
+| fundamental_id | BIGSERIAL PRIMARY KEY             |                              |                    |
+| data_vendor_id | SMALLINT                          | data_vendor(data_vendor_id)  | idx_fund_source_id |
+| source         | TEXT NOT NULL                     | symbology(source, source_id) | idx_fund_source_id |
+| source_id      | TEXT NOT NULL                     | symbology(source, source_id) | idx_fund_source_id |
+| date           | TIMESTAMP WITH TIME ZONE NOT NULL |                              | idx_fund_source_id |
+| field          | TEXT                              |                              |                    |
+| value          | DECIMAL(14,2)                     |                              |                    |
+| note           | TEXT                              |                              |                    |
+| created_date   | TIMESTAMP WITH TIME ZONE          |                              |                    |
+| updated_date   | TIMESTAMP WITH TIME ZONE          |                              |                    |
 
 #### minute_prices
 
@@ -209,8 +233,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name    | Type                     | Foreign Key                  | Index                    |
 |----------------|--------------------------|------------------------------|--------------------------|
 | option_id      | BIGSERIAL PRIMARY KEY    |                              |                          |
-| data_vendor_id | SMALLINT                 | data_vendor(data_vendor_id)  |                          |
-| source         | TEXT NOT NULL            | symbology(source, source_id) |                          |
+| data_vendor_id | SMALLINT                 | data_vendor(data_vendor_id)  | idx_option_chains_values |
+| source         | TEXT NOT NULL            | symbology(source, source_id) | idx_option_chains_values |
 | source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_option_chains_values |
 | symbol         | TEXT                     |                              |                          |
 | exchange       | TEXT                     |                              |                          |
@@ -220,50 +244,64 @@ These are structures for all of the tables built by pySecMaster. The three types
 | expiry         | DATE                     |                              | idx_option_chains_values |
 | type           | TEXT                     |                              |                          |
 | strike         | DECIMAL(8,2)             |                              | idx_option_chains_values |
-| bid            | DECIMAL(10,4)            |                              |                          |
-| bid_size       | INTEGER                  |                              |                          |
-| ask            | DECIMAL(10,4)            |                              |                          |
-| ask_size       | INTEGER                  |                              |                          |
-| close          | DECIMAL(10,4)            |                              |                          |
-| open_interest  | INTEGER                  |                              |                          |
-| volume         | INTEGER                  |                              |                          |
-| imp_volatility | DECIMAL(6,4)             |                              |                          |
-| delta          | DECIMAL(6,5)             |                              |                          |
-| gamm           | DECIMAL(6,5)             |                              |                          |
-| rho            | DECIMAL(6,5)             |                              |                          |
-| theta          | DECIMAL(6,5)             |                              |                          |
-| vega           | DECIMAL(6,5)             |                              |                          |
+| pre_split      | BOOLEAN                  |                              | idx_option_chains_values |
+| created_date   | TIMESTAMP WITH TIME ZONE |                              |                          |
 | updated_date   | TIMESTAMP WITH TIME ZONE |                              |                          |
+
+#### option_prices
+
+| Column Name      | Type                     | Foreign Key                 | Index             |
+|------------------|--------------------------|-----------------------------|-------------------|
+| option_prices_id | BIGSERIAL PRIMARY KEY    |                             |                   |
+| data_vendor_id   | SMALLINT                 | data_vendor(data_vendor_id) | idx_option_prices |
+| option_id        | BIGINT                   | option_chains(option_id)    | idx_option_prices |
+| date             | TIMESTAMP WITH TIME ZONE |                             | idx_option_prices |
+| bid              | DECIMAL(10,4)            |                             |                   |
+| bid_size         | INTEGER                  |                             |                   |
+| ask              | DECIMAL(10,4)            |                             |                   |
+| ask_size         | INTEGER                  |                             |                   |
+| close            | DECIMAL(10,4)            |                             |                   |
+| open_interest    | INTEGER                  |                             |                   |
+| volume           | INTEGER                  |                             |                   |
+| imp_volatility   | DECIMAL(6,4)             |                             |                   |
+| delta            | DECIMAL(6,5)             |                             |                   |
+| gamma            | DECIMAL(6,5)             |                             |                   |
+| rho              | DECIMAL(6,5)             |                             |                   |
+| theta            | DECIMAL(6,5)             |                             |                   |
+| vega             | DECIMAL(6,5)             |                             |                   |
+| updated_date     | TIMESTAMP WITH TIME ZONE |                             |                   |
 
 #### tick_prices
 
-| Column Name | Type                     | Foreign Key                  | Index           |
-|-------------|--------------------------|------------------------------|-----------------|
-| tick_id     | BIGSERIAL PRIMARY KEY    |                              |                 |
-| source      | TEXT NOT NULL            | symbology(source, source_id) |                 |
-| source_id   | TEXT NOT NULL            | symbology(source, source_id) | idx_tick_values |
-| date        | TIMESTAMP WITH TIME ZONE |                              | idx_tick_values |
-| bid         | DECIMAL(11,4)            |                              |                 |
-| ask         | DECIMAL(11,4)            |                              |                 |
-| last        | DECIMAL(11,4)            |                              |                 |
-| high        | DECIMAL(11,4)            |                              |                 |
-| low         | DECIMAL(11,4)            |                              |                 |
-| close       | DECIMAL(11,4)            |                              |                 |
-| bid_size    | INTEGER                  |                              |                 |
-| ask_size    | INTEGER                  |                              |                 |
-| last_size   | INTEGER                  |                              |                 |
-| volume      | INTEGER                  |                              |                 |
+olumn Name    | Type                     | Foreign Key                  | Index           |
+|----------------|--------------------------|------------------------------|-----------------|
+| tick_id        | BIGSERIAL PRIMARY KEY    |                              |                 |
+| data_vendor_id | SMALLINT                 | data_vendor(data_vendor_id)  |                 |
+| source         | TEXT NOT NULL            | symbology(source, source_id) | idx_tick_values |
+| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_tick_values |
+| date           | TIMESTAMP WITH TIME ZONE |                              | idx_tick_values |
+| bid            | DECIMAL(11,4)            |                              |                 |
+| ask            | DECIMAL(11,4)            |                              |                 |
+| last           | DECIMAL(11,4)            |                              |                 |
+| high           | DECIMAL(11,4)            |                              |                 |
+| low            | DECIMAL(11,4)            |                              |                 |
+| close          | DECIMAL(11,4)            |                              |                 |
+| bid_size       | INTEGER                  |                              |                 |
+| ask_size       | INTEGER                  |                              |                 |
+| last_size      | INTEGER                  |                              |                 |
+| volume         | INTEGER                  |                              |                 |
 
 #### tick_prices_stream
 
-| Column Name | Type                     | Foreign Key                  | Index                  |
-|-------------|--------------------------|------------------------------|------------------------|
-| tick_id     | BIGSERIAL PRIMARY KEY    |                              |                        |
-| source      | TEXT NOT NULL            | symbology(source, source_id) |                        |
-| source_id   | TEXT NOT NULL            | symbology(source, source_id) | idx_tick_stream_values |
-| date        | TIMESTAMP WITH TIME ZONE |                              | idx_tick_stream_values |
-| field       | TEXT                     |                              | idx_tick_stream_values |
-| value       | DECIMAL(11,4)            |                              |                        |
+| Column Name    | Type                     | Foreign Key                  | Index                  |
+|----------------|--------------------------|------------------------------|------------------------|
+| tick_id        | BIGSERIAL PRIMARY KEY    |                              |                        |
+| data_vendor_id | SMALLINT                 | data_vendor(data_vendor_id)  |                        |
+| source         | TEXT NOT NULL            | symbology(source, source_id) |                        |
+| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_tick_stream_values |
+| date           | TIMESTAMP WITH TIME ZONE |                              | idx_tick_stream_values |
+| field          | TEXT                     |                              | idx_tick_stream_values |
+| value          | DECIMAL(11,4)            |                              |                        |
 
 
 ## Events Tables
@@ -273,8 +311,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name  | Type                              | Foreign Key                  | Index              |
 |--------------|-----------------------------------|------------------------------|--------------------|
 | conf_call_id | SERIAL PRIMARY KEY                |                              |                    |
-| source       | TEXT                              | symbology(source, source_id) |                    |
-| source_id    | TEXT                              | symbology(source, source_id) | idx_conf_source_id |
+| source       | TEXT NOT NULL                     | symbology(source, source_id) | idx_conf_source_id |
+| source_id    | TEXT NOT NULL                     | symbology(source, source_id) | idx_conf_source_id |
 | symbol       | TEXT                              |                              |                    |
 | date         | TIMESTAMP WITH TIME ZONE NOT NULL |                              | idx_conf_source_id |
 | event_title  | TEXT                              |                              |                    |
@@ -286,12 +324,12 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name       | Type                              | Foreign Key                  | Index             |
 |-------------------|-----------------------------------|------------------------------|-------------------|
 | dividend_id       | SERIAL PRIMARY KEY                |                              |                   |
-| source            | TEXT                              | symbology(source, source_id) |                   |
-| source_id         | TEXT                              | symbology(source, source_id) | idx_div_source_id |
+| source            | TEXT NOT NULL                     | symbology(source, source_id) | idx_div_source_id |
+| source_id         | TEXT NOT NULL                     | symbology(source, source_id) | idx_div_source_id |
 | symbol            | TEXT                              |                              |                   |
 | company           | TEXT                              |                              |                   |
 | dividend          | DECIMAL(6,3)                      |                              |                   |
-| ex_dividend_date  | TIMESTAMP WITH TIME ZONE NOT NULL |                              |                   |
+| ex_dividend_date  | TIMESTAMP WITH TIME ZONE NOT NULL |                              | idx_div_source_id |
 | record_date       | TIMESTAMP WITH TIME ZONE          |                              |                   |
 | announcement_date | TIMESTAMP WITH TIME ZONE          |                              |                   |
 | payment_date      | TIMESTAMP WITH TIME ZONE          |                              |                   |
@@ -303,11 +341,11 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name   | Type                              | Foreign Key                  | Index              |
 |---------------|-----------------------------------|------------------------------|--------------------|
 | earnings_id   | SERIAL PRIMARY KEY                |                              |                    |
-| source        | TEXT                              | symbology(source, source_id) |                    |
-| source_id     | TEXT                              | symbology(source, source_id) | idx_earn_source_id |
+| source        | TEXT NOT NULL                     | symbology(source, source_id) | idx_earn_source_id |
+| source_id     | TEXT NOT NULL                     | symbology(source, source_id) | idx_earn_source_id |
 | symbol        | TEXT                              |                              |                    |
 | company_name  | TEXT                              |                              |                    |
-| date          | TIMESTAMP WITH TIME ZONE NOT NULL |                              |                    |
+| date          | TIMESTAMP WITH TIME ZONE NOT NULL |                              | idx_earn_source_id |
 | reported_eps  | DECIMAL(6,3)                      |                              |                    |
 | consensus_eps | DECIMAL(6,3)                      |                              |                    |
 | created_date  | TIMESTAMP WITH TIME ZONE          |                              |                    |
@@ -318,10 +356,10 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name       | Type                     | Foreign Key                  | Index                    |
 |-------------------|--------------------------|------------------------------|--------------------------|
 | event_id          | SERIAL PRIMARY KEY       |                              |                          |
-| source            | TEXT                     | symbology(source, source_id) |                          |
-| source_id         | TEXT                     | symbology(source, source_id) | idx_econ_event_source_id |
-| event_name        | TEXT                     |                              |                          |
-| date              | TIMESTAMP WITH TIME ZONE |                              |                          |
+| source            | TEXT NOT NULL            | symbology(source, source_id) | idx_econ_event_source_id |
+| source_id         | TEXT NOT NULL            | symbology(source, source_id) | idx_econ_event_source_id |
+| event_name        | TEXT                     |                              | idx_econ_event_source_id |
+| date              | TIMESTAMP WITH TIME ZONE |                              | idx_econ_event_source_id |
 | date_for          | TIMESTAMP WITH TIME ZONE |                              |                          |
 | actual            | TEXT                     |                              |                          |
 | briefing_forecast | TEXT                     |                              |                          |
@@ -336,11 +374,11 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name    | Type                     | Foreign Key                  | Index              |
 |----------------|--------------------------|------------------------------|--------------------|
 | ipo_id         | SERIAL PRIMARY KEY       |                              |                    |
-| source         | TEXT                     | symbology(source, source_id) |                    |
-| source_id      | TEXT                     | symbology(source, source_id) | idx_ipop_source_id |
+| source         | TEXT NOT NULL            | symbology(source, source_id) | idx_ipop_source_id |
+| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_ipop_source_id |
 | symbol         | TEXT                     |                              |                    |
 | company_name   | TEXT                     |                              |                    |
-| offer_date     | TIMESTAMP WITH TIME ZONE |                              |                    |
+| offer_date     | TIMESTAMP WITH TIME ZONE |                              | idx_ipop_source_id |
 | shares_offered | TEXT                     |                              |                    |
 | proposed_price | TEXT                     |                              |                    |
 | initial_price  | TEXT                     |                              |                    |
@@ -352,14 +390,14 @@ These are structures for all of the tables built by pySecMaster. The three types
 | Column Name    | Type                     | Foreign Key                  | Index                |
 |----------------|--------------------------|------------------------------|----------------------|
 | split_id       | SERIAL PRIMARY KEY       |                              |                      |
-| source         | TEXT                     | symbology(source, source_id) |                      |
-| source_id      | TEXT                     | symbology(source, source_id) | idx_splits_source_id |
+| source         | TEXT NOT NULL            | symbology(source, source_id) | idx_splits_source_id |
+| source_id      | TEXT NOT NULL            | symbology(source, source_id) | idx_splits_source_id |
 | symbol         | TEXT                     |                              |                      |
 | company_name   | TEXT                     |                              |                      |
 | payable_date   | TIMESTAMP WITH TIME ZONE |                              |                      |
-| ex_date        | TIMESTAMP WITH TIME ZONE |                              |                      |
+| ex_date        | TIMESTAMP WITH TIME ZONE |                              | idx_splits_source_id |
 | announced_date | TIMESTAMP WITH TIME ZONE |                              |                      |
 | optionable     | BOOLEAN                  |                              |                      |
-| ratio          | DECIMAL(11,4)            |                              |                      |
+| ratio          | DECIMAL(11,4)            |                              | idx_splits_source_id |
 | created_date   | TIMESTAMP WITH TIME ZONE |                              |                      |
 | updated_date   | TIMESTAMP WITH TIME ZONE |                              |                      |
