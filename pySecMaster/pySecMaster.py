@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+import argparse
 from datetime import datetime
 
 from create_tables import create_database, main_tables, data_tables,\
@@ -12,7 +15,7 @@ from utilities.database_queries import query_all_active_tsids
 from utilities.user_dir import user_dir
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__copyright__ = 'Copyright (C) 2018 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
@@ -22,23 +25,23 @@ __url__ = 'https://joshschertz.com/'
 __version__ = '1.4.3'
 
 '''
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as
-    published by the Free Software Foundation, either version 3 of the
-    License, or (at your option) any later version.
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Affero General Public License for more details.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
 ''' pySecMaster.py
 
-This manages the securities master database. It can be run daily.
+This manages the pysecmaster database. It should be run daily as a maximum.
 
 Database maintenance tasks:
     Creates the tables in the database.
@@ -53,9 +56,6 @@ Database data download tasks:
         the official Quandl Codes or implied codes from CSI Data.
     Downloads Google Finance minute stock data.
     Can either append only the new data, or replace part of the existing data.
-
-Future expansions:
-    Implement daily option chain data (from Google or Yahoo).
 '''
 
 ###############################################################################
@@ -71,8 +71,6 @@ database_url = ['https://www.quandl.com/api/v2/datasets.csv?query=*&'
 # http://www.csidata.com/factsheets.php?type=stock&format=html
 csidata_url = 'http://www.csidata.com/factsheets.php?'
 tables_to_load = ['data_vendor', 'exchanges']
-symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
-                     'seeking_alpha', 'yahoo']
 
 nasdaq_sector_industry_url = 'http://www.nasdaq.com/screening/' \
                              'companies-by-industry.aspx?'
@@ -374,6 +372,70 @@ def post_download_maintenance(database_options, download_list, period=None,
 
 if __name__ == '__main__':
 
+    # Establish the argument parser
+    parser = argparse.ArgumentParser(
+        description='The pySecMaster is an automated financial securities '
+                    'master framework. Currently, NYSE and NASDAQ securities '
+                    'will have their daily prices loaded into the database. '
+                    'Additional data can be integrated with the system, '
+                    'including minute prices, option chain values, tick '
+                    'values, corporate events (splits, dividends, IPOs), '
+                    'and fundamental data.'
+    )
+
+    # Optional arguments
+    parser.add_argument('--csidata-update-range', type=int,
+        default=7,
+        help='Number of days before the data will be refreshed.')
+    parser.add_argument('--daily-downloads', type=str, nargs='*',
+        default=['quandl', 'yahoo', 'google'],
+        help='Sources whose daily prices will be downloaded. By default, '
+             'quandl, yahoo and google daily prices will be downloaded.')
+    parser.add_argument('--database-list', type=str, nargs='+',
+        default=['WIKI'],
+        help='The Quandl databases that will have their codes downloaded. '
+             'Provide selections one after the other without quotes. Options '
+             'include: WIKI, GOOG, YAHOO, SEC, EIA, JODI, CURRFX, FINRA.')
+    parser.add_argument('--minute-downloads', type=str, nargs='*',
+        help='Sources whose minute prices will be downloaded. Only google '
+             'is implemented right now. By default, no minute prices are '
+             'downloaded.')
+    parser.add_argument('--quandl-update-range', type=int,
+        default=30,
+        help='Number of days before the ticker tables will be refreshed. If '
+             'the database was not completely downloaded within this range, '
+             'the remainder of the codes will attempt to be downloaded.')
+    parser.add_argument('--quandl-ticker-source', type=str,
+        choices=['quandl', 'csidata'], default='csidata',
+        help='Determines the extractor should get the ticker codes for when '
+             'downloading Quandl data. Options include using the official list '
+             'from Quandl (quandl), or make implied codes from the CSI data '
+             'stock factsheet (csidata) which is more accurate but tries more '
+             'non-existent tickers.')
+    parser.add_argument('--symbology-sources', type=str, nargs='+',
+        default = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
+                   'seeking_alpha', 'yahoo'],
+        help='Sources that will be integrated into the symbology table, '
+             'including have symbology specific identifiers created and '
+             'being linked with other sources symbology identifiers for the '
+             'same underlying item. The following sources are used by default: '
+             'csi_data, tsid, quandl_wiki, quandl_goog, seeking_alpha, yahoo. '
+             'Ommitting key sources may break the system. Provide selections '
+             'one after the other without quotes.')
+    parser.add_argument('-t', '--threads', type=int,
+        help='Number of threads to allocate to the system. The total system '
+             'cores are used by default.')
+    parser.add_argument('--validator-period', type=int,
+        help='Prior number of days whose values should be cross validated, '
+             'with 30 being a good option. If no value is provided, the '
+             'entire period will be validated.')
+    parser.add_argument('-v', '--verbose',
+        action='store_true',
+        help='Print out the status of the system.')
+
+    # Retrieve the arguments
+    args = parser.parse_args()
+
     ############################################################################
     # Database maintenance options:
 
@@ -388,29 +450,10 @@ if __name__ == '__main__':
     }
 
     test_quandl_key = userdir['quandl']['quandl_token']
-
-    # These are the Quandl Databases that will have all their codes downloaded
-    # Examples: 'GOOG', 'WIKI', 'YAHOO', 'SEC', 'EIA', 'JODI', 'CURRFX', 'FINRA'
-    # ToDo: Determine how to handle Futures; codes are a single item w/o a '_'
-    # ToDo: Determine how to handle USDAFAS; codes have 3 item formats
-    database_list = ['WIKI']
-
-    # Integer that represents the number of days before the ticker tables will
-    #   be refreshed. In addition, if a database wasn't completely downloaded
-    #   within this data range, the remainder of the codes will attempt to
-    #   download (relevant for Quandl codes).
-    quandl_update_range = 30
-    csidata_update_range = 7
-
     ############################################################################
     # Database data download options:
 
-    # When the Quandl data is downloaded, where should the extractor get the
-    #   ticker codes from? Either use the official list of codes from Quandl
-    #   (quandl), or make implied codes from the CSI Data stock factsheet
-    #   (csidata) which is more accurate but tries more non-existent companies.
-    quandl_ticker_source = 'csidata'        # quandl, csidata
-
+    # TODO: Move these parameters to a config file
     # Example download list: should be a list of dictionaries, with the
     #   dictionaries containing all relevant variables for the specific source
     test_download_list = [
@@ -427,9 +470,9 @@ if __name__ == '__main__':
          'interval': 'daily', 'period': 60, 'redownload_time': 60 * 60 * 12,
          'data_process': 'replace', 'replace_days_back': 10},
         # Google minute data with us_main (max of 15 day's prices)
-        # {'source': 'google', 'selection': 'us_main', 'interval': 'minute',
-        #  'period': 20, 'redownload_time': 60 * 60 * 12,
-        #  'data_process': 'replace', 'replace_days_back': 10}
+        {'source': 'google', 'selection': 'us_main', 'interval': 'minute',
+         'period': 20, 'redownload_time': 60 * 60 * 12,
+         'data_process': 'replace', 'replace_days_back': 10}
     ]
 
     # source: String of which data provider should have their data downloaded
@@ -458,24 +501,47 @@ if __name__ == '__main__':
     #   function is run
     ############################################################################
 
+    download_list = []
+    if args.daily_downloads or args.minute_downloads:
+        for source in test_download_list:
+            if args.daily_downloads and \
+                    source['source'] in args.daily_downloads and \
+                    source['interval'] == 'daily':
+                download_list.append(source)
+            if args.minute_downloads and \
+                    source['source'] in args.minute_downloads and \
+                    source['interval'] == 'minute':
+                download_list.append(source)
+
+    if args.threads:
+        threads = args.threads
+    else:
+        import multiprocessing
+        threads = multiprocessing.cpu_count()
+    
     maintenance(database_options=test_database_options,
                 quandl_key=test_quandl_key,
-                quandl_ticker_source=quandl_ticker_source,
-                database_list=database_list,
-                threads=8,
-                quandl_update_range=quandl_update_range,
-                csidata_update_range=csidata_update_range,
-                symbology_sources=symbology_sources)
+                quandl_ticker_source=args.quandl_ticker_source,
+                database_list=args.database_list,
+                threads=threads,
+                quandl_update_range=args.quandl_update_range,
+                csidata_update_range=args.csidata_update_range,
+                symbology_sources=args.symbology_sources)
 
-    data_download(database_options=test_database_options,
-                  quandl_key=test_quandl_key,
-                  download_list=test_download_list,
-                  threads=8,
-                  verbose=True)
+    if download_list:
+        data_download(database_options=test_database_options,
+                      quandl_key=test_quandl_key,
+                      download_list=download_list,
+                      threads=threads,
+                      verbose=args.verbose)
+        # 15 hours for complete build; adds ~6 GB
+        post_download_maintenance(database_options=test_database_options,
+                                  download_list=download_list,
+                                  period=args.validator_period,
+                                  verbose=args.verbose)
+    else:
+        print('No download sources were specified for either the daily data '
+              'or the minute data, therefore no prices will be downloaded nor '
+              'will the post download maintenance functions be run.')
 
-    # 15 hours for complete build; adds ~6 GB
-    post_download_maintenance(database_options=test_database_options,
-                              download_list=test_download_list,
-                              # period=60,      # Comment out to replace all
-                              verbose=True)
     print(datetime.now())
