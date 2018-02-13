@@ -1,0 +1,21 @@
+version '3'
+
+services:
+    postgres_pysecmaster:
+        container_name: postgres_pysecmaster
+        image: postgres:10-alpine
+        volumes:
+            - ./database:/docker-entrypoint-initdb.d/
+            - postgres_pysecmaster_data:/var/lib/postgresql
+        restart: always
+        ports:
+            - "127.0.0.1:5433:5432"
+
+    pysecmaster:
+        container_name: pysecmaster
+        build: .
+        depends_on:
+            - postgres_pysecmaster
+
+volumes:
+    postgres_pysecmaster_data:
