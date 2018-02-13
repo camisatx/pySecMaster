@@ -487,8 +487,8 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                     REFERENCES symbology(source, source_id)
                     ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_tick_stream_values
-                    ON tick_prices_stream(source, source_id, date field
-                    DESC NULLS LAST)""")
+                    ON tick_prices_stream(source, source_id,
+                    date DESC NULLS LAST, field)""")
 
             daily_prices(cur)
             finra_data(cur)
