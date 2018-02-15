@@ -2,6 +2,7 @@
 
 import argparse
 from datetime import datetime
+import time
 
 from create_tables import create_database, main_tables, data_tables,\
     events_tables
@@ -13,6 +14,7 @@ from build_symbology import create_symbology
 from cross_validator import CrossValidate
 from utilities.database_queries import query_all_active_tsids
 from utilities.user_dir import user_dir
+from utilities.database_check import postgres_test
 
 __author__ = 'Josh Schertz'
 __copyright__ = 'Copyright (C) 2018 Josh Schertz'
@@ -518,6 +520,18 @@ if __name__ == '__main__':
     else:
         import multiprocessing
         threads = multiprocessing.cpu_count()
+
+    # Try connecting to the postgres database
+    while True:
+        db_available = postgres_test(database_options=test_database_options)
+        if db_available:
+            print('%s database is available' %
+                  test_database_options['database'])
+            break
+        else:
+            print('%s database is unavailable' %
+                  test_database_options['database'])
+            time.sleep(1)
     
     maintenance(database_options=test_database_options,
                 quandl_key=test_quandl_key,
