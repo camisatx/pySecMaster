@@ -1,4 +1,4 @@
-version '3'
+version: '3'
 
 services:
     postgres_pysecmaster:
@@ -9,11 +9,13 @@ services:
             - postgres_pysecmaster_data:/var/lib/postgresql
         restart: always
         ports:
-            - "127.0.0.1:5433:5432"
+            - "127.0.0.1:5434:5432"
 
     pysecmaster:
         container_name: pysecmaster
         build: .
+        volumes:
+            - ./load_tables:/load_tables/
         depends_on:
             - postgres_pysecmaster
 

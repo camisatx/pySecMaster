@@ -12,6 +12,4 @@ COPY . .
 ENTRYPOINT ["pySecMaster.py"]
 # Download daily prices from quandl, yahoo and google, then run the
 #   cross-validator for only 30 prior periods
-CMD ["--daily-downloads", "quandl", "yahoo", "google",
-     "--validator-period", "30",
-     "--verbose"]
+CMD ["--daily-downloads", "quandl", "yahoo", "google", "--validator-period", "30", "--verbose"]
