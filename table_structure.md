@@ -148,8 +148,7 @@ These are structures for all of the tables built by pySecMaster. The three types
 | tsid             | TEXT PRIMARY KEY         | symbology(source, source_id) |                    |
 | ticker           | TEXT NOT NULL            |                              |                    |
 | name             | TEXT                     |                              |                    |
-| exchange         | TEXT NOT NULL            | exchanges(abbrev)            |                    |
-| child_exchange   | TEXT                     |                              |                    |
+| exchange_id      | INT NOT NULL             | exchanges(exchange_id)       |                    |
 | is_active        | SMALLINT                 |                              |                    |
 | start_date       | TIMESTAMP WITH TIME ZONE |                              |                    |
 | end_date         | TIMESTAMP WITH TIME ZONE |                              |                    |

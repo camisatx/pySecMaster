@@ -35,6 +35,16 @@ CREATE USER remote_ricardo IN ROLE remote_users;
 -- Change to pysecmaster database using the user pymaster
 \c pysecmaster pymaster
 
+CREATE TABLE IF NOT EXISTS symbology (
+    symbol_id       BIGINT                      NOT NULL,
+    source          TEXT                        NOT NULL,
+    source_id       TEXT                        NOT NULL,
+    type            TEXT,
+    created_date    TIMESTAMP WITH TIME ZONE,
+    updated_date    TIMESTAMP WITH TIME ZONE);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbology_sources
+    ON symbology(source, source_id);
+
 CREATE TABLE IF NOT EXISTS baskets (
     basket_id       SERIAL                      PRIMARY KEY,
     name            TEXT                        NOT NULL,
@@ -155,22 +165,11 @@ CREATE TABLE IF NOT EXISTS quandl_codes (
 CREATE INDEX IF NOT EXISTS idx_qc_data
     ON quandl_codes(data);
 
-CREATE TABLE IF NOT EXISTS symbology (
-    symbol_id       BIGINT                      NOT NULL,
-    source          TEXT                        NOT NULL,
-    source_id       TEXT                        NOT NULL,
-    type            TEXT,
-    created_date    TIMESTAMP WITH TIME ZONE,
-    updated_date    TIMESTAMP WITH TIME ZONE);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_symbology_sources
-    ON symbology(source, source_id);
-
 CREATE TABLE IF NOT EXISTS tickers (
     tsid                TEXT                        PRIMARY KEY,
     ticker              TEXT                        NOT NULL,
     name                TEXT,
-    exchange            TEXT                        NOT NULL,
-    child_exchange      TEXT,
+    exchange_id         INT                         NOT NULL,
     is_active           SMALLINT,
     start_date          TIMESTAMP WITH TIME ZONE,
     end_date            TIMESTAMP WITH TIME ZONE,
@@ -185,8 +184,8 @@ CREATE TABLE IF NOT EXISTS tickers (
     updated_date        TIMESTAMP WITH TIME ZONE,
     FOREIGN KEY(symbology_source, tsid)
         REFERENCES symbology(source, source_id) ON UPDATE CASCADE,
-    FOREIGN KEY(exchange)
-        REFERENCES exchanges(abbrev) ON UPDATE CASCADE);
+    FOREIGN KEY(exchange_id)
+        REFERENCES exchanges(exchange_id) ON UPDATE CASCADE);
 CREATE INDEX IF NOT EXISTS idx_tickers_sector
     ON tickers(sector);
 
@@ -224,7 +223,7 @@ CREATE TABLE IF NOT EXISTS finra_data (
     updated_date            TIMESTAMP WITH TIME ZONE,
     FOREIGN KEY(source, source_id)
         REFERENCES symbology(source, source_id)
-        ON UPDATE CASCADE):
+        ON UPDATE CASCADE);
 CREATE INDEX IF NOT EXISTS idx_finra_source_id
     ON finra_data(source, source_id);
 

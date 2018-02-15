@@ -242,8 +242,7 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                 (tsid               TEXT                        PRIMARY KEY,
                 ticker              TEXT                        NOT NULL,
                 name                TEXT,
-                exchange            TEXT                        NOT NULL,
-                child_exchange      TEXT,
+                exchange_id         INT                         NOT NULL,
                 is_active           SMALLINT,
                 start_date          TIMESTAMP WITH TIME ZONE,
                 end_date            TIMESTAMP WITH TIME ZONE,
@@ -258,8 +257,8 @@ def main_tables(database='pysecmaster', user='pysecmaster',
                 updated_date        TIMESTAMP WITH TIME ZONE,
                 FOREIGN KEY(symbology_source, tsid)
                     REFERENCES symbology(source, source_id) ON UPDATE CASCADE,
-                FOREIGN KEY(exchange)
-                    REFERENCES exchanges(abbrev) ON UPDATE CASCADE)""")
+                FOREIGN KEY(exchange_id)
+                    REFERENCES exchanges(exchange_id) ON UPDATE CASCADE)""")
                 c.execute("""CREATE INDEX IF NOT EXISTS idx_tickers_sector
                     ON tickers(sector)""")
 
