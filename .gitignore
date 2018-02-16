@@ -2,7 +2,7 @@
 ## Data
 #################
 
-load_tables/*_wo_data.csv
+pySecMaster/load_tables/*_wo_data.csv
 
 
 #################

@@ -5,41 +5,49 @@ def user_dir():
     """ This function returns the relavant file directories and passwords for
     the current system user in a dictionary. """
 
-    if getpass.getuser() == 'joshs':
+    if getpass.getuser() == 'root':
+        # Docker container will use these variables
 
-        load_tables = 'C:/Users/joshs/Programming/PycharmProjects/Git_Sync/' \
-                      'pySecMaster/pySecMaster/load_tables'
+        load_tables = '/load_tables'
 
         # PostgreSQL default database information
         main_db = 'postgres'
         main_user = 'postgres'
-        main_password = 'password'
-        main_host = 'localhost'
+        main_password = 'correct horse battery staple'          # Change this!!
+        main_host = 'postgres_pysecmaster'          # the docker container name
         main_port = '5432'
 
         # PostgreSQL pysecmaster database information
         pysecmaster_db = 'pysecmaster'
-        pysecmaster_user = 'postgres'
-        pysecmaster_password = 'password'
-        pysecmaster_host = 'localhost'
+        pysecmaster_user = 'pymaster'
+        pysecmaster_password = 'correct horse battery staple'   # Change this!!
+        pysecmaster_host = 'postgres_pysecmaster'   # the docker container name
         pysecmaster_port = '5432'
 
-        # PostgreSQL pysecmaster TEST database information
-        pysecmaster_test_db = 'pysecmaster_test'
-        pysecmaster_test_user = 'test'
-        pysecmaster_test_password = 'password'
-        pysecmaster_test_host = 'localhost'
-        pysecmaster_test_port = '5432'
+        # Quandl information
+        quandl_token = 'XXXXXXXXX'       # Keep this secret!!
 
-        # PostgreSQL sayvmaster transactions database information
-        sayvmaster_db = 'sayvmaster'
-        sayvmaster_user = 'postgres'
-        sayvmaster_password = 'postgres'
-        sayvmaster_host = 'localhost'
-        sayvmaster_port = '5432'
+    elif getpass.getuser() == 'josh':
+        # Local user will use thee variables
+
+        load_tables = '/load_tables'
+
+        # PostgreSQL default database information
+        main_db = 'postgres'
+        main_user = 'postgres'
+        main_password = 'correct horse battery staple'          # Change this!!
+        main_host = '127.0.0.1'
+        main_port = '5432'
+
+        # PostgreSQL pysecmaster database information
+        pysecmaster_db = 'pysecmaster'
+        pysecmaster_user = 'pymaster'
+        pysecmaster_password = 'correct horse battery staple'   # Change this!!
+        pysecmaster_host = '127.0.0.1'
+        pysecmaster_port = '5432'
 
         # Quandl information
-        quandl_token = 'XXXXXXXXXXXX'
+        quandl_token = 'XXXXXXXXX'       # Keep this secret!!
 
     else:
         raise NotImplementedError('Need to set data variables for user %s in '
@@ -58,16 +66,6 @@ def user_dir():
                  'pysecmaster_password': pysecmaster_password,
                  'pysecmaster_host': pysecmaster_host,
                  'pysecmaster_port': pysecmaster_port,
-                 'pysecmaster_test_db': pysecmaster_test_db,
-                 'pysecmaster_test_user': pysecmaster_test_user,
-                 'pysecmaster_test_password': pysecmaster_test_password,
-                 'pysecmaster_test_host': pysecmaster_test_host,
-                 'pysecmaster_test_port': pysecmaster_test_port,
-                 'sayvmaster_db': sayvmaster_db,
-                 'sayvmaster_user': sayvmaster_user,
-                 'sayvmaster_password': sayvmaster_password,
-                 'sayvmaster_host': sayvmaster_host,
-                 'sayvmaster_port': sayvmaster_port,
                  },
             'quandl':
                 {'quandl_token': quandl_token},
