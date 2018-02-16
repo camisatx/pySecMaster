@@ -103,7 +103,7 @@ def pull_daily_prices(database, user, password, host, port, query_type,
             df.set_index(['date'], inplace=True)
             df.index.name = ['date']
 
-            df.sortlevel(inplace=True)
+            df.sort_index(inplace=True)
 
             return df
 
@@ -175,7 +175,7 @@ def pull_minute_prices(database, user, password, host, port, query_type,
             df.set_index(['date'], inplace=True)
             df.index.name = ['date']
 
-            df.sortlevel(inplace=True)
+            df.sort_index(inplace=True)
 
             return df
 
@@ -209,10 +209,10 @@ if __name__ == '__main__':
     test_data_vendor_id = 15        # pySecMaster_Consensus
     # test_data_vendor_id = 12        # Google_Finance
     test_beg_date = '1950-01-01 00:00:00'
-    test_end_date = '2016-12-30 00:00:00'
+    test_end_date = '2018-12-30 00:00:00'
     frequency = 'daily'    # daily, minute
 
-    # NOTE: Background code implemented yet
+    # NOTE: Background code not implemented yet
     test_index = 'S&P 500'  # 'S&P 500', 'Russell Midcap', 'Russell 2000'
     test_as_of_date = '2015-01-01'
 
@@ -223,14 +223,14 @@ if __name__ == '__main__':
                                           test_password, test_host, test_port,
                                           test_query_type, test_data_vendor_id,
                                           test_beg_date, test_end_date,
-                                          test_tsid)
+                                          'tsid', test_tsid)
 
         elif frequency == 'minute':
             prices_df = pull_minute_prices(test_database, test_user,
                                            test_password, test_host, test_port,
                                            test_query_type, test_data_vendor_id,
                                            test_beg_date, test_end_date,
-                                           test_tsid)
+                                           'tsid', test_tsid)
 
         else:
             raise NotImplementedError('Frequency %s is not implemented within '
@@ -250,10 +250,11 @@ if __name__ == '__main__':
     csv_friendly_tsid = re.sub('[.]', '_', test_tsid)
     print('Query took %0.2f seconds' % (time.time() - start_time))
     print(prices_df)
-    prices_df.to_csv('output/%s_%s_%s.csv' %
-                     (csv_friendly_tsid, frequency,
-                      datetime.today().strftime('%Y%m%d')))
+    #prices_df.to_csv('output/%s_%s_%s.csv' %
+    #                 (csv_friendly_tsid, frequency,
+    #                  datetime.today().strftime('%Y%m%d')))
 
     unique_codes = pd.unique((prices_df['tsid']).values)
     print('There are %i unique tsid codes' % (len(unique_codes)))
     print('There are %s rows' % ('{:,}'.format(len(prices_df.index))))
+    print(datetime.today().strftime('%Y%m%d'))

@@ -1,0 +1,25 @@
+version: '3'
+
+services:
+    postgres:
+        container_name: postgres_pysecmaster
+        image: postgres:10-alpine
+        volumes:
+            - ./database:/docker-entrypoint-initdb.d/
+            - postgres_pysecmaster_data:/var/lib/postgresql
+        restart: always
+        ports:
+            - "127.0.0.1:5432:5432"
+
+    app:
+        container_name: pysecmaster
+        build: .
+        environment:
+            - "PYTHONUNBUFFERED=1"  # Prevent python prints from using buffer
+        volumes:
+            - ./load_tables:/load_tables/
+        depends_on:
+            - postgres
+
+volumes:
+    postgres_pysecmaster_data:
