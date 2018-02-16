@@ -286,7 +286,7 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
                 # Have to rename the indices as set_index removes the names
                 df.index.name = ['date', 'data_vendor_id']
 
-                df.sortlevel(inplace=True)
+                df.sort_index(inplace=True)
             else:
                 raise TypeError('Not able to query any prices for %s in '
                                 'query_all_tsid_prices' % tsid)
