@@ -35,6 +35,9 @@ CREATE USER remote_ricardo IN ROLE remote_users;
 -- Change to pysecmaster database using the user pymaster
 \c pysecmaster pymaster
 
+-- Set the database timezone to Eastern Standard Time
+SET TIME ZONE 'EST';
+
 CREATE TABLE IF NOT EXISTS symbology (
     symbol_id       BIGINT                      NOT NULL,
     source          TEXT                        NOT NULL,
