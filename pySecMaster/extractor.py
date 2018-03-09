@@ -2,7 +2,7 @@ import csv
 from datetime import datetime, timedelta, timezone
 import pandas as pd
 import psycopg2
-import re
+# import re
 from sqlalchemy import create_engine
 import time
 
@@ -688,7 +688,10 @@ class GoogleFinanceDataExtraction(object):
     def __init__(self, database, user, password, host, port, db_url,
                  download_selection, redownload_time, data_process, days_back,
                  threads, table, load_tables='load_tables', verbose=True):
-        """
+        """Google Finance historical price extractor is BROKEN. Google changed
+        their finance API in Fall 2017, preventing the download of historical
+        price data. Use other sources for this data.
+
         :param database: String of the directory location for the SQL database.
         :param user: String of the username used to login to the database
         :param password: String of the password used to login to the database
@@ -726,6 +729,10 @@ class GoogleFinanceDataExtraction(object):
         self.threads = threads
         self.table = table
         self.verbose = verbose
+
+        raise SystemError('WARNING - Google Finance extractor is broken! '
+            'Google mortally changed their finance API in Fall 2017, '
+            'preventing historical data downloads.')
 
         # Rate limiter parameters based on guessed Google Finance limitations
         # Received captcha if too fast (about 2000 queries within x seconds)
@@ -818,14 +825,14 @@ class GoogleFinanceDataExtraction(object):
         """This runs the program with no multiprocessing or threading.
         To run, make sure to comment out all pool processes below.
         Takes about 55 seconds for 10 tickers; 5.5 seconds per ticker."""
-        # [self.extractor(tsid) for tsid in code_list]
+        [self.extractor(tsid) for tsid in code_list]
 
         """This runs the program with multiprocessing or threading.
         Comment and uncomment the type of multiprocessing in the
         multi-thread function above to change the type. Change the number
         of threads below to alter the speed of the downloads. If the
         query runs out of items, try lowering the number of threads."""
-        multithread(self.extractor, code_list, threads=self.threads)
+        # multithread(self.extractor, code_list, threads=self.threads)
 
         print('The price extraction took %0.2f seconds to complete' %
               (time.time() - start_time))
@@ -1058,8 +1065,7 @@ class YahooFinanceDataExtraction(object):
         self.main()
 
     def main(self):
-        """
-        The main YahooFinanceDataExtraction method is used to execute
+        """The main YahooFinanceDataExtraction method is used to execute
         subsequent methods in the correct order.
         """
 

@@ -95,14 +95,15 @@ google_fin_url = {'root': 'http://www.google.com/finance/getprices?',
                   'period': 'p=',    # 20d; 15d is the longest period for min
                   'fields': 'f=d,c,v,o,h,l'}    # order doesn't change anything
 
-yahoo_end_date = ('d=%s&e=%s&f=%s' %
-                  (str(int(today.month - 1)).zfill(2), today.day, today.year))
-yahoo_fin_url = {'root': 'http://real-chart.finance.yahoo.com/table.csv?',
-                 'ticker': 's=',    # Exchange is added after ticker and '.'
-                 'interval': 'g=',  # d, w, m, v: (daily, wkly, mth, dividends)
-                 'start_date': 'a=00&b=1&c=1900',   # The entire price history
-                 'end_date': yahoo_end_date,    # Today's date (MM; D; YYYY)
-                 'csv': 'ignore=.csv'}      # Returns a CSV file
+cur_posix_time = str(datetime.now().timestamp())
+cur_posix_time = cur_posix_time[:cur_posix_time.find('.')]  # remove decimals
+yahoo_fin_url = {'root': 'https://query1.finance.yahoo.com/v7/finance/download/',
+                 # Put the ticker after the root, then '?', then other params
+                 'start_date': 'period1=0',     # First POSIX time (whole hist)
+                 'end_date': 'period2=' + cur_posix_time,   # Cur POSIX time
+                 'interval': 'interval=',   # 1d, 1w, 1mo: (daily, wkly, mthly)
+                 'events': 'events=',       # history, div, split
+                 'cookie': 'crumb='}        # Cookie value
 ###############################################################################
 
 
@@ -216,13 +217,13 @@ def data_download(database_options, quandl_key, download_list, threads=4,
         if source['interval'] == 'daily':
             table = 'daily_prices'
             if source['source'] == 'google':
-                google_fin_url['interval'] = 'i=' + str(60*60*24)
+                google_fin_url['interval'] += str(60*60*24)
             elif source['source'] == 'yahoo':
-                yahoo_fin_url['interval'] = 'g=d'
+                yahoo_fin_url['interval'] += '1d'
         elif source['interval'] == 'minute':
             table = 'minute_prices'
             if source['source'] == 'google':
-                google_fin_url['interval'] = 'i=' + str(60)
+                google_fin_url['interval'] += str(60)
             elif source['source'] == 'yahoo':
                 raise SystemError('Yahoo Finance does not provide minute data.')
         else:
@@ -267,7 +268,7 @@ def data_download(database_options, quandl_key, download_list, threads=4,
                   (source['selection'], source['data_process'],
                    source['replace_days_back']))
 
-            google_fin_url['period'] = 'p=' + str(source['period']) + 'd'
+            google_fin_url['period'] += str(source['period']) + 'd'
             GoogleFinanceDataExtraction(
                 database=database_options['database'],
                 user=database_options['user'],

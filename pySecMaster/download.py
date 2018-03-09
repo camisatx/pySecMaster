@@ -3,7 +3,7 @@ from functools import wraps
 import numpy as np
 import pandas as pd
 import time
-from urllib.request import urlopen
+import urllib.request, urllib.parse
 from urllib.error import HTTPError, URLError
 
 from utilities.date_conversions import date_to_iso
@@ -71,10 +71,7 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
 
 
 def csv_load_converter(input):
-
-    # try:
-    #     return int(input)
-    # except ValueError:
+    """Try to convert the input value into a float, otherwise a -1 value"""
     try:
         return float(input)
     except ValueError:
@@ -368,7 +365,7 @@ class QuandlDownload(object):
                 url_var = url_var + '&trim_start=' + beg_date
 
         try:
-            csv_file = urlopen(db_url + url_var)
+            csv_file = urllib.request.urlopen(db_url + url_var)
             return csv_file
 
         except HTTPError as e:
@@ -477,7 +474,7 @@ class QuandlDownload(object):
 
 
 def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
-    """ Receives a tsid as a string, splits the code into ticker and
+    """Receives a tsid as a string, splits the code into ticker and
     exchange, then passes it to the url to download the data. Once downloaded,
     this adds titles to the column headers.
 
@@ -524,7 +521,7 @@ def download_google_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         download_try += 1
         try:
             # Download the data
-            return urlopen(url).readlines()
+            return urllib.request.urlopen(url).readlines()
 
         except HTTPError as e:
             if 'http error 403' in str(e).lower():
@@ -819,17 +816,19 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     # Make the url string; aside from the root, the items can be in any order
     url_string = db_url['root']      # Establish the url root
+
+    # Add the ticker to the URL
+    if exchange:
+        # If an exchange was found, Yahoo requires both ticker and exchange
+        url_string += ticker + '.' + exchange + '?'
+    else:
+        # Ticker is in a major exchange and doesn't need exchange info
+        url_string += ticker + '?'
+
+    # Add the other API parameters to the URL
     for key, item in db_url.items():
         if key == 'root':
             continue    # Already used above
-        elif key == 'ticker':
-            if exchange:
-                # If an exchange was found, Yahoo requires both ticker and
-                #   exchange
-                url_string += '&' + item + ticker + '.' + exchange
-            else:
-                # Ticker is in a major exchange and doesn't need exchange info
-                url_string += '&' + item + ticker
         else:
             url_string += '&' + item
 
@@ -844,7 +843,7 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
         download_try += 1
         try:
             # Download the csv file
-            return urlopen(url)
+            return urllib.request.urlopen(url)
 
         except HTTPError as e:
             if 'http error 403' in str(e).lower():
@@ -940,8 +939,8 @@ def download_yahoo_data(db_url, tsid, exchanges_df, csv_out, verbose=True):
 
     url_obj = download_data(url_string)
 
-    column_names = ['date', 'open', 'high', 'low', 'close', 'volume',
-                    'adj_close']
+    column_names = ['date', 'open', 'high', 'low', 'close', 'adj_close',
+                    'volume']
 
     try:
         raw_df = pd.read_csv(url_obj, index_col=False, names=column_names,
@@ -1100,7 +1099,7 @@ def download_csidata_factsheet(db_url, data_type, exchange_id=None,
         download_try += 1
         try:
             # Download the data
-            return urlopen(url)
+            return urllib.request.urlopen(url)
 
         except HTTPError as e:
             if 'http error 403' in str(e).lower():
@@ -1271,7 +1270,7 @@ def download_nasdaq_industry_sector(db_url, exchange_list):
         download_try += 1
         try:
             # Download the data
-            return urlopen(url)
+            return urllib.request.urlopen(url)
 
         except HTTPError as e:
             if 'http error 403' in str(e).lower():

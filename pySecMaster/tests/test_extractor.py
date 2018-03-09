@@ -24,39 +24,19 @@ class GoogleFinanceDownloadTests(unittest.TestCase):
         self.port = userdir['postgresql']['pysecmaster_port']
 
         self.google_fin_url = {
-            'root': 'http://www.google.com/finance/getprices?',
+            'root': 'https://finance.google.com/finance/historical?',
             'ticker': 'q=',
             'exchange': 'x=',
-            'interval': 'i=',   # 60; 60 seconds is the shortest interval
-            # 'sessions': 'sessions=ext_hours',
-            'period': 'p=',    # 20d; 15d is the longest period for min
-            'fields': 'f=d,c,v,o,h,l',
+            'start_date': 'startdate=01-Jan-2000',
+            'output': 'output=csv',
         }    # order doesn't change anything
 
         self.exchanges_df = self.query_exchanges()
 
     def test_download_google_daily_price_data(self):
-        self.google_fin_url['interval'] += str(60*60*24)
-        self.google_fin_url['period'] += str(60) + 'd'
         tsid = 'AAPL.Q.0'
 
         csv_wo_data = 'test_goog_daily_wo_data.csv'
-        with open(csv_wo_data, 'w') as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(['tsid', 'date_tried'])
-
-        test_df = download_google_data(db_url=self.google_fin_url,
-            tsid=tsid, exchanges_df=self.exchanges_df, csv_out=csv_wo_data)
-        print(test_df)
-        self.assertGreater(len(test_df.index), 1)
-        os.remove(csv_wo_data)
-
-    def test_download_google_minute_price_data(self):
-        self.google_fin_url['interval'] += str(60)
-        self.google_fin_url['period'] += str(20) + 'd'
-        tsid = 'AAPL.Q.0'
-
-        csv_wo_data = 'test_goog_minute_wo_data.csv'
         with open(csv_wo_data, 'w') as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow(['tsid', 'date_tried'])
