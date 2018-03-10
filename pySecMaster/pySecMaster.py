@@ -395,7 +395,8 @@ if __name__ == '__main__':
              'quandl, yahoo and google daily prices will be downloaded.')
     parser.add_argument('--database-list', type=str, nargs='+',
         default=['WIKI'],
-        help='The Quandl databases that will have their codes downloaded. '
+        help='The Quandl databases that will have their codes downloaded if '
+             'the quanddl-ticker-source argument is set to quandl. '
              'Provide selections one after the other without quotes. Options '
              'include: WIKI, GOOG, YAHOO, SEC, EIA, JODI, CURRFX, FINRA.')
     parser.add_argument('--minute-downloads', type=str, nargs='*',
@@ -409,21 +410,21 @@ if __name__ == '__main__':
              'the remainder of the codes will attempt to be downloaded.')
     parser.add_argument('--quandl-ticker-source', type=str,
         choices=['quandl', 'csidata'], default='csidata',
-        help='Determines the extractor should get the ticker codes for when '
-             'downloading Quandl data. Options include using the official list '
-             'from Quandl (quandl), or make implied codes from the CSI data '
-             'stock factsheet (csidata) which is more accurate but tries more '
-             'non-existent tickers.')
+        help='Determines where the extractor should get the ticker codes from '
+             'when downloading Quandl data. Options include using the official '
+             'list from Quandl (quandl), or make implied codes from the CSI '
+             'data stock factsheet (csidata) which is more accurate but tries '
+             'more non-existent tickers.')
     parser.add_argument('--symbology-sources', type=str, nargs='+',
-        default = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
-                   'seeking_alpha', 'yahoo'],
+        default = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_eod',
+                   'quandl_goog', 'seeking_alpha', 'yahoo'],
         help='Sources that will be integrated into the symbology table, '
              'including have symbology specific identifiers created and '
              'being linked with other sources symbology identifiers for the '
              'same underlying item. The following sources are used by default: '
-             'csi_data, tsid, quandl_wiki, quandl_goog, seeking_alpha, yahoo. '
-             'Ommitting key sources may break the system. Provide selections '
-             'one after the other without quotes.')
+             'csi_data, tsid, quandl_wiki, qualdo_eod, quandl_goog, '
+             'seeking_alpha, yahoo. Ommitting key sources may break the '
+             'system. Provide selections one after the other without quotes.')
     parser.add_argument('-t', '--threads', type=int,
         help='Number of threads to allocate to the system. The total system '
              'cores are used by default.')
@@ -461,6 +462,10 @@ if __name__ == '__main__':
     test_download_list = [
         # Quandl WIKI daily data with wiki
         {'source': 'quandl', 'selection': 'wiki', 'interval': 'daily',
+         'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
+         'replace_days_back': 60},
+        # Quandl EOD daily data with eod
+        {'source': 'quandl', 'selection': 'eod', 'interval': 'daily',
          'redownload_time': 60 * 60 * 12, 'data_process': 'replace',
          'replace_days_back': 60},
         # Yahoo Fin daily data with us_main - 9300 seconds (2.58 hours)

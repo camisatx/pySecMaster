@@ -545,6 +545,43 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                     raise SystemExit('Not able to retrieve any tickers after '
                                      'querying %s in query_csi_stocks'
                                      % (query,))
+
+            elif query == 'main_us_no_amex':
+                # Restricts tickers to those that have been active within the
+                #   prior two years. For the few duplicate tickers, choose the
+                #   active one over the non-active one (same company but
+                #   different start and end dates, with one being active).
+                # NOTE: Due to different punctuations, it is possible for
+                #   items with similar symbol, exchange and sub exchange
+                #   to be returned (ie. 'ABK.A TSX' and 'ABK+A TSX')
+                beg_date = (datetime.now() - timedelta(days=730))
+                cur.execute("""SELECT DISTINCT ON (symbol, exchange)
+                                   csi_number, symbol, exchange, sub_exchange
+                               FROM (SELECT csi_number, symbol, exchange,
+                                   sub_exchange, is_active
+                                   FROM csidata_stock_factsheet
+                                   WHERE end_date>=%s
+                                   AND (exchange IN ('NYSE')
+                                   OR sub_exchange IN (
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA'))
+                                   AND symbol IS NOT NULL)
+                                   AS csi
+                               ORDER BY symbol, exchange, is_active DESC
+                                   NULLS LAST""",
+                            (beg_date.isoformat(),))
+                rows = cur.fetchall()
+                if rows:
+                    csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
+                                                         'exchange',
+                                                         'sub_exchange'])
+                else:
+                    raise SystemExit('Not able to retrieve any tickers after '
+                                     'querying %s in query_csi_stocks'
+                                     % (query,))
             else:
                 raise SystemExit('%s query does not exist within '
                                  'query_csi_stocks. Valid queries '
