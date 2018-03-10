@@ -2,7 +2,7 @@ import csv
 from datetime import datetime, timedelta, timezone
 import pandas as pd
 import psycopg2
-import re
+#import re
 from sqlalchemy import create_engine
 import time
 
@@ -436,25 +436,29 @@ class QuandlDataExtraction(object):
 
         # Retrieve the Quandl data vendor IDs. Not able to use a list of all
         #   Quandl data vendor IDs because that prevents data being downloaded
-        #   for the same tsid but from different Quandl sources (ie wiki % goog)
-        # vendor_id = retrieve_data_vendor_id(
-        #     database=self.database, user=self.user, password=self.password,
-        #     host=self.host, port=self.port, name='Quandl_%')
+        #   for the same tsid but from different Quandl sources (e.g. wiki; eod)
         if self.download_selection[:4] == 'wiki':
             self.vendor_id = query_data_vendor_id(
                 database=self.database, user=self.user, password=self.password,
                 host=self.host, port=self.port, name='Quandl_WIKI')
+            self.q_selection = 'Quandl WIKI'
+        elif self.download_selection[:3] == 'eod':
+            self.vendor_id = query_data_vendor_id(
+                database=self.database, user=self.user, password=self.password,
+                host=self.host, port=self.port, name='Quandl_EOD')
+            self.q_selection = 'Quandl EOD'
         elif self.download_selection[:4] == 'goog':
             self.vendor_id = query_data_vendor_id(
                 database=self.database, user=self.user, password=self.password,
                 host=self.host, port=self.port, name='Quandl_GOOG')
+            self.q_selection = 'Quandl GOOG'
         else:
             raise NotImplementedError('The %s Quandl source is not implemented '
                                       'in the init within QuandlDataExtraction'
                                       % self.download_selection)
 
-        print('Retrieving dates of the last price per ticker for all Quandl '
-              'values.')
+        print('Retrieving dates of the last price per ticker for all %s values'
+              % self.q_selection)
         # Creates a DataFrame with the last price for each Quandl code
         self.latest_prices = query_last_price(
             database=self.database, user=self.user, password=self.password,
@@ -464,14 +468,12 @@ class QuandlDataExtraction(object):
         self.main()
 
     def main(self):
-        """
-        The main QuandlDataExtraction method is used to execute subsequent
-        methods in the correct order.
-        """
+        """This is used to execute subsequent methods in the correct order"""
 
         start_time = time.time()
 
-        print('Analyzing the Quandl Codes that will be downloaded...')
+        print('Analyzing the %s codes that will be downloaded' %
+              self.q_selection)
         # Create a list of securities to download
         q_code_df = query_q_codes(database=self.database, user=self.user,
                                   password=self.password, host=self.host,
@@ -481,14 +483,8 @@ class QuandlDataExtraction(object):
         q_codes_df = pd.merge(q_code_df, self.latest_prices,
                               left_on='tsid', right_index=True, how='left')
         # Sort the DF with un-downloaded items first, then based on last update
-        try:
-            # df.sort_values introduced in 0.17.0
-            q_codes_df.sort_values('updated_date', axis=0, ascending=True,
-                                   na_position='first', inplace=True)
-        except:
-            # df.sort() depreciated in 0.17.0
-            q_codes_df.sort('updated_date', ascending=True, na_position='first',
-                            inplace=True)
+        q_codes_df.sort_values('updated_date', axis=0, ascending=True,
+                               na_position='first', inplace=True)
 
         try:
             # Load the codes that did not have data from the last extractor run
@@ -525,9 +521,10 @@ class QuandlDataExtraction(object):
         # Inform the user how many codes will be updated
         dl_codes = len(q_codes_final.index)
         total_codes = len(q_codes_df.index)
-        print('%s Quandl Codes out of %s requested codes will be downloaded.\n'
+        print('%s %s codes out of %s requested codes will be downloaded.\n'
               '%s codes were last updated within the %s second limit.'
               % ('{:,}'.format(dl_codes), '{:,}'.format(total_codes),
+                 self.q_selection,
                  '{:,}'.format(total_codes - dl_codes),
                  '{:,}'.format(self.redownload_time)))
 
@@ -540,19 +537,17 @@ class QuandlDataExtraction(object):
         Comment and uncomment the type of multiprocessing in the
         multi-thread function above to change the type. Change the number
         of threads below to alter the speed of the downloads. If the
-        query runs out of items, try lowering the number of threads.
-        22 threads -> 932.65 seconds"""
+        query runs out of items, try lowering the number of threads."""
         multithread(self.extractor, q_code_list, threads=self.threads)
 
-        print('The price extraction took %0.2f seconds to complete' %
-              (time.time() - start_time))
+        print('The %s price extraction took %0.2f seconds to complete' %
+              (self.q_selection, time.time() - start_time))
 
     def extractor(self, codes):
-        """ Takes the Quandl ticker quote, downloads the historical data,
-        and then saves the data into the SQLite database.
+        """Takes the Quandl code, downloads the historical data, and then saves
+        the data into the database.
 
-        :param codes: String of tuples containing the tsid and Quandl code
-        :return: Nothing. It saves the price data in the SQLite Database.
+        :param codes: Tuple of strings containing the tsid and Quandl code
         """
 
         main_time_start = time.time()
@@ -574,32 +569,28 @@ class QuandlDataExtraction(object):
                 database=self.database, user=self.user, password=self.password,
                 host=self.host, port=self.port, tsid=tsid)
 
+            # Download the quandl data, cleaning it and put into a DataFrame
             clean_data = quandl_download.download_quandl_data(
                 q_code=q_code, csv_out=self.csv_wo_data, beg_date=start_date)
 
             # There is not new data, so do nothing to the database
-            if len(clean_data.index) == 0:
+            if len(clean_data.index) == 0 and self.verbose:
                 print('No update for %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
             # There is new data to add to the database
             else:
-                # Find the data vendor of the q_code; add it to the DataFrame
-                # vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
-                # data_vendor = retrieve_data_vendor_id(
-                #     db_location=self.db_location, name=vendor_name)
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
-
-                # Add the tsid into the DataFrame, and then remove the q_code
                 clean_data.insert(1, 'source', 'tsid')
                 clean_data.insert(2, 'source_id', tsid)
-                # clean_data.drop('q_code', axis=1, inplace=True)
 
+                # Insert the DataFrame into the database
                 df_to_sql(database=self.database, user=self.user,
                           password=self.password, host=self.host,
                           port=self.port, df=clean_data,
                           sql_table=self.table, exists='append', item=tsid)
-                print('Updated %s | %0.1f seconds' %
-                      (q_code, time.time() - main_time_start))
+                if self.verbose:
+                    print('Updated %s | %0.1f seconds' %
+                          (q_code, time.time() - main_time_start))
 
         # The pricing database has prior values; append/replace new data points
         else:
@@ -624,21 +615,17 @@ class QuandlDataExtraction(object):
                     clean_data = raw_data[raw_data.date > last_date]
 
             except Exception as e:
-                print('Failed to determine what data is new for %s in extractor'
-                      % q_code)
+                print('Failed to determine what data is new for %s in '
+                      'QuandlDataExtraction.extractor' % q_code)
                 print(e)
                 return
 
             # There is not new data, so do nothing to the database
-            if len(clean_data.index) == 0:
+            if len(clean_data.index) == 0 and self.verbose:
                 print('No update for %s | %0.1f seconds' %
                       (q_code, time.time() - main_time_start))
             # There is new data to add to the database
             else:
-                # Find the data vendor of the q_code; add it to the DataFrame
-                # vendor_name = 'Quandl_' + q_code[:q_code.find('/')]
-                # data_vendor = retrieve_data_vendor_id(
-                #     db_location=self.db_location, name=vendor_name)
                 clean_data.insert(0, 'data_vendor_id', self.vendor_id)
                 clean_data.insert(1, 'source', 'tsid')
                 clean_data.insert(2, 'source_id', tsid)
@@ -650,10 +637,11 @@ class QuandlDataExtraction(object):
                     #   deleted before the new data can be added.
                     first_date_iso = clean_data['date'].min()
 
+                    # NOTE: Query susceptible to sql injection attacks
                     query = ("""DELETE FROM %s
-                                WHERE source_id='%s' AND source='tsid'
-                                AND date>='%s'
-                                AND data_vendor_id='%s'""" %
+                             WHERE source_id='%s' AND source='tsid'
+                             AND date>='%s'
+                             AND data_vendor_id='%s'""" %
                              (self.table, tsid, first_date_iso, self.vendor_id))
 
                     del_success = 'failure'
@@ -679,8 +667,9 @@ class QuandlDataExtraction(object):
                           password=self.password, host=self.host,
                           port=self.port, df=clean_data,
                           sql_table=self.table, exists='append', item=tsid)
-                print('Updated %s | %0.1f seconds' %
-                      (q_code, time.time() - main_time_start))
+                if self.verbose:
+                    print('Updated %s | %0.1f seconds' %
+                          (q_code, time.time() - main_time_start))
 
 
 class GoogleFinanceDataExtraction(object):

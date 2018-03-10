@@ -484,10 +484,10 @@ if __name__ == '__main__':
 
     # source: String of which data provider should have their data downloaded
     # selection: String of which data from the source should be downloaded. To
-    #   understand what is actually being downloaded, go to the query_q_codes
-    #   method in either the QuandlDataExtraction class or the
-    #   GoogleFinanceDataExtraction class in extractor.py, and look at the
-    #   SQLite queries. (Quandl: 'wiki', 'goog', 'goog_us_main',
+    #   understand what is actually being downloaded, go to either the
+    #   query_q_codes function or query_codes function in
+    #   utilities/database_queries.py and view the SQL queries.
+    #   (Quandl: 'wiki', 'eod', 'goog', 'goog_us_main',
     #   'goog_us_main_no_end_date', 'goog_us_canada_london', 'goog_etf';
     #   Google: 'all', 'us_main', 'us_main_no_end_date', 'us_canada_london')
     # interval: String of what interval the data should be in (daily or minute).
@@ -508,15 +508,25 @@ if __name__ == '__main__':
     #   function is run
     ############################################################################
 
+    # Build the download list from the argparse arguments provided. There is
+    #   probably a much better way to do this
     download_list = []
     if args.daily_downloads or args.minute_downloads:
+        daily_d = args.daily_downloads
+        minute_d = args.minute_downloads
+        # Cycle through all download templates specified above
         for source in test_download_list:
-            if args.daily_downloads and \
-                    source['source'] in args.daily_downloads and \
-                    source['interval'] == 'daily':
-                download_list.append(source)
-            if args.minute_downloads and \
-                    source['source'] in args.minute_downloads and \
+            if daily_d and source['interval'] == 'daily':
+                for cur_d in daily_d:
+                    # Need to do string to string comparisson
+                    if source['source'] in cur_d:
+                        # For quandl, ensure selection matches argparse exactly
+                        if source['source'] in 'quandl' and \
+                                source['selection'] == cur_d[cur_d.find('.')+1:]:
+                            download_list.append(source)
+                        elif source['source'] not in 'quandl':
+                            download_list.append(source)
+            if minute_d and source['source'] in minute_d and \
                     source['interval'] == 'minute':
                 download_list.append(source)
 

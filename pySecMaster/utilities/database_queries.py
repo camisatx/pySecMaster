@@ -244,11 +244,11 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
             cur = conn.cursor()
             if table == 'daily_prices':
                 cur.execute("""SELECT data_vendor_id, date, open, high, low,
-                                close, volume, ex_dividend, split_ratio
+                                close, volume, dividend, split
                             FROM daily_prices
                             WHERE source_id=%s AND source='tsid'""", (tsid,))
                 columns = ['data_vendor_id', 'date', 'open', 'high', 'low',
-                           'close', 'volume', 'ex_dividend', 'split_ratio']
+                           'close', 'volume', 'dividend', 'split']
             elif table == 'minute_prices':
                 cur.execute("""SELECT data_vendor_id, date, open, high, low,
                                 close, volume
@@ -996,6 +996,15 @@ def query_q_codes(database, user, password, host, port, download_selection):
                             WHERE tsid.source='tsid'
                             AND qcode.source='quandl_wiki'
                             ORDER BY qcode.source_id ASC NULLS LAST""")
+            elif download_selection == 'eod':
+                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
+                                tsid.source_id, qcode.source_id
+                            FROM symbology tsid
+                            INNER JOIN symbology qcode
+                            ON tsid.symbol_id = qcode.symbol_id
+                            WHERE tsid.source='tsid'
+                            AND qcode.source='quandl_eod'
+                            ORDER BY qcode.source_id ASC NULLS LAST""")
             elif download_selection == 'goog':
                 cur.execute("""SELECT DISTINCT ON (qcode.source_id)
                                tsid.source_id, qcode.source_id
@@ -1090,9 +1099,10 @@ def query_q_codes(database, user, password, host, port, download_selection):
                             (beg_date.isoformat(),))
             else:
                 raise SystemError('Improper download_selection was provided '
-                                  'in query_codes. If this is a new query, '
-                                  'ensure the SQL is correct. Valid symbology '
-                                  'download selections include wiki, goog, '
+                                  'in query_q_codes in database_queries.py. '
+                                  'If this is a new query, ensure the SQL is '
+                                  'correct. Valid symbology download '
+                                  'selections include wiki, eod, goog, '
                                   'goog_us_main, goog_us_main_no_end_date,'
                                   'goog_us_canada_london, and goog_etf.')
 
@@ -1104,8 +1114,8 @@ def query_q_codes(database, user, password, host, port, download_selection):
                 # ticker_list = df.values.flatten()
                 # df.to_csv('query_q_code.csv')
             else:
-                raise SystemError('Not able to determine the q_codes '
-                                  'from the SQL query in query_q_codes')
+                raise SystemError('Not able to determine the q_codes from the '
+                                  'SQL query in query_q_codes')
     except psycopg2.Error as e:
         print(e)
         raise SystemError('Error when trying to connect to the %s database '

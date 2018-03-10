@@ -133,7 +133,7 @@ class CrossValidate:
         if self.table == 'daily_prices':
             consensus_price_df = pd.DataFrame(
                 columns=['date', 'open', 'high', 'low', 'close', 'volume',
-                         'ex_dividend', 'split_ratio'])
+                         'dividend', 'split'])
         elif self.table == 'minute_prices':
             consensus_price_df = pd.DataFrame(
                 columns=['date', 'open', 'high', 'low', 'close', 'volume'])
