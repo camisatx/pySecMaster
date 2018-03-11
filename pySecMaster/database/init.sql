@@ -35,6 +35,9 @@ CREATE USER remote_ricardo IN ROLE remote_users;
 -- Change to pysecmaster database using the user pymaster
 \c pysecmaster pymaster
 
+-- Set the database timezone to Eastern Standard Time
+SET TIME ZONE 'EST';
+
 CREATE TABLE IF NOT EXISTS symbology (
     symbol_id       BIGINT                      NOT NULL,
     source          TEXT                        NOT NULL,
@@ -200,8 +203,8 @@ CREATE TABLE IF NOT EXISTS daily_prices (
     low             DECIMAL(11,4),
     close           DECIMAL(11,4),
     volume          BIGINT,
-    ex_dividend     DECIMAL(6,3),
-    split_ratio     DECIMAL(11,4),
+    dividend        DECIMAL(6,3),
+    split           DECIMAL(11,4),
     updated_date    TIMESTAMP WITH TIME ZONE,
     FOREIGN KEY(data_vendor_id)
         REFERENCES data_vendor(data_vendor_id),

@@ -5,14 +5,14 @@ from utilities.user_dir import user_dir
 
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__copyright__ = 'Copyright (C) 2018 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.3'
+__version__ = '1.5.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -40,8 +40,8 @@ def build_symbology(database_options):
     # Don't change these unless you know what you are doing
     # http://www.csidata.com/factsheets.php?type=stock&format=html
     csidata_url = 'http://www.csidata.com/factsheets.php?'
-    symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
-                         'seeking_alpha', 'yahoo']
+    symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_eod',
+                         'quandl_goog', 'seeking_alpha', 'yahoo']
 
     LoadTables(database=database_options['database'],
                user=database_options['user'],

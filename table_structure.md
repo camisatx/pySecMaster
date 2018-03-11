@@ -179,8 +179,8 @@ These are structures for all of the tables built by pySecMaster. The three types
 | low            | DECIMAL(11,4)                     |                              |                    |
 | close          | DECIMAL(11,4)                     |                              |                    |
 | volume         | BIGINT                            |                              |                    |
-| ex_dividend    | DECIMAL(6,3)                      |                              |                    |
-| split_ratio    | DECIMAL(11,4)                     |                              |                    |
+| dividend       | DECIMAL(6,3)                      |                              |                    |
+| split          | DECIMAL(11,4)                     |                              |                    |
 | updated_date   | TIMESTAMP WITH TIME ZONE          |                              | idx_dp_identifiers |
 
 #### finra_data

@@ -14,6 +14,7 @@ The goal of the system is to have a central repository of interrelated finance d
  - [Symbology](#symbology)
  - [Data Types](#data-types)
  - [Cross Validator](#cross-validator)
+ - [Adjusted Prices](#adjusted-prices)
  - [System Requirements](#system-requirements)
  - [Future Goals](#future-goals)
  - [Notes](#notes)
@@ -28,112 +29,47 @@ The goal of the system is to have a central repository of interrelated finance d
 
   2. Clone (or download) [this](https://github.com/camisatx/pySecMaster) repository to your computer
 
-  5. Navigate to `pySecMaster/pySecMaster`
+  3. Navigate to `pySecMaster/pySecMaster`
 
-  3. Open the `/utilities/user_dir.py` [file](https://github.com/camisatx/pySecMaster/blob/master/pySecMaster/utilities/user_dir.py):
+  4. Open the `/utilities/user_dir.py` [file](../master/pySecMaster/utilities/user_dir.py):
     - Change the default name (josh) to your system user name (**line 30**)
     - Add your [Quandl API key](https://docs.quandl.com/docs#section-authentication) to both the root and your user sections (**lines 28 and 50**)
-    - [optional] Change the `main_password` (**lines 16 and 38**) and `pysecmaster_password` (**lines 23 and 45**) in both the root and your user sections; Also change the passwords within the `pySecMaster/pySecMaster/database/init.sql` [file](https://github.com/camisatx/pySecMaster/blob/master/pySecMaster/database/init.sql) on **lines 2 and 12** to the same respective passwords you used in the `user_dir.py` file; You can also change or remove the special `remote_users` password and users created between **lines 16 and 33** within the `init.sql` file
+    - [optional] Change the `main_password` (**lines 16 and 38**) and `pysecmaster_password` (**lines 23 and 45**) in both the root and your user sections; Also change the passwords within the `pySecMaster/pySecMaster/database/init.sql` [file](../master/pySecMaster/database/init.sql) on **lines 2 and 12** to the same respective passwords you used in the `user_dir.py` file; You can also change or remove the special `remote_users` password and users created between **lines 16 and 33** within the `init.sql` file
 
-  4. Run `docker-compose up`, and the system will start building itself using the variables specified [here](https://github.com/camisatx/pySecMaster/blob/a6ebcab9c5e81c2fc163997df79ea3a230b8f238/pySecMaster/Dockerfile#L17). To view the arguments you can provide, either run `pySecMaster/pySecMaster/pySecMaster.py -h` or view the arguments [here](https://github.com/camisatx/pySecMaster/blob/a6ebcab9c5e81c2fc163997df79ea3a230b8f238/pySecMaster/pySecMaster.py#L388)
+  5. Run `docker-compose up -d postgres` to start the Postgres container running as a daemon, where it will continue running in the background.
+
+  6. Run `docker-compose up app` to run the pySecMaster code. You would run this to update the prices daily. If you change a script, run `docker-compose up --build app` to have the updated script loaded into the pySecMaster container. The system will utilize the variables specified [here](../master/pySecMaster/Dockerfile#L17). To view the arguments you can provide, either run `pySecMaster/pySecMaster/pySecMaster.py -h` or view the arguments [here](../master/pySecMaster/pySecMaster.py#L388).
 
 ### Without Docker using the Script
 
   1. Download and install both [PostgreSQL](http://www.postgresql.org/download/) and [Psycopg2](http://initd.org/psycopg/docs/install.html) to your computer. Installing psycopg2 on Windows can be challenging, but I found it easy to use the wheel provided on Christoph Gohlke's [Windows Binaries for Python](http://www.lfd.uci.edu/~gohlke/pythonlibs/#psycopg) page.
   
-  2. Clone (or download) [this](https://github.com/camisatx/pySecMaster) repository to your computer
-
-  3. Create a new Postgres user to use with pySecMaster (i.e. pysecmaster)
-
-  4. Clone or download [this](https://github.com/camisatx/pySecMaster) repository to your computer
-
-  5. Navigate to `pySecMaster/pySecMaster`
-
-  6. Open the `/utilities/user_dir.py` [file](https://github.com/camisatx/pySecMaster/blob/master/pySecMaster/utilities/user_dir.py):
-    - Change the default name (josh) to your system user name (**line 30**)
-    - Add your [Quandl API key](https://docs.quandl.com/docs#section-authentication) to both the root and your user sections (**lines 28 and 50**)
-    - [optional] Change the `main_password` (**lines 16 and 38**) and `pysecmaster_password` (**lines 23 and 45**) in both the root and your user sections; Also change the passwords within the `pySecMaster/pySecMaster/database/init.sql` [file](https://github.com/camisatx/pySecMaster/blob/master/pySecMaster/database/init.sql) on **lines 2 and 12** to the same respective passwords you used in the `user_dir.py` file; You can also change or remove the special `remote_users` password and users created between **lines 16 and 33** within the `init.sql` file
-
-  7. Install the python libraries with `pip3 install -r requirements.txt`
-
-  8. Run `python pySecMaster/pySecMaster/pySecMaster.py --daily-downloads quandl -v` for the system to start building itself. It'll download Quandl daily prices and run the cross validator for all price values. To view the arguments you can provide, either run `pySecMaster/pySecMaster/pySecMaster.py -h` or view the arguments [here](https://github.com/camisatx/pySecMaster/blob/a6ebcab9c5e81c2fc163997df79ea3a230b8f238/pySecMaster/pySecMaster.py#L388)
-
-### Without Docker using the GUI
-
-  1. Download and install both [PostgreSQL](http://www.postgresql.org/download/) and [Psycopg2](http://initd.org/psycopg/docs/install.html) to your computer. Installing psycopg2 on Windows can be challenging, but I found it easy to use the wheel provided on Christoph Gohlke's [Windows Binaries for Python](http://www.lfd.uci.edu/~gohlke/pythonlibs/#psycopg) page.
-  
-  2. Create a new Postgres user to use with pySecMaster (i.e. pysecmaster)
+  2. Create a new user in Postgres to use with pySecMaster (i.e. pysecmaster)
 
   3. Clone or download [this](https://github.com/camisatx/pySecMaster) repository to your computer
 
-  4. Navigate to the `pySecMaster/pySecMaster` and run `main_gui.py`
+  4. Navigate to `pySecMaster/pySecMaster`
 
-  5. Within the GUI, provide the Postgres admin user and password, along with the database name you want to use for the pySecMaster (i.e. pysecmaster). Also, enter the user, password, host and port number that will be used to access this new database.
+  5. Open the `/utilities/user_dir.py` [file](../master/pySecMaster/utilities/user_dir.py):
+    - Change the default name (josh) to your system user name (**line 30**)
+    - Add your [Quandl API key](https://docs.quandl.com/docs#section-authentication) to both the root and your user sections (**lines 28 and 50**)
+    - [optional] Change the `main_password` (**lines 16 and 38**) and `pysecmaster_password` (**lines 23 and 45**) in both the root and your user sections; Also change the passwords within the `pySecMaster/pySecMaster/database/init.sql` [file](../master/pySecMaster/database/init.sql) on **lines 2 and 12** to the same respective passwords you used in the `user_dir.py` file; You can also change or remove the special `remote_users` password and users created between **lines 16 and 33** within the `init.sql` file
 
-#### Quandl daily data
+  6. Install the python libraries with `pip3 install -r requirements.txt`
 
-  6. Enter a Quandl API Key (free at <https://www.quandl.com>)
-  
-  7. In the *Data* tab, change *Download Source* combo-box to **quandl**
-  
-  8. In the *Data* tab, change *Selection* combo-box to:
-    - **wiki** if you want all Quandl WIKI data ([Note 4](#notes)) (~3,000 symbols)
-    - **goog** if you want all *US, Toronto and London* Quandl Google Finance data (~38,000 symbols)
-    - **goog_etf** if you want all Quandl Google Finance ETF data ([Note 5](#notes))) (~3,700 symbols)
-    - **goog_us_main_no_end_date** if you want main US exchange Quandl Google Finance data ([Note 6](#notes))) (~15,000 symbols)
-
-  9. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
-
-  10. Click on the *Ok* button, and the database will start building itself
-  
-  11. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
-
-#### Yahoo Finance daily data (currently broken - 2/19/18)
-  
-  6. In the *Data* tab, change *Download Source* combo-box to **yahoo**
-  
-  7. In the *Data* tab, change *Selection* combo-box to:
-    - **all** if you want all *US, Toronto and London* Yahoo Finance data (~38,000 symbols)
-    - **us_main** if you want main US exchange Yahoo Finance data that's been active within the prior two years ([Note 6](#notes)) (~9,000 symbols)
-    - **us_main_no_end_date** if you want main US exchange Yahoo Finance data ([Note 6](#notes)) (~15,000 symbols)
-    - **us_canada_london** if you want all *US, Toronto and London* Yahoo Finance data that's been active within the prior two years (~25,000 symbols)
-  
-  8. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
-
-  9. Click on the *Ok* button, and the database will start building itself with daily data from Yahoo Finance
-  
-  10. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
-
-#### Google Finance minute data (currently broken - 2/19/18)
-
-  6. In the *Data* tab, change *Download Source* combo-box to **google**
-  
-  7. In the *Data* tab, change *Selection* combo-box to:
-    - **all** if you want all *US, Toronto and London* Google Finance data (~38,000 symbols)
-    - **us_main** if you want main US exchange Google Finance data that's been active within the prior two years ([Note 6](#notes)) (~9,000 symbols)
-    - **us_canada_london** if you want all *US, Toronto and London* Google Finance data that's been active within the prior two years (~25,000 symbols)
-  
-  8. In the *Data* tab, change *Interval* combo-box to **minute**
-  
-  9. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
-
-  10. Click on the *Ok* button, and the database will start building itself with minute data from Google Finance
-  
-  11. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+  7. Run `python pySecMaster/pySecMaster/pySecMaster.py --daily-downloads quandl.wiki -v` for the system to start building itself. It'll download Quandl daily prices and run the cross validator for all price values. To view the arguments you can provide, either run `pySecMaster/pySecMaster/pySecMaster.py -h` or view the arguments [here](../master/pySecMaster/pySecMaster.py#L388)
 
 ### Retrieve Database Values
-  1. To retrieve the data from the PostgreSQL database, open the `pySecMaster/pySecMaster/query_data.py` [file](https://github.com/camisatx/pySecMaster/blob/master/pySecMaster/query_data.py) in a code editor (Vim, PyCharm, Sublime, etc.)
+  1. To retrieve the data from the PostgreSQL database, open the `pySecMaster/pySecMaster/query_data.py` [file](../master/pySecMaster/query_data.py) in a code editor (Vim, PyCharm, Sublime, etc.)
 
-  2. Navigate to the query options (**lines 207 - 217**): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQL query. By default the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
+  2. Navigate to the query options (**lines 242 - 250**): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQL query. This file also includes a [price adjustment calculation](#adjusted-prices), which calculates the correct historical adjusted prices based on the dividend and splits. By default the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
 
   3. You can now save and run `python pySecMaster/pySecMaster/query_data.py`
-
 
 ## Database
 This system utilizes [PostgreSQL](http://www.postgresql.org/) for the database engine. [Postgres](https://en.wikipedia.org/wiki/PostgreSQL) provides an extremely flexible yet powerful database experience. Furthermore, Postgres allows the database to be stored on a remote server, accessible by multiple users.
 
 Currently, there are 24 tables that make up the pySecMaster database. You can view the database table structure [here](../master/table_structure.md).
-
 
 ## TSID
 All of the data tables utilize a custom symbol ID, called a `tsid` (trading system ID). This allows for consistent data nomenclature across the system.
@@ -221,19 +157,88 @@ The system is setup to work with as many data sources as available, so future da
 
 This can be multi-processed based on tsids. By default, 5 threads are used. This value is dependent on the disk and processor speed, so you may need to lower this value.
 
+## Adjusted Prices
+The [query_data.py](../master/pySecMaster/query_data.py) file includes a function for calculating the adjusted prices based on the stock's dividends and splits. You can read more about this calculation [here](https://joshschertz.com/2016/08/27/Vectorizing-Adjusted-Close-with-Python/).
+
+## Run without Docker using the GUI
+
+  **NOTE: The Quandl data download is currently broken. Use the pysecmaster.py instead.**
+
+  1. Download and install both [PostgreSQL](http://www.postgresql.org/download/) and [Psycopg2](http://initd.org/psycopg/docs/install.html) to your computer. Installing psycopg2 on Windows can be challenging, but I found it easy to use the wheel provided on Christoph Gohlke's [Windows Binaries for Python](http://www.lfd.uci.edu/~gohlke/pythonlibs/#psycopg) page.
+  
+  2. Create a new Postgres user to use with pySecMaster (i.e. pysecmaster)
+
+  3. Clone or download [this](https://github.com/camisatx/pySecMaster) repository to your computer
+
+  4. Navigate to the `pySecMaster/pySecMaster` and run `main_gui.py`
+
+  5. Within the GUI, provide the Postgres admin user and password, along with the database name you want to use for the pySecMaster (i.e. pysecmaster). Also, enter the user, password, host and port number that will be used to access this new database.
+
+#### Quandl daily data
+
+  6. Enter a Quandl API Key (free at <https://www.quandl.com>)
+  
+  7. In the *Data* tab, change *Download Source* combo-box to **quandl**
+  
+  8. In the *Data* tab, change *Selection* combo-box to:
+    - **wiki** if you want all Quandl WIKI data ([Note 4](#notes)) (~3,000 symbols)
+    - **goog** if you want all *US, Toronto and London* Quandl Google Finance data (~38,000 symbols)
+    - **goog_etf** if you want all Quandl Google Finance ETF data ([Note 5](#notes))) (~3,700 symbols)
+    - **goog_us_main_no_end_date** if you want main US exchange Quandl Google Finance data ([Note 6](#notes))) (~15,000 symbols)
+
+  9. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
+
+  10. Click on the *Ok* button, and the database will start building itself
+  
+  11. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+
+#### Yahoo Finance daily data (currently broken - 2/19/18)
+  
+  6. In the *Data* tab, change *Download Source* combo-box to **yahoo**
+  
+  7. In the *Data* tab, change *Selection* combo-box to:
+    - **all** if you want all *US, Toronto and London* Yahoo Finance data (~38,000 symbols)
+    - **us_main** if you want main US exchange Yahoo Finance data that's been active within the prior two years ([Note 6](#notes)) (~9,000 symbols)
+    - **us_main_no_end_date** if you want main US exchange Yahoo Finance data ([Note 6](#notes)) (~15,000 symbols)
+    - **us_canada_london** if you want all *US, Toronto and London* Yahoo Finance data that's been active within the prior two years (~25,000 symbols)
+  
+  8. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
+
+  9. Click on the *Ok* button, and the database will start building itself with daily data from Yahoo Finance
+  
+  10. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+
+#### Google Finance minute data (currently broken - 2/19/18)
+
+  6. In the *Data* tab, change *Download Source* combo-box to **google**
+  
+  7. In the *Data* tab, change *Selection* combo-box to:
+    - **all** if you want all *US, Toronto and London* Google Finance data (~38,000 symbols)
+    - **us_main** if you want main US exchange Google Finance data that's been active within the prior two years ([Note 6](#notes)) (~9,000 symbols)
+    - **us_canada_london** if you want all *US, Toronto and London* Google Finance data that's been active within the prior two years (~25,000 symbols)
+  
+  8. In the *Data* tab, change *Interval* combo-box to **minute**
+  
+  9. If you have a HDD, I'd recommend changing the *Threads* count in *System Settings* tab to **2** (SSD's can handle 8 threads). If you see the database constantly being locked, lower this number.
+
+  10. Click on the *Ok* button, and the database will start building itself with minute data from Google Finance
+  
+  11. You can save your settings either when you exit the GUI or by going to *File* -> *Save Settings* [ctrl + s]
+
 # System Requirements
   - Python 3.4+
+  - Numpy 1.14.0
   - Pandas 0.22.0
-  - PyQt 4.11+
+  - Psycopg2 2.6.2
+  - SqlAlchemy 1.2.2
   - PostgreSQL 9.5+
-  - Psycopg2 2.6.1+
+  - PyQt 4.11+
   - More than 20GB of storage space (daily Quandl WIKI data is about 4 GB, while a year's worth of Google Finance minute data can become 50+ GB)
 
 # User Requirements
   - Quandl API Token (free at <https://www.quandl.com>)
 
 # Future Goals
-  - Add function to manually calculate the adjusted prices for all price tables (instead of relying on the source)
   - Add Quandl_YAHOO to symbology
   - Add custom holiday table
 
@@ -252,7 +257,7 @@ To view the PostgreSQL database, you can [pgAdmin](http://www.pgadmin.org) progr
 Before using this software, be sure to understand and follow the terms of all data providers. I am not responsible for how you use this software, so please be responsible in your use of it! Please see the following links for some information:
   - [Quandl TOS](http://help.quandl.com/category/133-terms-and-conditions)
   - [Google Finance TOS](https://www.google.com/intl/en/googlefinance/disclaimer)
-  - [Yahoo Finance TOS] (https://policies.yahoo.com/us/en/yahoo/terms/utos/index.htm)
+  - [Yahoo Finance TOS](https://policies.yahoo.com/us/en/yahoo/terms/utos/index.htm)
 
 For further information, please seek legal counsel.
 

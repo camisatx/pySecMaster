@@ -4,14 +4,14 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from utilities.user_dir import user_dir
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__copyright__ = 'Copyright (C) 2018 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.3'
+__version__ = '1.5.0'
 
 """
     This program is free software: you can redistribute it and/or modify
@@ -314,8 +314,8 @@ def data_tables(database='pysecmaster', user='pysecmaster',
                 low             DECIMAL(11,4),
                 close           DECIMAL(11,4),
                 volume          BIGINT,
-                ex_dividend     DECIMAL(6,3),
-                split_ratio     DECIMAL(11,4),
+                dividend        DECIMAL(6,3),
+                split           DECIMAL(11,4),
                 updated_date    TIMESTAMP WITH TIME ZONE,
                 FOREIGN KEY(data_vendor_id)
                     REFERENCES data_vendor(data_vendor_id),

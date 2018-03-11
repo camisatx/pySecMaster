@@ -10,14 +10,14 @@ from utilities.date_conversions import date_to_iso
 
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__copyright__ = 'Copyright (C) 2018 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.3'
+__version__ = '1.5.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -71,10 +71,6 @@ def rate_limit(rate=2000, period_sec=600, threads=1):
 
 
 def csv_load_converter(input):
-
-    # try:
-    #     return int(input)
-    # except ValueError:
     try:
         return float(input)
     except ValueError:
@@ -84,18 +80,17 @@ def csv_load_converter(input):
 class QuandlDownload(object):
 
     def __init__(self, quandl_token, db_url):
-        """ Items that are always required when downloading Quandl data.
+        """Items that are always required when downloading Quandl data.
 
         :param quandl_token: String of the sensitive Quandl API token
-        :param db_url: String of the url address of the particular database's
-            metadata to download
+        :param db_url: String of the database API url
         """
 
         self.quandl_token = quandl_token
         self.db_url = db_url
 
     def download_quandl_codes(self, db_name, page_num, download_try=0):
-        """ The token, database name, database url and page number are provided,
+        """The token, database name, database url and page number are provided,
         and this downloads the metadata library for that particular page as a
         csv file. Quandl has a restriction where only 300 items can be
         downloaded at a time, thus multiple requests must be sent. This is
@@ -151,10 +146,10 @@ class QuandlDownload(object):
 
     def download_quandl_data(self, q_code, csv_out, beg_date=None,
                              verbose=True):
-        """ Receives a Quandl Code as a string, and it calls the QuandlDownload
-        class to actually download it. Once downloaded, this adds titles to the
-        column headers, depending on what type of Quandl Code it is. Last, a
-        column for the q_code is added to the DataFrame.
+        """Receives a Quandl Code as a string, and it calls download_data to
+        actually download it. Once downloaded, this adds titles to the column
+        headers, depending on what type of Quandl Code it is. Last, a column
+        for the q_code is added to the DataFrame.
 
         :param q_code: A string of the Quandl Code
         :param csv_out: String of directory and CSV file name; used to store
@@ -173,8 +168,14 @@ class QuandlDownload(object):
         # Specify the column headers
         if q_code[:4] == 'WIKI':
             column_names = ['date', 'open', 'high', 'low', 'close', 'volume',
-                            'ex_dividend', 'split_ratio', 'adj_open',
+                            'dividend', 'split', 'adj_open',
                             'adj_high', 'adj_low', 'adj_close', 'adj_volume']
+            columns_to_remove = ['adj_open', 'adj_high', 'adj_low', 'adj_close',
+                                 'adj_volume']
+        elif q_code[:3] == 'EOD':
+            column_names = ['date', 'open', 'high', 'low', 'close', 'volume',
+                            'dividend', 'split', 'adj_open', 'adj_high',
+                            'adj_low', 'adj_close', 'adj_volume']
             columns_to_remove = ['adj_open', 'adj_high', 'adj_low', 'adj_close',
                                  'adj_volume']
         elif q_code[:4] == 'GOOG':
@@ -185,9 +186,8 @@ class QuandlDownload(object):
                             'volume', 'adjusted_close']
             columns_to_remove = ['adjusted_close']
         else:
-            print('The data source for %s is not implemented in the price '
-                  'extractor. Please define the columns in '
-                  'QuandlDownload.download_quandl_data.' % q_code)
+            print('The column headers the %s download are not defined within '
+                  'QuandlDownload.download_quandl_data in download.py' % q_code)
             return pd.DataFrame()
 
         if file:
@@ -203,15 +203,14 @@ class QuandlDownload(object):
             except IndexError:
                 return pd.DataFrame()
             except OSError:
-                # Occurs when url_obj is None, meaning url returned a 404 error
                 return pd.DataFrame()
             except Exception as e:
-                print('Unknown error occurred when reading Quandl CSV for %s' %
-                      q_code)
+                print('Unknown error occurred when reading Quandl CSV for %s '
+                      'in download_quandl_data in download.py' % q_code)
                 print(e)
                 return pd.DataFrame()
 
-            # Remove all adjusted value columns
+            # Remove all adjusted columns
             raw_df.drop(columns_to_remove, axis=1, inplace=True)
 
             # Data successfully downloaded; check to see if code was on the list
@@ -235,8 +234,7 @@ class QuandlDownload(object):
                 pass
 
         else:
-            # There is no minute data for this code so add it to the CSV file
-
+            # There is no data for this code, so add it to the CSV file
             try:
                 codes_wo_data_df = pd.read_csv(csv_out, index_col=False)
             except ValueError:
@@ -244,6 +242,7 @@ class QuandlDownload(object):
                 return pd.DataFrame()
             except Exception as e:
                 # An error that happens sometimes; idk
+                print('Unknown error occured in download_quandl_data')
                 print(e)
                 return pd.DataFrame()
             try:
@@ -291,7 +290,6 @@ class QuandlDownload(object):
 
         # Check each price column for outliers
         for column in raw_df.columns:
-
             # Skip the date and updated_date columns
             if column in ['date', 'updated_date']:
                 continue
@@ -319,14 +317,13 @@ class QuandlDownload(object):
                         print(outliers_df)
                         # If outlier, replace the value for the row with -1
                         for index, row in outliers_df.iterrows():
-                            # Index from the outlier_df is the index
-                            #   from the raw_df
+                            # Index from the outlier_df is the index from raw_df
                             raw_df.set_value(index, column, -1.0)
 
                     # Round all data values to their appropriate levels
                     raw_df[column] = np.round(raw_df[column], decimals=4)
 
-                # elif column in ['ex_dividend']:
+                # elif column in ['dividend']:
                 #     # Round all data values to their appropriate levels
                 #     raw_df[column] = np.round(raw_df[column], decimals=3)
 
@@ -340,19 +337,16 @@ class QuandlDownload(object):
         return raw_df
 
     def download_data(self, name, page_num=None, beg_date=None, download_try=0):
-        """
-        Downloads the CSV from the Quandl URL provide, and passes a DataFrame
-        back. Provides error handling of HTTP errors. It is restricted by the
-        rate limit decorator.
+        """Downloads the CSV from the Quandl API URL provided.
 
-        :param name: String of the object being downloaded. It can be either
+        :param name: String of the object being downloaded. It can either be
             the database name or a Quandl Code
         :param page_num: Integer used when downloading database Quandl Codes
         :param beg_date: String of the start date (YYYY-MM-DD) to download
-        :return: A CSV file of the downloaded data
         :param download_try: Optional integer that indicates a download
             retry; utilized after an HTTP error to try the download again
             recursively
+        :return: CSV file of the downloaded data
         """
 
         db_url = self.db_url[0] + name + self.db_url[1]
@@ -365,6 +359,7 @@ class QuandlDownload(object):
         else:
             url_var = '?auth_token=' + self.quandl_token
             if beg_date is not None:
+                # NOTE: This only works with the v1 API
                 url_var = url_var + '&trim_start=' + beg_date
 
         try:
@@ -392,18 +387,16 @@ class QuandlDownload(object):
             elif 'http error 429' in str(e).lower():
                 # HTTP Error 429: Too Many Requests
                 if download_try <= 5:
-                    print('HTTPError %s: Exceeded Quandl API limit. Make '
-                          'the rate_limit more restrictive. Program will '
-                          'sleep for 11 minutes and will try again...'
-                          % (e.reason,))
+                    print('HTTPError %s: Exceeded Quandl API limit. Make the '
+                          'rate_limit more restrictive. Program will sleep for '
+                          '11 minutes and will try again...' % (e.reason,))
                     time.sleep(11 * 60)
                     self.download_data(name, download_try=download_try)
                 else:
-                    raise OSError('HTTPError %s: Exceeded Quandl API '
-                                  'limit. After trying 5 time, the '
-                                  'download was still not successful. You '
-                                  'could have hit the 50,000 calls per '
-                                  'day limit.' % (e.reason,))
+                    raise OSError('HTTPError %s: Exceeded Quandl API limit. '
+                                  'After trying 5 time, the download was still '
+                                  'not successful. You could have hit the '
+                                  '50,000 calls per day limit.' % (e.reason,))
             elif 'http error 500' in str(e).lower():
                 # HTTP Error 500: Internal Server Error
                 if download_try <= 10:
@@ -411,9 +404,9 @@ class QuandlDownload(object):
             elif 'http error 502' in str(e).lower():
                 # HTTP Error 502: Bad Gateway
                 if download_try <= 10:
-                    print('HTTPError %s: Encountered a bad gateway with '
-                          'the server. Maybe the network is down. Will '
-                          'sleep for 5 minutes' % (e.reason,))
+                    print('HTTPError %s: Encountered a bad gateway with the '
+                          'server. Maybe the network is down. Will sleep for '
+                          '5 minutes' % (e.reason,))
                     time.sleep(5 * 60)
                     self.download_data(name, download_try=download_try)
                 else:
@@ -437,9 +430,9 @@ class QuandlDownload(object):
             elif 'http error 504' in str(e).lower():
                 # HTTP Error 504: GATEWAY_TIMEOUT
                 if download_try <= 10:
-                    print('HTTPError %s: Server connection timed out. '
-                          'Maybe the network is down. Will sleep for 5 '
-                          'minutes' % (e.reason,))
+                    print('HTTPError %s: Server connection timed out. Maybe '
+                          'the network is down. Will sleep for 5 minutes' %
+                          (e.reason,))
                     time.sleep(5 * 60)
                     self.download_data(name, download_try=download_try)
                 else:
@@ -450,25 +443,23 @@ class QuandlDownload(object):
             else:
                 print('Base URL used: %s' % (db_url + url_var,))
                 if page_num:
-                    raise OSError('%s - Unknown error when '
-                                  'downloading page %i for %s'
-                                  % (e, page_num, name))
+                    raise OSError('%s - Unknown error when downloading page '
+                                  '%i for %s' % (e, page_num, name))
                 else:
-                    raise OSError('%s - Unknown error when '
-                                  'downloading %s' % (e, name))
+                    raise OSError('%s - Unknown error when downloading %s' %
+                                  (e, name))
         except URLError as e:
             if download_try <= 10:
-                print('Warning: Experienced URL Error %s. Program will '
-                      'sleep for 5 minutes and will then try again...' %
-                      (e.reason,))
+                print('Warning: Experienced URL Error %s. Program will sleep '
+                      'for 5 minutes and will then try again...' % (e.reason,))
                 print('URL used: %s' % (db_url + url_var,))
                 time.sleep(5 * 60)
                 self.download_data(name, download_try=download_try)
             else:
                 raise URLError('Warning: Still experiencing URL Error %s. '
                                'After trying 10 times, the error remains. '
-                               'Quitting for now, but you can try again '
-                               'later.' % (e.reason,))
+                               'Quitting for now, but you can try again later.'
+                               % (e.reason,))
         except Exception as e:
             print(e)
             raise OSError('Warning: Encountered an unknown error when '

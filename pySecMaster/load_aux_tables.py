@@ -8,14 +8,14 @@ from utilities.database_queries import df_to_sql, query_load_table,\
     update_load_table
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__copyright__ = 'Copyright (C) 2018 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.3'
+__version__ = '1.5.0'
 
 '''
     This program is free software: you can redistribute it and/or modify

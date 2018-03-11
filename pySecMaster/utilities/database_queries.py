@@ -5,14 +5,14 @@ import psycopg2
 from sqlalchemy import create_engine
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__copyright__ = 'Copyright (C) 2018 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.3'
+__version__ = '1.5.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -244,11 +244,11 @@ def query_all_tsid_prices(database, user, password, host, port, table, tsid):
             cur = conn.cursor()
             if table == 'daily_prices':
                 cur.execute("""SELECT data_vendor_id, date, open, high, low,
-                                close, volume, ex_dividend, split_ratio
+                                close, volume, dividend, split
                             FROM daily_prices
                             WHERE source_id=%s AND source='tsid'""", (tsid,))
                 columns = ['data_vendor_id', 'date', 'open', 'high', 'low',
-                           'close', 'volume', 'ex_dividend', 'split_ratio']
+                           'close', 'volume', 'dividend', 'split']
             elif table == 'minute_prices':
                 cur.execute("""SELECT data_vendor_id, date, open, high, low,
                                 close, volume
@@ -526,6 +526,43 @@ def query_csi_stocks(database, user, password, host, port, query='all'):
                                    WHERE end_date>=%s
                                    AND (exchange IN ('AMEX', 'NYSE')
                                    OR sub_exchange IN ('AMEX',
+                                       'BATS Global Markets',
+                                       'Nasdaq Capital Market',
+                                       'Nasdaq Global Market',
+                                       'Nasdaq Global Select',
+                                       'NYSE', 'NYSE ARCA'))
+                                   AND symbol IS NOT NULL)
+                                   AS csi
+                               ORDER BY symbol, exchange, is_active DESC
+                                   NULLS LAST""",
+                            (beg_date.isoformat(),))
+                rows = cur.fetchall()
+                if rows:
+                    csi_df = pd.DataFrame(rows, columns=['sid', 'ticker',
+                                                         'exchange',
+                                                         'sub_exchange'])
+                else:
+                    raise SystemExit('Not able to retrieve any tickers after '
+                                     'querying %s in query_csi_stocks'
+                                     % (query,))
+
+            elif query == 'main_us_no_amex':
+                # Restricts tickers to those that have been active within the
+                #   prior two years. For the few duplicate tickers, choose the
+                #   active one over the non-active one (same company but
+                #   different start and end dates, with one being active).
+                # NOTE: Due to different punctuations, it is possible for
+                #   items with similar symbol, exchange and sub exchange
+                #   to be returned (ie. 'ABK.A TSX' and 'ABK+A TSX')
+                beg_date = (datetime.now() - timedelta(days=730))
+                cur.execute("""SELECT DISTINCT ON (symbol, exchange)
+                                   csi_number, symbol, exchange, sub_exchange
+                               FROM (SELECT csi_number, symbol, exchange,
+                                   sub_exchange, is_active
+                                   FROM csidata_stock_factsheet
+                                   WHERE end_date>=%s
+                                   AND (exchange IN ('NYSE')
+                                   OR sub_exchange IN (
                                        'BATS Global Markets',
                                        'Nasdaq Capital Market',
                                        'Nasdaq Global Market',
@@ -959,6 +996,15 @@ def query_q_codes(database, user, password, host, port, download_selection):
                             WHERE tsid.source='tsid'
                             AND qcode.source='quandl_wiki'
                             ORDER BY qcode.source_id ASC NULLS LAST""")
+            elif download_selection == 'eod':
+                cur.execute("""SELECT DISTINCT ON (qcode.source_id)
+                                tsid.source_id, qcode.source_id
+                            FROM symbology tsid
+                            INNER JOIN symbology qcode
+                            ON tsid.symbol_id = qcode.symbol_id
+                            WHERE tsid.source='tsid'
+                            AND qcode.source='quandl_eod'
+                            ORDER BY qcode.source_id ASC NULLS LAST""")
             elif download_selection == 'goog':
                 cur.execute("""SELECT DISTINCT ON (qcode.source_id)
                                tsid.source_id, qcode.source_id
@@ -1053,9 +1099,10 @@ def query_q_codes(database, user, password, host, port, download_selection):
                             (beg_date.isoformat(),))
             else:
                 raise SystemError('Improper download_selection was provided '
-                                  'in query_codes. If this is a new query, '
-                                  'ensure the SQL is correct. Valid symbology '
-                                  'download selections include wiki, goog, '
+                                  'in query_q_codes in database_queries.py. '
+                                  'If this is a new query, ensure the SQL is '
+                                  'correct. Valid symbology download '
+                                  'selections include wiki, eod, goog, '
                                   'goog_us_main, goog_us_main_no_end_date,'
                                   'goog_us_canada_london, and goog_etf.')
 
@@ -1067,8 +1114,8 @@ def query_q_codes(database, user, password, host, port, download_selection):
                 # ticker_list = df.values.flatten()
                 # df.to_csv('query_q_code.csv')
             else:
-                raise SystemError('Not able to determine the q_codes '
-                                  'from the SQL query in query_q_codes')
+                raise SystemError('Not able to determine the q_codes from the '
+                                  'SQL query in query_q_codes')
     except psycopg2.Error as e:
         print(e)
         raise SystemError('Error when trying to connect to the %s database '

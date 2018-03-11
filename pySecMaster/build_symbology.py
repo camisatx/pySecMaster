@@ -5,19 +5,19 @@ import time
 from create_tables import create_database, main_tables, data_tables, \
     events_tables
 from load_aux_tables import LoadTables
-from extractor import CSIDataExtractor, QuandlCodeExtract
+from extractor import CSIDataExtractor      # QuandlCodeExtract
 from utilities.database_queries import df_to_sql, query_csi_stocks, \
     query_existing_sid, query_exchanges, update_symbology_values
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__copyright__ = 'Copyright (C) 2018 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
 __maintainer__ = 'Josh Schertz'
 __status__ = 'Development'
 __url__ = 'https://joshschertz.com/'
-__version__ = '1.4.3'
+__version__ = '1.5.0'
 
 '''
     This program is free software: you can redistribute it and/or modify
@@ -98,6 +98,7 @@ def create_symbology(database, user, password, host, port, source_list):
     # ToDo: Add economic_events codes
 
     for source in source_list:
+        print('Processing the symbology IDs for %s' % (source,))
         source_start = time.time()
 
         # Retrieve any existing ID values from the symbology table
@@ -128,8 +129,8 @@ def create_symbology(database, user, password, host, port, source_list):
             altered_df.insert(len(altered_df.columns), 'updated_date',
                               datetime.now().isoformat())
 
-        elif source in ['tsid', 'quandl_wiki', 'quandl_goog', 'seeking_alpha',
-                        'yahoo']:
+        elif source in ['tsid', 'quandl_wiki', 'quandl_eod', 'quandl_goog',
+                        'seeking_alpha', 'yahoo']:
             # These sources have a similar symbology creation process
 
             if source == 'quandl_wiki':
@@ -151,6 +152,29 @@ def create_symbology(database, user, password, host, port, source_list):
                 #   compatible with the Quandl WIKI code structure
                 csi_stock_df['ticker'] = csi_stock_df['ticker'].\
                     apply(lambda x: 'WIKI/' + x)
+
+            elif source == 'quandl_eod':
+                # Quandl EOD only provides data for tickers trading on NASDAQ,
+                #   NYSE, NYSE ARCA, and NYSE MKT
+                # NOTE: It is possible to download the daily list of valid
+                #   Quandl EOD symbols. That might be a better approach for
+                #   getting the quandl codes.
+
+                # DataFrame of main US active tickers, their exchanges and
+                #   sub exchanges
+                csi_stock_df = query_csi_stocks(database=database, user=user,
+                                                password=password, host=host,
+                                                port=port,
+                                                query='main_us_no_amex')
+
+                # If a ticker has a ". + -", change it to an underscore
+                csi_stock_df['ticker'].replace(regex=True, inplace=True,
+                                               to_replace=r'[.+-]', value=r'_')
+
+                # Need to add 'EOD/' before every ticker to make it compatible
+                #   with the Quandl EOD code structure
+                csi_stock_df['ticker'] = csi_stock_df['ticker'].\
+                    apply(lambda x: 'EOD/' + x)
 
             elif source == 'quandl_goog':
                 # Imply plausible Quandl codes for their GOOG database. Only
@@ -196,7 +220,7 @@ def create_symbology(database, user, password, host, port, source_list):
                                   'csi_to_quandl_goog')
                     elif sub_exchange == 'Alberta Stock Exchange':
                         # All stocks with the Alberta Stock Exchange as the
-                        #   sub exchange were all delisted prior to 2004
+                        #   sub exchange were delisted prior to 2004
                         pass
                     else:
                         # For all non NYSE ARCA exchanges, see if there is a
@@ -407,9 +431,9 @@ def create_symbology(database, user, password, host, port, source_list):
                               datetime.now().isoformat())
 
         else:
-            return NotImplementedError('%s is not implemented in the '
-                                       'create_symbology function of '
-                                       'build_symbology.py' % source)
+            raise NotImplementedError('%s is not implemented in the '
+                                      'create_symbology function of '
+                                      'build_symbology.py' % source)
 
         # Separate out the updated values from the altered_df
         updated_symbols_df = (altered_df[altered_df['symbol_id'].
@@ -487,7 +511,7 @@ if __name__ == '__main__':
     #                   update_range=3000, threads=4)
 
     symbology_sources = ['csi_data', 'quandl_wiki', 'seeking_alpha', 'tsid',
-                         'yahoo', 'quandl_goog']
+                         'yahoo', 'quandl_goog', 'quandl_eod']
     create_symbology(database=userdir['postgresql']['pysecmaster_db'],
                      user=userdir['postgresql']['pysecmaster_user'],
                      password=userdir['postgresql']['pysecmaster_password'],
