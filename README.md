@@ -65,7 +65,7 @@ The goal of the system is to have a central repository of interrelated finance d
 
 ### Without Docker using the GUI
 
-  *NOTE*: The Quandl data download is currently broken. Use the pysecmaster.py instead.
+  **NOTE: The Quandl data download is currently broken. Use the pysecmaster.py instead.**
 
   1. Download and install both [PostgreSQL](http://www.postgresql.org/download/) and [Psycopg2](http://initd.org/psycopg/docs/install.html) to your computer. Installing psycopg2 on Windows can be challenging, but I found it easy to use the wheel provided on Christoph Gohlke's [Windows Binaries for Python](http://www.lfd.uci.edu/~gohlke/pythonlibs/#psycopg) page.
   
@@ -131,7 +131,7 @@ The goal of the system is to have a central repository of interrelated finance d
 ### Retrieve Database Values
   1. To retrieve the data from the PostgreSQL database, open the `pySecMaster/pySecMaster/query_data.py` [file](https://github.com/camisatx/pySecMaster/blob/master/pySecMaster/query_data.py) in a code editor (Vim, PyCharm, Sublime, etc.)
 
-  2. Navigate to the query options (**lines 242 - 250**): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQL query. This file also includes a price adjustment calculation, which calculates the correct historical adjusted prices based on the dividend and splits. By default the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
+  2. Navigate to the query options (**lines 242 - 250**): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQL query. This file also includes a [price adjustment calculation](#price-adjustment), which calculates the correct historical adjusted prices based on the dividend and splits. By default the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
 
   3. You can now save and run `python pySecMaster/pySecMaster/query_data.py`
 
@@ -233,17 +233,18 @@ The query_data.py file includes a function for calculating the adjusted prices b
 
 # System Requirements
   - Python 3.4+
+  - Numpy 1.14.0
   - Pandas 0.22.0
-  - PyQt 4.11+
+  - Psycopg2 2.6.2
+  - SqlAlchemy 1.2.2
   - PostgreSQL 9.5+
-  - Psycopg2 2.6.1+
+  - PyQt 4.11+
   - More than 20GB of storage space (daily Quandl WIKI data is about 4 GB, while a year's worth of Google Finance minute data can become 50+ GB)
 
 # User Requirements
   - Quandl API Token (free at <https://www.quandl.com>)
 
 # Future Goals
-  - Add function to manually calculate the adjusted prices for all price tables (instead of relying on the source)
   - Add Quandl_YAHOO to symbology
   - Add custom holiday table
 
@@ -262,7 +263,7 @@ To view the PostgreSQL database, you can [pgAdmin](http://www.pgadmin.org) progr
 Before using this software, be sure to understand and follow the terms of all data providers. I am not responsible for how you use this software, so please be responsible in your use of it! Please see the following links for some information:
   - [Quandl TOS](http://help.quandl.com/category/133-terms-and-conditions)
   - [Google Finance TOS](https://www.google.com/intl/en/googlefinance/disclaimer)
-  - [Yahoo Finance TOS] (https://policies.yahoo.com/us/en/yahoo/terms/utos/index.htm)
+  - [Yahoo Finance TOS](https://policies.yahoo.com/us/en/yahoo/terms/utos/index.htm)
 
 For further information, please seek legal counsel.
 
