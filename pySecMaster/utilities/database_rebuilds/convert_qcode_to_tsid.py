@@ -6,7 +6,7 @@ import time
 from pySecMaster import maintenance
 
 __author__ = 'Josh Schertz'
-__copyright__ = 'Copyright (C) 2016 Josh Schertz'
+__copyright__ = 'Copyright (C) 2018 Josh Schertz'
 __description__ = 'An automated system to store and maintain financial data.'
 __email__ = 'josh[AT]joshschertz[DOT]com'
 __license__ = 'GNU AGPLv3'
