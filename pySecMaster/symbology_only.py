@@ -40,8 +40,8 @@ def build_symbology(database_options):
     # Don't change these unless you know what you are doing
     # http://www.csidata.com/factsheets.php?type=stock&format=html
     csidata_url = 'http://www.csidata.com/factsheets.php?'
-    symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_goog',
-                         'seeking_alpha', 'yahoo']
+    symbology_sources = ['csi_data', 'tsid', 'quandl_wiki', 'quandl_eod',
+                         'quandl_goog', 'seeking_alpha', 'yahoo']
 
     LoadTables(database=database_options['database'],
                user=database_options['user'],

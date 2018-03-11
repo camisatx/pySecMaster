@@ -14,6 +14,7 @@ The goal of the system is to have a central repository of interrelated finance d
  - [Symbology](#symbology)
  - [Data Types](#data-types)
  - [Cross Validator](#cross-validator)
+ - [Adjusted Prices](#adjusted-prices)
  - [System Requirements](#system-requirements)
  - [Future Goals](#future-goals)
  - [Notes](#notes)
@@ -37,6 +38,10 @@ The goal of the system is to have a central repository of interrelated finance d
 
   4. Run `docker-compose up`, and the system will start building itself using the variables specified [here](https://github.com/camisatx/pySecMaster/blob/a6ebcab9c5e81c2fc163997df79ea3a230b8f238/pySecMaster/Dockerfile#L17). To view the arguments you can provide, either run `pySecMaster/pySecMaster/pySecMaster.py -h` or view the arguments [here](https://github.com/camisatx/pySecMaster/blob/a6ebcab9c5e81c2fc163997df79ea3a230b8f238/pySecMaster/pySecMaster.py#L388)
 
+  4.1. Run `docker-compose up -d postgres` to start the Postgres container running as a daemon, where it will continue running in the background.
+
+  4.2. Run `docker-compose up app` to rerun the pySecMaster code. You would run this to update the prices daily. If you change a script, run `docker-compose up --build app` to have the script loaded into the pySecMaster container.
+
 ### Without Docker using the Script
 
   1. Download and install both [PostgreSQL](http://www.postgresql.org/download/) and [Psycopg2](http://initd.org/psycopg/docs/install.html) to your computer. Installing psycopg2 on Windows can be challenging, but I found it easy to use the wheel provided on Christoph Gohlke's [Windows Binaries for Python](http://www.lfd.uci.edu/~gohlke/pythonlibs/#psycopg) page.
@@ -59,6 +64,8 @@ The goal of the system is to have a central repository of interrelated finance d
   8. Run `python pySecMaster/pySecMaster/pySecMaster.py --daily-downloads quandl -v` for the system to start building itself. It'll download Quandl daily prices and run the cross validator for all price values. To view the arguments you can provide, either run `pySecMaster/pySecMaster/pySecMaster.py -h` or view the arguments [here](https://github.com/camisatx/pySecMaster/blob/a6ebcab9c5e81c2fc163997df79ea3a230b8f238/pySecMaster/pySecMaster.py#L388)
 
 ### Without Docker using the GUI
+
+  *NOTE*: The Quandl data download is currently broken. Use the pysecmaster.py instead.
 
   1. Download and install both [PostgreSQL](http://www.postgresql.org/download/) and [Psycopg2](http://initd.org/psycopg/docs/install.html) to your computer. Installing psycopg2 on Windows can be challenging, but I found it easy to use the wheel provided on Christoph Gohlke's [Windows Binaries for Python](http://www.lfd.uci.edu/~gohlke/pythonlibs/#psycopg) page.
   
@@ -124,7 +131,7 @@ The goal of the system is to have a central repository of interrelated finance d
 ### Retrieve Database Values
   1. To retrieve the data from the PostgreSQL database, open the `pySecMaster/pySecMaster/query_data.py` [file](https://github.com/camisatx/pySecMaster/blob/master/pySecMaster/query_data.py) in a code editor (Vim, PyCharm, Sublime, etc.)
 
-  2. Navigate to the query options (**lines 207 - 217**): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQL query. By default the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
+  2. Navigate to the query options (**lines 242 - 250**): change any of the options within this section to alter the query. Be aware that certain variables may be ignored depending on what type of query is run (i.e. minute data only comes from Google Finance). It is possible to retrieve very specific data by writing a custom SQL query. This file also includes a price adjustment calculation, which calculates the correct historical adjusted prices based on the dividend and splits. By default the data is returned as a pandas DataFrame, which can be manipulated to any format (visual, CSV, JSON, chart, etc.), or even sent to another file for further processing.
 
   3. You can now save and run `python pySecMaster/pySecMaster/query_data.py`
 
@@ -220,6 +227,9 @@ The system is setup to work with as many data sources as available, so future da
 **Currently, the only way to run the cross validator is to run the system through the pySecMaster.py script. The validator has not been implemented into the GUI yet.**
 
 This can be multi-processed based on tsids. By default, 5 threads are used. This value is dependent on the disk and processor speed, so you may need to lower this value.
+
+## Adjusted Prices
+The query_data.py file includes a function for calculating the adjusted prices based on the stock's dividends and splits. You can read more about this calculation [here](https://joshschertz.com/2016/08/27/Vectorizing-Adjusted-Close-with-Python/).
 
 # System Requirements
   - Python 3.4+

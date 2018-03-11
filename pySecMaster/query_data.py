@@ -241,7 +241,8 @@ if __name__ == '__main__':
 
     test_query_type = 'ticker'     # index, ticker
     test_tsid = 'AAPL.Q.0'
-    test_data_vendor_id = 11        # Quandl EOD
+    test_data_vendor_id = 1        # Quandl WIKi
+    # test_data_vendor_id = 11        # Quandl EOD
     # test_data_vendor_id = 15        # pySecMaster_Consensus
     # test_data_vendor_id = 12        # Google_Finance
     test_beg_date = '1950-01-01 00:00:00'
