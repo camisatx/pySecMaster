@@ -384,7 +384,7 @@ class QuandlDataExtraction(object):
 
     def __init__(self, database, user, password, host, port, quandl_token,
                  db_url, download_selection, redownload_time, data_process,
-                 days_back, threads, table, load_tables='load_tables',
+                 days_back, table, threads=2, load_tables='load_tables',
                  verbose=False):
         """
         :param database: String of the directory location for the SQL database.
@@ -404,10 +404,10 @@ class QuandlDataExtraction(object):
             'append' or 'replace'.
         :param days_back: Integer of the number of days where any existing
             data should be replaced with newer prices
-        :param threads: Integer of the number of threads the current process
-            is using; used for rate limiter
         :param table: String indicating which table the DataFrame should be
             put into.
+        :param threads: Integer of the number of threads the current process
+            is using; used for rate limiter
         :param load_tables: String of the directory location for the load tables
         :param verbose: Boolean of whether debugging prints should occur.
         """
@@ -428,6 +428,9 @@ class QuandlDataExtraction(object):
         self.verbose = verbose
 
         # Rate limiter parameters based on Quandl API limitations
+        #   Anonymous: 20 calls per 10 min; 1 active call
+        #   Logged-in free user: 2000 calls per 10 min; 1 active, 1 queue call
+        #   Premium subscriber:  5000 calls per 10 min; no concurrent limit
         rate = 2000
         period_sec = 600
         self.min_interval = float((period_sec/rate)*threads)
