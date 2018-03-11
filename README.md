@@ -44,22 +44,20 @@ The goal of the system is to have a central repository of interrelated finance d
 
   1. Download and install both [PostgreSQL](http://www.postgresql.org/download/) and [Psycopg2](http://initd.org/psycopg/docs/install.html) to your computer. Installing psycopg2 on Windows can be challenging, but I found it easy to use the wheel provided on Christoph Gohlke's [Windows Binaries for Python](http://www.lfd.uci.edu/~gohlke/pythonlibs/#psycopg) page.
   
-  2. Clone (or download) [this](https://github.com/camisatx/pySecMaster) repository to your computer
+  2. Create a new user in Postgres to use with pySecMaster (i.e. pysecmaster)
 
-  3. Create a new Postgres user to use with pySecMaster (i.e. pysecmaster)
+  3. Clone or download [this](https://github.com/camisatx/pySecMaster) repository to your computer
 
-  4. Clone or download [this](https://github.com/camisatx/pySecMaster) repository to your computer
+  4. Navigate to `pySecMaster/pySecMaster`
 
-  5. Navigate to `pySecMaster/pySecMaster`
-
-  6. Open the `/utilities/user_dir.py` [file](../master/pySecMaster/utilities/user_dir.py):
+  5. Open the `/utilities/user_dir.py` [file](../master/pySecMaster/utilities/user_dir.py):
     - Change the default name (josh) to your system user name (**line 30**)
     - Add your [Quandl API key](https://docs.quandl.com/docs#section-authentication) to both the root and your user sections (**lines 28 and 50**)
     - [optional] Change the `main_password` (**lines 16 and 38**) and `pysecmaster_password` (**lines 23 and 45**) in both the root and your user sections; Also change the passwords within the `pySecMaster/pySecMaster/database/init.sql` [file](../master/pySecMaster/database/init.sql) on **lines 2 and 12** to the same respective passwords you used in the `user_dir.py` file; You can also change or remove the special `remote_users` password and users created between **lines 16 and 33** within the `init.sql` file
 
-  7. Install the python libraries with `pip3 install -r requirements.txt`
+  6. Install the python libraries with `pip3 install -r requirements.txt`
 
-  8. Run `python pySecMaster/pySecMaster/pySecMaster.py --daily-downloads quandl.wiki -v` for the system to start building itself. It'll download Quandl daily prices and run the cross validator for all price values. To view the arguments you can provide, either run `pySecMaster/pySecMaster/pySecMaster.py -h` or view the arguments [here](../master/pySecMaster/pySecMaster.py#L388)
+  7. Run `python pySecMaster/pySecMaster/pySecMaster.py --daily-downloads quandl.wiki -v` for the system to start building itself. It'll download Quandl daily prices and run the cross validator for all price values. To view the arguments you can provide, either run `pySecMaster/pySecMaster/pySecMaster.py -h` or view the arguments [here](../master/pySecMaster/pySecMaster.py#L388)
 
 ### Retrieve Database Values
   1. To retrieve the data from the PostgreSQL database, open the `pySecMaster/pySecMaster/query_data.py` [file](../master/pySecMaster/query_data.py) in a code editor (Vim, PyCharm, Sublime, etc.)
